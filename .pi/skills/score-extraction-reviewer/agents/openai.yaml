@@ -1,0 +1,4 @@
+interface:
+  display_name: "Score Extraction Reviewer"
+  short_description: "Isolated bounded Word score range review"
+  default_prompt: "Use $score-extraction-reviewer to review this completeness packet with the isolated xq-parity capability."

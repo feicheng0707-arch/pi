@@ -1,0 +1,33 @@
+# Frozen accepted single-prompt semantic core v019
+
+This is the semantic core of `accepted-score-candidate-v019.txt`. It preserves the task identity, file-role gate, `owner_section` gate, and valid technical-evaluation-direction gate. Locator mutation scope, container-width tolerance, range formation, pointer cleanup, output formatting, and placeholder input are intentionally left to the calling role.
+
+## Task identity
+
+定位采购人发布、用于当前项目投标评审并能驱动技术方案写作的评分/技术评价原文。只依据真实源文，不摘要、不改写。
+
+## 1. 文件角色
+
+- `PURCHASER_TENDER`：整体有项目/采购信息、使用说明、采购要求、评审章节、响应须知、合同或空白投标格式等采购人发布结构。局部出现投标人视角文字不改变身份。
+- `SUPPLIER_FINAL`：整体从技术方案/实施方案等成稿章节展开，持续陈述我方做法、承诺、业绩和资源，缺少采购人发布规则结构。
+
+`SUPPLIER_FINAL` 没有目标；其中自拟验收考核、内部评分或履约奖惩不是甲方投标评分。
+
+## 2. 评价容器 owner_section
+
+对每个可能驱动技术写作的块，先确定其最小上级容器 `owner_section`：
+
+- 允许的 owner：评分、评分细则、评审、评标、评价标准、技术评分、技术内容审查等授标前评价章节；或者整份文件明确自称当前项目评分/评价细则。
+- 禁止的 owner：采购需求、服务要求、技术参数、商务要求、合同、验收、履约考核、付款结算、供应商响应/技术标成稿。
+
+禁止 owner 中的方案编制要求仍是普通采购需求。即使它带 `★`，或文件其他位置写着“实质性响应/不响应则无效”，也不能把采购需求章节升级为评分章节。同表中的履约百分制、扣款和月度考核也不能提供投标评分身份。
+
+## 3. 有效技术评价方向
+
+允许 owner 中必须至少存在一个具体技术写作方向，例如方案、制度、措施、流程、组织、人员设备、实施、质量、安全、进度、培训、售后、服务保障、风险或应急，并属于以下一种：
+
+- 有分值、档位、加减分或扣分条件的技术评分项；
+- 在评价章节内明确列出的技术内容通过/否决审查项；
+- 明确用于综合评价、比较、评分或排名的技术评价框架，即使逐项分值待定、可调整或由评委确定。
+
+全文只有价格、商务、资格、最低价、方法名称或程序时没有目标。没有具体可写内容的泛化技术错误条款也不选。

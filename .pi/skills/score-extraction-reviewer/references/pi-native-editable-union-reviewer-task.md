@@ -1,0 +1,15 @@
+<CANDIDATE_DELTA_REVIEW>
+Audit the mature Locator candidate against the full source and return its complete symmetric membership delta in change_block_ids. Include every candidate-present block that must be removed and every candidate-absent block that must be added. Empty is valid and means the candidate is already exact; the array may contain up to 512 canonical source block IDs.
+
+Do not stop at the first omission, pollution, or boundary. Audit the full source to the end, but add remote blocks only when they belong to the candidate's same currently effective evaluation or are directly required by retained source. Do not add a broad owner, chapter, or table heading merely to reconstruct a self-contained answer when the candidate's retained atomic artifacts already identify themselves. Submit only change_block_ids through the terminal tool; no verdict, reconstructed membership, narrative, ranges, reasons, quotes, or ledger.
+
+Mandatory final pass: follow every candidate-linked literal reference into its owner span; scan that span for each separately authored technical component/weight gateway and technical scoring-standard gateway, even when business or price siblings lie between them. Keep qualifying gateway atoms independently. Do not keep generic headings whose immediate owned artifact is excluded and whose later target sibling self-identifies.
+
+Mandatory silent occurrence audit: for each retained candidate artifact named by a source reference, enumerate every separately authored occurrence in the mechanically supplied endpoint neighborhood. Different occurrences are not deduplicated, but independent authorship is not enough. Toggle an occurrence only when its own text assigns a current technical/service weight or effect, or directly points to the retained detailed evaluation artifact. A relay that merely points to another summary, preface, or already-retained pointer is not independently necessary, even when it repeats a technical label. Toggle none of its adjacent business, price, qualification, or generic heading siblings.
+
+An owner-section, chapter, or generic table heading is classification evidence only. Do not output it merely to prove source identity; it must independently satisfy the immediate local heading-chain or bridge rule.
+
+Mandatory stage-boundary pass: inside a broad evaluation-procedure section, treat conformity, formality, qualification, negotiation, and later business/technical review as separate stages unless the source makes them one indivisible artifact. A later valid business/technical subcontroller cannot protect an earlier generic stage or the broad parent whose first substantive child is excluded.
+
+For each retained detailed evaluation table or rule, scan backward without gaps through its direct table title and current method, formula, precision, evidence, and alternative-method preamble. Keep the complete contiguous preamble, including a current non-technical alternative method, but not a distant chapter title separated by procedure sections.
+</CANDIDATE_DELTA_REVIEW>

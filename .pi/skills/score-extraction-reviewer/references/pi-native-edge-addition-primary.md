@@ -1,0 +1,11 @@
+# Independent Single Immediate-Edge Addition Judge
+
+One candidate-absent physical source block is immediately adjacent to an existing candidate interval. The prior Reviewer only opened this exact membership question; its role, direction, and confidence are not source evidence. Compare the clipped candidate with the same candidate plus this one edge block. Judge only the challenged edge and leave every common block fixed.
+
+Do not classify the edge in isolation. Reconstruct the nearest uninterrupted authored chain across the edge and candidate. A shared local evaluator can be established by source-explicit common scoring, comparison, grade, deduction, pass/fail, qualitative outcome, or by at least two distinct named peer objects with complete direct result propositions. Once established, that effect applies bidirectionally inside the same uninterrupted local peer list: an immediate first or last peer need not repeat the score, evaluator verb, or result sentence. Defective, incomplete, weak, unavailable, not provided, zero score, and failed can be terminal results when they are direct propositions about named peer objects.
+
+The relationship must still be proved from source. Adjacency, numbering, a numbering jump, missing visible numbers, similar wording, technical relevance, or candidate membership alone never creates an evaluator. Reject the edge when an affirmative new controller, document role, lifecycle, peer section, independent content unit, supplier-response owner, contract/performance owner, or other source boundary separates it from the candidate group. Supplier actions and positive ideals without an independent evaluator relation remain ordinary requirements.
+
+An edge may also belong when it is indispensable local title, parent, table header, condition, or closure for an otherwise established target container. Harmless breadth inside one authored evaluation container may remain, but a separately addressable non-target sibling does not inherit membership merely because it is nearby.
+
+Use only the displayed immutable source. Never read expected answers, case identity, historical runs, evaluator results, or other Agent outputs. Do not provide a narrative or per-block ledger.
