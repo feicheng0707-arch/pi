@@ -180,6 +180,19 @@ test("preserves the candidate after one contract-valid Reviewer pass", async () 
 	expect(scripted.userPrompts[0]).toMatch(/sourceCharacterCount=\d+/u);
 	expect(scripted.userPrompts[0]).toMatch(/candidateCharacterCount=\d+/u);
 	expect(scripted.userPrompts[0]).toMatch(/candidateCharacterCoverageRatio=0\.\d{4}/u);
+	expect(scripted.userPrompts[0]).toContain("focusedCandidateBlockCount=1");
+	expect(scripted.userPrompts[0]).toContain("focusedCandidateIncludedTargetBlockCount=1");
+	expect(scripted.userPrompts[0]).toContain("focusedCandidateContextBlockCount=2");
+	expect(scripted.userPrompts[0]).toContain("focusedCandidateCoverage=complete");
+	expect(scripted.userPrompts[0]).toContain("focusedCandidateIncluded=true");
+	expect(scripted.userPrompts[0]).toContain(
+		"# Focused Candidate review view with context-only neighbors (mechanical duplicate of source addresses)",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"candidateFocusPurpose=Deterministic boundary-balanced duplicate of Candidate-selected source addresses",
+	);
+	expect(scripted.userPrompts[0]).toContain("FOCUS_TARGET|IN|段落1：");
+	expect(scripted.userPrompts[0]).toContain("CONTEXT_ONLY|OUT|段落0：");
 	expect(scripted.userPrompts[0]).toContain("IN|段落1：");
 	expect(scripted.userPrompts[0]).toContain("OUT|段落2：");
 	expect(scripted.userPrompts[0].lastIndexOf("# Final closure checklist")).toBeGreaterThan(
@@ -740,6 +753,55 @@ test("uses a narrative-blind Release to apply a bounded repair", async () => {
 	expect(result.budget.providerCalls).toBe(2);
 });
 
+test("renders an oversized Release focus as a boundary-balanced partial view with context-only neighbors", async () => {
+	const blocks = Array.from({ length: 180 }, (_, blockId) => ({
+		blockId,
+		text: `原子段落${blockId}。`,
+	}));
+	const packet = parseRequirementReviewPacket(
+		packetValue(blocks, ["段落20", "段落40-段落179"]),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				remove_mode: "exact",
+				remove_ranges: ["段落20", "段落40-段落179"],
+				preserve_ranges: [],
+				reason: "The exact challenge covers two mechanically distinct Candidate intervals.",
+			},
+			"reviewer-oversized-focus",
+		),
+		tool(
+			"submit_requirement_release",
+			release([], "The bounded exact challenge is independently approved."),
+			"release-oversized-focus",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "3".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(scripted.userPrompts[1]).toContain("focusedReviewBlockCount=141");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewIncludedTargetBlockCount=96");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewContextBlockCount=32");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=128");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewCoverage=partial");
+	expect(scripted.userPrompts[1]).toContain("FOCUS_TARGET|REMOVE_REVIEW|段落20：");
+	expect(scripted.userPrompts[1]).toContain("CONTEXT_ONLY|OUT|段落19：");
+	expect(scripted.userPrompts[1]).toContain("CONTEXT_ONLY|OUT|段落39：");
+});
+
 test("mechanically applies an independently approved operational precision removal", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
@@ -1103,21 +1165,34 @@ test("mechanically expands a broad Candidate complement from protected technical
 	);
 	expect(scripted.userPrompts[1]).toContain("reviewerPreserveRangesAndRationale=withheld");
 	expect(scripted.userPrompts[1]).toContain(
-		"reviewerMechanicalPatchVisibility=asymmetric REMOVE_REVIEW then KEEP_LOCAL_AUDIT review",
+		"reviewerMechanicalPatchVisibility=prioritized REMOVE_REVIEW followed by independent KEEP_RECHECK audit across the complete Candidate",
 	);
 	expect(scripted.userPrompts[1]).not.toContain("challengePreserveRanges=");
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
-	expect(scripted.userPrompts[1]).toContain("KEEP_LOCAL_AUDIT|段落1：");
+	expect(scripted.userPrompts[1]).toContain("KEEP_RECHECK|段落1：");
 	expect(scripted.userPrompts[1]).not.toContain("PROPOSED_REMOVE|");
 	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 	expect(scripted.userPrompts[1]).not.toContain("REMOVE_REVIEW|段落1：");
 	expect(scripted.userPrompts[1]).toContain(
-		"Never remove KEEP_LOCAL_AUDIT by extending a disputed outer announcement",
+		"independently attack every KEEP_RECHECK block for false protection",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only",
 	);
+	expect(scripted.userPrompts[1]).toContain("focusedReviewBlockCount=8");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewIncludedTargetBlockCount=8");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewContextBlockCount=0");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
+	expect(scripted.userPrompts[1]).toContain(
+		"# Focused bounded review view with context-only neighbors (mechanical duplicate of source addresses)",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"focusViewPurpose=Deterministic boundary-balanced duplicate of the bounded terminal audit surface only",
+	);
+	expect(scripted.userPrompts[1]).toContain("FOCUS_TARGET|KEEP_RECHECK|段落1：");
+	expect(scripted.userPrompts[1]).toContain("FOCUS_TARGET|REMOVE_REVIEW|段落0：");
 	expect(scripted.userPrompts[1]).toContain(
 		"an independent technical chapter outside the four carriers has fact payload",
 	);
@@ -1161,7 +1236,28 @@ test("mechanically expands a broad Candidate complement from protected technical
 		"that pointer block must be removed even when the heading is retained for boundary context",
 	);
 	expect(scripted.userPrompts[0]).toContain(
-		"Remove separable funding-source declarations, contract price form",
+		"Source-fidelity closure and cross-references never transfer Owner",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"Carrier Owner is the terminal gate before primary effect",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"A complete source whose parties, agreement language, continuous articles, price/payment, breach, effectiveness, termination, dispute and signature structure jointly form one bilateral contract remains a contract",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"Every block inside an exact remove range must already be judged safe to delete",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"Engineering quantities, completion, acceptance or quality-retention language used only as a monetary basis",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"a later 'but the duties are technical' clause is a direct contradiction",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"A qualified requirement sentence that says see an appendix does not make that appendix qualified",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"no uncited tail block may be absorbed merely by range continuity",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"Closure never extends backward across the carrier start",
@@ -1282,13 +1378,13 @@ test("allows local complement review to remove a self-proving false protection",
 		'releaseRemoveEnvelopeRanges=["段落0-段落3"]',
 	);
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
-	expect(scripted.userPrompts[1]).toContain("KEEP_LOCAL_AUDIT|段落1：");
+	expect(scripted.userPrompts[1]).toContain("KEEP_RECHECK|段落1：");
 	expect(scripted.userPrompts[1]).not.toContain("PROPOSED_REMOVE|");
 	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 });
 
-test("keeps exact-mode Candidate blocks outside the Reviewer remove envelope mandatory", async () => {
+test("allows an independent Release to remove false-protected Candidate blocks after an exact deletion challenge", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1315,7 +1411,7 @@ test("keeps exact-mode Candidate blocks outside the Reviewer remove envelope man
 		),
 		tool(
 			"submit_requirement_release",
-			release([], "The release omits both blocks, but exact permissions protect the first."),
+			release([], "The complete Candidate recheck independently rejects both blocks."),
 			"release-exact-base-keep",
 		),
 	]);
@@ -1328,10 +1424,10 @@ test("keeps exact-mode Candidate blocks outside the Reviewer remove envelope man
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落0"]);
-	expect(scripted.userPrompts[1]).toContain("BASE_KEEP|段落0：");
+	expect(result.finalRanges).toEqual([]);
+	expect(scripted.userPrompts[1]).toContain("KEEP_RECHECK|段落0：");
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落1：");
-	expect(scripted.userPrompts[1]).not.toContain("KEEP_LOCAL_AUDIT|");
+	expect(scripted.userPrompts[1]).toContain("releaseAuditMode=candidate_recheck");
 });
 
 test("does not run Release when a complement proposal has no net patch", async () => {

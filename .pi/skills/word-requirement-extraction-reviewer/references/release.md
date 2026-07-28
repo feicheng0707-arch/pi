@@ -1,6 +1,6 @@
 # Independent Release
 
-`semantic-contract.md` 是唯一语义合同。完整 source、冻结 Candidate 与机械有界 challenge envelope 已提供；Reviewer 的叙事、证据线索和历史均隐藏。`REMOVE_REVIEW` 是待安全审查的删除提议，`ADD_REVIEW` 是待独立审查的新增提议，`OUT` 不在本次权限内。`exact` mode 的 `BASE_KEEP` 不可删除；`candidate_complement` 的 `KEEP_LOCAL_AUDIT` 只开放块内或紧邻局部即可自证的 false-protection 纠错，不开放重新划分全局载体边界。标记只表达权限和审查顺序，不是答案、置信度或投票。
+`semantic-contract.md` 是唯一语义合同。完整 source、冻结 Candidate 与机械有界 challenge envelope 已提供；Reviewer 的叙事、证据线索和历史均隐藏。`REMOVE_REVIEW` 是 Reviewer 点名删除、需要优先攻击过度删除风险的 Candidate block，`KEEP_RECHECK` 是同一次删除型 challenge 中其他必须独立重审的 Candidate block，`ADD_REVIEW` 是待独立审查的新增提议，`OUT` 不在本次权限内。若 challenge 只有 add，Candidate 标记为不可删除的 `BASE_KEEP`。标记只表达审查优先级和机械权限，不是答案、置信度或投票。
 
 只审查这一个 bounded patch，不从零生成第三套提取。终态优先：内部只做一次 Owner/边界判断、一次反例检查和一次终态闭合；不要输出 ledger、逐段复述 source、反复归并 ranges 或解释思考过程。必须在预算耗尽前调用唯一终态工具。
 
@@ -14,11 +14,13 @@
 - 只有明确裁决正确结果为空时才提交 `[]`；
 - reason 只解释决定性 Owner、边界与材料性，不承担结构决定，Harness 不读取 reason 修补 ranges。
 
-`exact` mode 只允许删除 `REMOVE_REVIEW` envelope 中的 Candidate block，所有 `BASE_KEEP` 会由 Harness 机械恢复。`candidate_complement` 将完整 Candidate 作为删除 envelope：你可恢复误删的 `REMOVE_REVIEW`，也可删除 locally self-proving 的 `KEEP_LOCAL_AUDIT` false protection；若删除依赖把公告、邀请、须知、格式或合同 Owner 跨越顶层功能边界继续延伸，必须保留。两种 mode 都只能新增 Reviewer challenged 的 `ADD_REVIEW` block；其他 OUT block 永远不能进入 final。
+只要 challenge 含任何有效 Candidate 删除，完整 Candidate 就是本次删除重审 envelope，与 Reviewer 使用 `exact` 还是 `candidate_complement` 无关。你可恢复误删的 `REMOVE_REVIEW`，也可删除任何经完整 source 肯定证明的 `KEEP_RECHECK` false protection；必须在每个顶层功能边界重新判断公告、邀请、须知、格式、合同与独立技术来源的真实 Owner，不能继承 Reviewer 的分区结论。add-only challenge 中所有 `BASE_KEEP` 必须保留。两类 challenge 都只能新增 Reviewer challenged 的 `ADD_REVIEW` block；其他 OUT block 永远不能进入 final。
 
 ## 硬排除发布门
 
 `instantiation=present` 与 requirement membership 正交。公告、须知、投标/响应格式或合同载体内部已经填写的项目名称、人员、范围、服务、质量、安全、验收和其他技术义务，仍随外层 Owner 排除。若 source 从头到尾未退出四类硬排除载体，且没有边界独立的合格技术章节/附件，正确 `final_ranges=[]`。
+
+单一合同文档是终态门。若合同双方/当事人关系、订立或履行合同的总领关系、连续条款、价款或结算、违约、生效、解除/续约、争议解决、签署盖章等结构共同形成一份自洽双边合同，标题中的“服务要求”“技术要求”以及合同内部大量具体履约事实都不能把它改判为需求 handoff。只有合同真实结束后边界独立的技术规范、需求书、图纸、清单或有效技术附件可以重开 Owner。若 reason 已确认全文是该合同且从未退出，唯一一致终态是 `final_ranges=[]`；随后再以“内部义务技术具体”或主要直接效力恢复合同条款，是直接的终态矛盾。
 
 公告 Owner 不依赖明示“公告”标题。若一个自包含通知序列连续承担项目概况、参与资格、文件获取、递交、发布媒介和联系方式等对外通知功能，其中项目概况仍是公告性摘要；即使它包含当前项目唯一或最具体的范围、工期、质量事实，也不能因此保护。若要保留该序列中的项目概况，必须从 source 证明通知序列已结束并进入独立技术来源。
 
@@ -36,13 +38,19 @@ Candidate 的连续地址范围不是语义载体边界。一个宽区间可从�
 
 必须区分规范性纳入与裸外部指针：当前段已经要求工作“必须遵守/达到”所引用的法律、图纸、规范或现行标准时，义务本身已在 source 中成立，不能因引用对象未全文复制而删除；只有当前段没有任何义务、仅要求另见未提供文件时，才是裸指针。
 
-人员要求必须按 Owner 区分：公告/资格/须知中的投标资格或拟派人员表仍排除；退出这些载体后，独立合格来源中规定中标后实际履约组织、岗位职责或驻场义务的内容才可保留。
+不得用篇幅、通用性或参数密度覆盖该判断。项目已由其他事实实例化后，边界独立的技术标准/规范章节即使只有数段、措辞通用、没有型号数量，也只要直接要求当前项目必须遵守/达到/符合现行法律或标准，就有当前事实载荷，不能提交 `final_ranges=[]`。
+
+交叉引用不转移 Owner。合格需求正文中的“详见附件/合同附件/考核表/响应表”只证明引用关系；必须到被引用内容的实际结构位置重新判断。若目标位于公告、须知、投标/响应格式、评分、资格、合同条款及格式或其附件范本中，即使内容详细、唯一、与需求正文一致或被明确引用，也仍须排除。标题—正文—表格闭合只能在同一合格 Owner 内延伸，不能跨越硬排除边界。
+
+人员要求必须按 Owner、时间方向和直接效力区分。公告、须知、资格审查、投标/响应格式中用于证明投标人或拟派人员资格，或要求供应商填写/提交人员名单、简历、证书、承诺的内容仍排除。source 退出这些载体后，边界独立的采购人要求若直接规定中标后实际履约必须投入的岗位、职责、最低人数、执业条件、驻场/进场时间或持续配置义务，就属于 requirement；不能仅因章节名称含“投标”“强制”、表格列出资格证书或表现为人员表而删除。先判断它是在证明谁有资格投标，还是在约束中标后必须如何组织履约。
+
+载体 Owner 必须先于 `REMOVE_REVIEW` 的主要直接效力裁决。公告、须知、投标/响应格式或合同条款及格式尚未结束时，禁止用局部实施、服务、质量、安全、验收、人员或项目专属事实恢复 block；只有 source 已证明退出四类硬排除载体后，才对混合商务内容按主要直接效力裁决。以计价、报价构成、支付、结算、扣款、审计、发票、保证金或价格调整为主要效力时，工程量、完工、验收或质量保证金只是金额依据、付款前提或结算触发条件，不构成恢复理由；“验收合格后结算”仍是结算。只有 block 直接要求实施、提供、配置、施工、交付、维护、响应或达到工期/质量/安全结果时，才因履约事实恢复，即使附带费用已含、不另支付或违约后果。不得因为同一章另有合格质保或验收义务，就把可分离的纯结算 block 一并恢复。
 
 ## 独立裁决顺序
 
 1. **整文关系**：从 source 开头、中部和结尾独立确定作者关系、用途与实例化依据。采购人身份不会让公告、须知、格式或合同模板获得 requirement membership。
 2. **真实载体边界**：确认四类硬排除载体的实际起止。物理文件封面不得覆盖全文；完整邀请文件可为多载体采购容器，真实公告正文仍整体排除。
-3. **验证有界 envelope**：先逐原子攻击 `REMOVE_REVIEW` 的过度删除、材料性遗漏、false null 和标题—正文—表格不闭合；批准安全子集并恢复误删子集。仅在 `candidate_complement` 中，再逐 block 检查 `KEEP_LOCAL_AUDIT` 的局部自证 false protection；不得重开全局载体分区，也不得按方案宽窄或角色身份投票。
+3. **验证有界 envelope**：删除型 challenge 先逐原子攻击 `REMOVE_REVIEW` 的过度删除、材料性遗漏、false null 和标题—正文—表格不闭合；批准安全子集并恢复误删子集。随后独立逐 block 攻击全部 `KEEP_RECHECK` 的 false protection，在每个 source-proven 顶层边界重开 Owner，不得按 Reviewer 分区、方案宽窄或角色身份投票。add-only challenge 不得删除任何 `BASE_KEEP`。
 4. **独立审查 add**：新增只能来自合格来源并达到材料性召回门槛；一个正确 add 不能为无关 remove 背书。
 5. **保护详细载体**：不得遗漏对象、工作包、独立章节、参数/清单/图纸、质量、安全、质保、验收或其他不可替代源文。
 6. **形成一次终态**：先让 reason 到达单一终结论，再在最后的 `final_ranges` 中一次性表达所有 keep/add/remove。提交前机械检查：理由称为保留的 block 必须在集合内，称为删除的 block 必须不在集合内。

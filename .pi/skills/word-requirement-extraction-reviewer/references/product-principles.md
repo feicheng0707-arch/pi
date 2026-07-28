@@ -14,7 +14,7 @@
 - Reviewer `pass` 后一调用结束；
 - Reviewer 必须先在短 reason 中完成整文关系、Owner、材料性与反事实 final 的单一结论，再最后生成 add/remove/preserve 结构字段；结构字段是 reason 的终态投影，不能在 reason 中发现正确范围后仍保留先前生成的旧 ranges；
 - 只有 contract-valid challenge 才启动 Call 2 Independent Release；Release 固定使用与 Reviewer 不同的模型家族，以减少同模型共模偏差；
-- Reviewer 是 patch 的主语义判断。Release 看不到 Reviewer 的 claim、reason、evidence leads 或历史，只看到完整 source 与机械 patch。`exact` mode 中，`BASE_KEEP` 是 Harness 必须保留的 Candidate，`REMOVE_REVIEW` 是 Release 可批准或恢复的删除提议。`candidate_complement` 中，Release 先攻击 `REMOVE_REVIEW` 的误删，再检查 `KEEP_LOCAL_AUDIT` 中块内或紧邻局部即可自证的 false protection；它不得重新划分 Reviewer 已建立的全局载体边界。两种标记只定义处理顺序和有界审查面，不代表语义真值、置信度或角色投票。`ADD_REVIEW` 可独立批准或拒绝，其他 OUT 永远不得加入。Release 先用短 reason 收敛到单一结论，再最后提交一个权威的完整 `final_ranges`；Harness 只做权限交集和 Candidate 差分，不能解释 reason 或补写语义；
+- Reviewer 是 challenge 的主语义判断和第二次调用门。Release 看不到 Reviewer 的 claim、reason、evidence leads 或历史，只看到完整 source 与机械 challenge overlay。add-only challenge 中，Candidate 全部标记为强制 `BASE_KEEP`，Release 只能独立批准或拒绝 `ADD_REVIEW`。只要 Reviewer 提出任何有效 Candidate 删除，完整 Candidate 就成为一次有界重审面：Reviewer 点名删除的 block 标记为优先攻击的 `REMOVE_REVIEW`，其他 Candidate 标记为 `KEEP_RECHECK`；Release 可恢复误删，也可删除 Reviewer 漏掉的 false protection，并必须在每个 source-proven Owner 边界重新判断。两种标记只定义审查优先级与机械权限，不代表语义真值、置信度或角色投票。未被 Reviewer 挑战的 OUT 永远不得加入。Release 先用短 reason 收敛到单一结论，再最后提交一个权威的完整 `final_ranges`；Harness 只做地址集合权限和 Candidate 差分，不能解释 reason 或补写语义；
 - 任一失败、降级或越界都静态保留 candidate。
 
 ## 二、评估标准
@@ -41,7 +41,11 @@
 
 四类硬排除载体之外的独立章节，不得只凭“商务要求”“履约要求”“交付条件”“售后要求”或其他标题判为纯商务。若其直接规定当前项目的工期/服务期、地点、采购范围、质量标准、保修/质保、交付、验收、服务响应或其他会形成技术方案事实基础的履约义务，这些 block 属于 requirement；只有价格、付款、结算、保证金、投标有效期等可安全分离且不承载工作内容的纯商务 block 才按非目标处理。混合章节必须逐可寻址边界裁决，不能因其中存在付款或结算条款而删除整章，也不能因其中存在技术义务而自动保留全部纯商务内容。
 
+“主要直接效力”只能在已经由 source 证明位于四类硬排除载体之外的 block 上使用。公告、须知、投标/响应格式或合同条款及格式尚未结束时，Owner 是终态门槛；不得再用 block 内的实施、服务、质量、安全、验收、人员或项目专属事实覆盖外层排除 Owner。只有先证明 source 已退出这些载体，才按该 block 的主要直接效力判断，而不是统计其中出现了多少技术名词。若正文主要规定计价、报价构成、支付、结算、扣款、审计、发票、保证金或价格调整，工程量、完工、验收、质量保证金等词仅作为金额计算依据、付款前提或结算触发条件，该 block 仍是纯商务；不能把“验收合格后结算”改写成验收要求。反之，若正文直接要求供应商实施、提供、配置、施工、交付、维护、响应或达到质量/安全/工期结果，它就是履约事实，即使末尾附带“费用已含”“不另支付”或违约后果也不能因此整段删除。标题不能替代这一主导效力判断；原子 block 内两类效力确实不可分割时才按 source fidelity 保护。
+
 若同一技术事实同时出现在排除载体和合格来源，应从合格来源忠实保留；不得用排除载体补写、扩展或替代合格来源。若某技术事实只存在于四类排除载体，本 capability 不负责把它迁入 `requirement`。公告、须知、格式模板和合同模板由其他独立能力处理。
+
+合格来源中的“详见附件/合同附件/考核表/响应表”等交叉引用，不会把被引用载体的 Owner 转移给合格来源。必须到被引用内容实际所在的结构位置独立判断：若它仍位于公告、须知、投标/响应格式、评分、资格、合同条款及格式或其附件范本中，即使内容详细、唯一、与需求正文一致或被需求章节明确引用，也仍按其实际 Owner 排除。标题—正文—表格的 source-fidelity 闭合只能在同一个合格 Owner 内延伸，不能跨越硬排除边界。只有边界独立、实际属于技术规范、需求书、图纸、清单或有效技术附件的载体，才能因交叉引用进入 requirement。
 
 四类载体的结构包含关系是硬边界。位于公告、须知正文、投标/响应格式或合同条款及格式内部的子标题、表格、附件项和项目专用字段，不能在该载体尚未结束时仅凭“采购范围”“技术要求”“服务要求”“验收”或其他局部功能重新获得 requirement membership。合格来源必须是四类载体之外边界清晰的独立技术章节/附件，或 source 中已经明确退出该载体后的独立 Owner。
 
@@ -56,6 +60,8 @@
 若同一物理文件已经并列形成资格、报价/响应格式、评审、合同以及技术章节或技术附件等完整采购结构，这是“多载体采购容器”的肯定证据，不是“整份文件均为公告”的证据。此时第一类硬排除只覆盖实际承担公告、邀请前言、获取/递交/联系方式等通知摘要功能的区域；其余同级区域分别按实际 Owner 裁决。真实的独立招标/采购公告仍整体排除，不能仅凭顶层编号把公告内部摘要切成技术来源。
 
 典型名称必须按实际文种区分：承载完整采购结构的竞争性谈判邀请书、询价邀请书、投标邀请书或类似邀请文件，不能仅因含“邀请”二字就等同于竞争性谈判公告、询价公告、招标公告或其摘要。前者通常是多载体采购容器；其中邀请前言和程序区域排除，但边界独立的项目概况/采购内容、执行期质量安全、质保售后、技术标准和技术附件仍按实际 Owner 判断。资格章节内部的人员证书、安全资格和投标承诺仍属资格/响应 Owner；退出资格章节后独立规定中标后履约、施工、质量、安全、质保或售后的区域，不得继续继承资格 Owner。
+
+人员类内容必须区分“投标前资格/响应证明”与“中标后履约配置”。若 block 的主要直接效力只是证明投标人或拟派人员具备资格，或要求在响应文件中填写、提交人员表、简历、证书和承诺，它仍属于资格/响应 Owner。若 source 已退出公告、须知、资格审查、投标/响应格式和合同载体，边界独立的采购人要求直接规定中标后必须投入的岗位、职责、最低人数、执业条件、驻场/进场时间或持续配置义务，则属于 requirement；不能仅因章节名称含“投标”“强制”，表格含资格证书，或载体表现为人员表而排除。判断依据是实际 Owner、时间方向和对履约组织的直接约束，不是标题或关键词。
 
 Candidate 已选中四类排除载体时，不能再以“下游会忽略”“内容与项目相关”“包含唯一技术事实”或“只是中性宽度”为由保留。完整或大面积排除载体造成范围稀释、上下文挤占、截断或错误事实 Owner 时，属于 correctness repair；Candidate 语义主干已正确但仍含可安全分离的排除载体时，可作为 `good -> great` 的 scope precision 改善。只有原子地址无法把排除载体与合格技术来源安全拆分时，才因 source fidelity 保留不可分割的混合段落。
 
@@ -75,6 +81,8 @@ Owner 判断优先于局部技术词。若一个普通采购要求段落先独�
 
 采购事实源不以正式招标文件、盖章发布结构或法律文书形态为前提。采购人侧的需求简报、技术交底、会议纪要、邮件/聊天整理、现场勘查记录、方案委托和内部需求 handoff，只要已经描述当前项目的具体对象、范围、现场事实、工作内容、技术义务或明确要求供应商据此产出方案，仍属于可用 requirement source。协议字段 `source_role=buyer_issued` 在本 capability 中表示“采购人侧需求事实源”，不是对正式发布状态的法律判断。
 
+“采购事实源不要求正式法律文书形态”不能反向取消合同载体硬边界。若完整 source 由合同双方/当事人关系、订立或履行合同的总领关系、连续合同条款、价款或结算、违约、生效、解除/续约、争议解决、签署盖章等结构共同形成一份自洽的双边合同，它就是 `source_role=contract`；不能因标题含“服务要求”“技术要求”“协议要求”、大部分篇幅描述具体履约义务、采购人提供该文件或项目已经实例化，就改判为采购需求 handoff。只有合同真实结束后边界独立的技术规范、需求书、图纸、清单或有效技术附件，才可按自身 Owner 重新判断。若完整 source 从头到尾只有该合同载体且无上述独立来源，终态只能是裸 `null`；一旦 reason 已建立该前提，禁止再用“内部义务技术具体”或主要直接效力测试重新打开合同条款。
+
 “包含真实项目事实”不等于已经证明采购需求 Owner，但“文档像一份完成报告”也不等于已经证明错误 Owner。`buyer_issued` 可以包含采购人交给后续设计、实施、供货、服务或响应方的对象、范围、约束、责任、验收条件、参考事实和方案委托，也可以包含采购包内供技术写作使用的既有项目技术依据。若一份报告、规划、研究、设计或方案已经自行完成分析、取舍和结论，Reviewer 必须主动检查它究竟是采购人提供的项目依据，还是供应商交付物、企业内部材料、无关成稿或其他非采购文件；但不得仅凭完成口吻、结论章节、缺少招标措辞或标题中的“报告”“方案”就整体判空。破坏性整文删除仍需肯定证据证明其错误作者关系、使用目的或与当前采购任务无可用关系；证据不足而内容确实承载当前项目技术事实时，Candidate 保留推定优先。
 
 一份 source 可以是混合作者关系。若采购人侧已实例化需求、供应商疑问/报价/建议和后续方案指令共同出现，不能因为存在供应商文字或缺少正式版式而整篇判为供应商成稿或 `non_procurement`；应按可分离 block 的实际 Owner 保留采购事实、排除供应商响应和商务内容。只有 source 整体已经形成供应商交付的完整方案/承诺/配置成稿，且不存在可分离的采购人需求事实源时，整文供应商响应 veto 才成立。
@@ -86,6 +94,8 @@ Owner 判断优先于局部技术词。若一个普通采购要求段落先独�
 实例化证据与合格来源内的技术 membership 必须分开判断。“通用质量标准不能单独证明项目实例化”只限制整文 `instantiation` 门槛；一旦完整 source 已由其他已填写事实证明当前项目真实存在，四类排除载体之外、边界清晰的技术标准/技术规范/采购需求中，只要存在对当前项目可执行的质量、安全、环保、材料、施工、服务或验收义务，就已经具有 requirement 事实载荷。该义务即使采用行业通用措辞、引用现行标准、没有数值参数或只有一条正文，也不能被降格为空标题、外部指针或无事实模板。只有确实没有任何义务正文、仅有标题/占位/示例/未随 Word 提供材料的指针时，才属于非事实壳。
 
 必须区分“规范性纳入”与“裸外部指针”。要求当前项目的材料、设备、施工、服务、质量、安全、环保或验收必须遵守/达到所引用的法律、图纸、规范或现行标准，本身已经建立可执行义务，即使外部标准全文未复制进 Word，也不是空指针。只有文本仅要求另见一个未提供文件、且本段没有声明任何当前义务时，才按裸外部指针处理。
+
+规范性纳入是终态一致性规则。一旦完整 source 已由其他事实证明项目实例化，四类硬排除载体之外、边界独立的技术标准/规范章节只要直接要求当前项目的材料、设备、施工、服务、质量、安全、环保或验收“必须遵守/达到/符合”所引用的法律、规范或现行标准，就已经声明当前义务。篇幅只有数段、措辞可复用、没有项目专属参数或引用文本未复制，都不能把它降格为裸外部指针；只有当前段没有声明任何义务、仅要求另见未提供材料时，才是指针。
 
 孤立的技术章节标题、空标题或“详见/以另附技术任务书为准”之类仅指向未随当前 Word 提供材料的外部指针，不是可交付的 requirement 原文。若删除四类载体后只剩这类指针且当前 Word 没有对应详细内容，正确结果为裸 `null`；source fidelity 不能用来保留一个没有事实载荷的非空壳。
 
@@ -114,11 +124,11 @@ Owner 判断优先于局部技术词。若一个普通采购要求段落先独�
 
 Reviewer 默认必须使用 `remove_mode=exact`，完整枚举所有安全删除岛，即使 Candidate 很宽也不能把宽度或方便当作保护岛求补集的理由。只有完整 exact 删除确实超过 64 个不连续 range、无法在 schema 内表达时，才允许使用 `remove_mode=candidate_complement`，在 `preserve_ranges` 中一次列全其判断必须保留的 Candidate 子集，并保持 `remove_ranges=[]`。Harness 确定性计算 Reviewer 提案 `proposed remove = Candidate - preserve` 供 trace 和闭合检查；哪些岛应保护仍完全由 Reviewer 依据完整 source 判断。Reviewer 必须让每个 `preserve_range` 完整落在一个已给出的 Candidate interval 内，遇到任一 OUT gap 必须拆分。Harness 对误跨 OUT gap 的范围只做与 add/remove 方向裁剪同构的机械交集 `effective preserve = submitted preserve ∩ Candidate`，绝不把 OUT block 加入 final；若非空 preserve 与 Candidate 完全无交集则 fail-closed。
 
-`candidate_complement` 启动 Release 时，Reviewer 的 reason、证据线索和原始 `preserve_ranges` 表达隐藏；Harness 把 `Candidate - preserve` 机械标记为 `REMOVE_REVIEW`，把其余 Candidate 标记为 `KEEP_LOCAL_AUDIT`，并把完整 Candidate 作为最大删除 envelope。Release 必须先逐原子攻击 `REMOVE_REVIEW` 是否误伤合格事实，再逐 block 检查 `KEEP_LOCAL_AUDIT` 中可由 block 本身或紧邻明确局部标题自证的 false protection；不得通过延长有争议的公告、邀请、须知、格式或合同外层 Owner 跨越顶层功能边界来删除，也不得因一个误删点整包恢复。`exact` mode 只开放 Reviewer 明确提交的 remove ranges，envelope 外 Candidate 为强制 `BASE_KEEP`。两种模式都不允许代码推断 Owner、membership 或最终范围。
+Reviewer 的 reason、证据线索和原始 `preserve_ranges` 表达始终对 Release 隐藏。`remove_mode` 只决定 Reviewer 如何在 64 个 range 的地址容量内表达删除提案，不决定 Release 权限：只要机械归一化后的有效删除非空，Harness 就把完整 Candidate 作为删除重审 envelope，将 Reviewer 点名删除的 block 标记为 `REMOVE_REVIEW`，其余 Candidate 标记为 `KEEP_RECHECK`。Release 先攻击 `REMOVE_REVIEW` 的过度删除，再独立攻击全部 `KEEP_RECHECK` 的 false protection；它既不能把一个误删点扩张成整包恢复，也不能沿用 Reviewer 的载体分区而跳过后续顶层边界。若 challenge 只有 add，则 Candidate 仍全部是不可删除的 `BASE_KEEP`。任何模式都不允许代码推断 Owner、membership 或最终范围。
 
-remove envelope 的 block 数、字符数、覆盖比例和是否等于完整 Candidate 都只是权限与预算元数据，不是 Reviewer 的删除票数、目标删除比例或整包语义结论。Release 必须对 `REMOVE_REVIEW` 内每个可寻址子集独立判断，恢复所有误删事实，并只批准 source-grounded 的安全删除。`KEEP_LOCAL_AUDIT` 只允许局部自证纠错：明确评分/资格/响应格式/合同块、供应商成稿、可分离纯价格付款结算保证金投标有效期和裸外部指针可删除；若结论依赖跨顶层边界继续继承一个有争议的外层载体，则必须保留并由 Reviewer 的全局分区承担。不能因为 envelope 很宽就整包删除，也不能因为其中存在一个误删点就整包恢复。
+remove envelope 的 block 数、字符数、覆盖比例和是否等于完整 Candidate 都只是权限与预算元数据，不是 Reviewer 的删除票数、目标删除比例或整包语义结论。Release 必须对完整 Candidate 内每个可寻址子集独立判断：恢复所有误删事实，删除所有在本次重审中肯定证明的 false protection，并只批准 source-grounded 的安全变化。`KEEP_RECHECK` 不是保留票；`REMOVE_REVIEW` 也不是删除票。Release 必须重新确认公告、邀请、须知、格式、合同与独立技术来源的真实边界，不能因为 envelope 很宽就整包删除，也不能因为其中存在一个合格岛就整包恢复。
 
-Release 提交的 `final_ranges` 若越过机械权限，Harness 只能执行集合约束：未被 Reviewer 提议的 Candidate 外 block 不得新增；`exact` mode 中 remove envelope 外的 Candidate block 必须机械恢复；`candidate_complement` 中完整 Candidate 均在机械删除权限内，但语义 Prompt 只授权 `KEEP_LOCAL_AUDIT` 的局部自证纠错，不授权重开全局载体分区。该规则只解决地址权限和稀疏 Candidate 空隙，不读取 reason，不推断任何 Owner、membership 或安全删除语义。
+Release 提交的 `final_ranges` 若越过机械权限，Harness 只能执行集合约束：未被 Reviewer 挑战的 Candidate 外 block 不得新增；add-only challenge 中全部 Candidate block 必须机械恢复；含有效删除的 challenge 中，Release 可在完整 Candidate 内显式保留或省略，并可加入 Reviewer challenged add。该规则只解决地址权限和稀疏 Candidate 空隙，不读取 reason，不推断任何 Owner、membership 或安全删除语义。
 
 任何使反事实 final 变成裸 `null` 的 challenge 都承担完整外部召回义务。Reviewer 必须先检查四类硬排除载体之外的全部顶层区域、载体边界过渡和不连续 OUT 岛，确认不存在独立采购需求、技术标准和要求、项目专用技术条款、图纸/设计说明、清单或有效技术附件。合格来源可能只有数段并夹在很长的合同、格式或程序载体之间；长度短、Candidate 未选或相邻载体很大都不能成为跳过理由。
 
