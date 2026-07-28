@@ -1,6 +1,6 @@
 # Independent Release
 
-`semantic-contract.md` 是唯一语义合同。完整 source、冻结 Candidate 与机械有界 challenge envelope 已提供；Reviewer 的叙事、证据线索、身份和历史均隐藏。`PROPOSED_REMOVE`、`AUDIT_KEEP`、`ADD`、`REMOVE`、`IN` 和 `OUT` 都只是机械 membership/权限标记，不是答案。
+`semantic-contract.md` 是唯一语义合同。完整 source、冻结 Candidate 与机械有界 challenge envelope 已提供；Reviewer 的叙事、证据线索和历史均隐藏。`REMOVE_REVIEW` 是待安全审查的删除提议，`ADD_REVIEW` 是待独立审查的新增提议，`OUT` 不在本次权限内。`exact` mode 的 `BASE_KEEP` 不可删除；`candidate_complement` 的 `KEEP_LOCAL_AUDIT` 只开放块内或紧邻局部即可自证的 false-protection 纠错，不开放重新划分全局载体边界。标记只表达权限和审查顺序，不是答案、置信度或投票。
 
 只审查这一个 bounded patch，不从零生成第三套提取。终态优先：内部只做一次 Owner/边界判断、一次反例检查和一次终态闭合；不要输出 ledger、逐段复述 source、反复归并 ranges 或解释思考过程。必须在预算耗尽前调用唯一终态工具。
 
@@ -14,7 +14,7 @@
 - 只有明确裁决正确结果为空时才提交 `[]`；
 - reason 只解释决定性 Owner、边界与材料性，不承担结构决定，Harness 不读取 reason 修补 ranges。
 
-`exact` mode 只允许删除 `REMOVE` envelope 中的 Candidate block；envelope 外 Candidate 会由 Harness 机械恢复。`candidate_complement` mode 将完整 Candidate 作为 remove envelope，因此可恢复误删的 `PROPOSED_REMOVE`，也可删除经独立证明为 false protection 的 `AUDIT_KEEP`。两种 mode 都只能新增 Reviewer challenged `ADD`；其他 OUT block 永远不能进入 final。
+`exact` mode 只允许删除 `REMOVE_REVIEW` envelope 中的 Candidate block，所有 `BASE_KEEP` 会由 Harness 机械恢复。`candidate_complement` 将完整 Candidate 作为删除 envelope：你可恢复误删的 `REMOVE_REVIEW`，也可删除 locally self-proving 的 `KEEP_LOCAL_AUDIT` false protection；若删除依赖把公告、邀请、须知、格式或合同 Owner 跨越顶层功能边界继续延伸，必须保留。两种 mode 都只能新增 Reviewer challenged 的 `ADD_REVIEW` block；其他 OUT block 永远不能进入 final。
 
 ## 硬排除发布门
 
@@ -32,6 +32,8 @@ Candidate 的连续地址范围不是语义载体边界。一个宽区间可从�
 
 若一个合格章节标题之后在同一 Word 中存在实质正文，最终范围必须让标题与正文闭合到下一个同级 Owner 边界。图片占位、空行、分页和短续段不结束章节。不能在 reason 中认定项目范围、质量、安全、质保、验收或技术标准章节应保留，却只提交标题/概述并省略同章的具体义务、参数、措施、响应时限或责任正文；表头和清单也必须与明细闭合。
 
+闭合不得反向跨越载体起点。独立技术附件、清单或图纸从其自身标题、名称或首个明确内容 block 开始；其前方属于上一载体的签署主体、日期、签章、落款、页眉页脚和版式图片不得仅因紧邻而保留。进入合格载体之后的图片占位、分页和短续段仍不构成结束边界。
+
 必须区分规范性纳入与裸外部指针：当前段已经要求工作“必须遵守/达到”所引用的法律、图纸、规范或现行标准时，义务本身已在 source 中成立，不能因引用对象未全文复制而删除；只有当前段没有任何义务、仅要求另见未提供文件时，才是裸指针。
 
 人员要求必须按 Owner 区分：公告/资格/须知中的投标资格或拟派人员表仍排除；退出这些载体后，独立合格来源中规定中标后实际履约组织、岗位职责或驻场义务的内容才可保留。
@@ -40,7 +42,7 @@ Candidate 的连续地址范围不是语义载体边界。一个宽区间可从�
 
 1. **整文关系**：从 source 开头、中部和结尾独立确定作者关系、用途与实例化依据。采购人身份不会让公告、须知、格式或合同模板获得 requirement membership。
 2. **真实载体边界**：确认四类硬排除载体的实际起止。物理文件封面不得覆盖全文；完整邀请文件可为多载体采购容器，真实公告正文仍整体排除。
-3. **验证 Reviewer patch**：逐原子检查 `PROPOSED_REMOVE`/`REMOVE` 是否误伤合格事实；再对抗性攻击 `AUDIT_KEEP`/`IN` 是否仍包含硬排除载体、评分/资格/纯价格、供应商成稿或非事实壳。
+3. **验证有界 envelope**：先逐原子攻击 `REMOVE_REVIEW` 的过度删除、材料性遗漏、false null 和标题—正文—表格不闭合；批准安全子集并恢复误删子集。仅在 `candidate_complement` 中，再逐 block 检查 `KEEP_LOCAL_AUDIT` 的局部自证 false protection；不得重开全局载体分区，也不得按方案宽窄或角色身份投票。
 4. **独立审查 add**：新增只能来自合格来源并达到材料性召回门槛；一个正确 add 不能为无关 remove 背书。
 5. **保护详细载体**：不得遗漏对象、工作包、独立章节、参数/清单/图纸、质量、安全、质保、验收或其他不可替代源文。
 6. **形成一次终态**：先让 reason 到达单一终结论，再在最后的 `final_ranges` 中一次性表达所有 keep/add/remove。提交前机械检查：理由称为保留的 block 必须在集合内，称为删除的 block 必须不在集合内。
