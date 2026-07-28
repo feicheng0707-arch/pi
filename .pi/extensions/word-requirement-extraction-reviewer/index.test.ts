@@ -181,18 +181,13 @@ test("preserves the candidate after one contract-valid Reviewer pass", async () 
 	expect(scripted.userPrompts[0]).toMatch(/candidateCharacterCount=\d+/u);
 	expect(scripted.userPrompts[0]).toMatch(/candidateCharacterCoverageRatio=0\.\d{4}/u);
 	expect(scripted.userPrompts[0]).toContain("focusedCandidateBlockCount=1");
-	expect(scripted.userPrompts[0]).toContain("focusedCandidateIncludedTargetBlockCount=1");
-	expect(scripted.userPrompts[0]).toContain("focusedCandidateContextBlockCount=2");
-	expect(scripted.userPrompts[0]).toContain("focusedCandidateCoverage=complete");
 	expect(scripted.userPrompts[0]).toContain("focusedCandidateIncluded=true");
 	expect(scripted.userPrompts[0]).toContain(
-		"# Focused Candidate review view with context-only neighbors (mechanical duplicate of source addresses)",
+		"# Focused Candidate-only review view (complete mechanical duplicate when budget permits)",
 	);
 	expect(scripted.userPrompts[0]).toContain(
-		"candidateFocusPurpose=Deterministic boundary-balanced duplicate of Candidate-selected source addresses",
+		"candidateFocusPurpose=Complete mechanical duplicate of Candidate-selected addresses only when the whole duplicate fits",
 	);
-	expect(scripted.userPrompts[0]).toContain("FOCUS_TARGET|IN|段落1：");
-	expect(scripted.userPrompts[0]).toContain("CONTEXT_ONLY|OUT|段落0：");
 	expect(scripted.userPrompts[0]).toContain("IN|段落1：");
 	expect(scripted.userPrompts[0]).toContain("OUT|段落2：");
 	expect(scripted.userPrompts[0].lastIndexOf("# Final closure checklist")).toBeGreaterThan(
@@ -753,7 +748,7 @@ test("uses a narrative-blind Release to apply a bounded repair", async () => {
 	expect(result.budget.providerCalls).toBe(2);
 });
 
-test("renders an oversized Release focus as a boundary-balanced partial view with context-only neighbors", async () => {
+test("samples an oversized change side with fixed text-blind address priorities", async () => {
 	const blocks = Array.from({ length: 180 }, (_, blockId) => ({
 		blockId,
 		text: `原子段落${blockId}。`,
@@ -792,14 +787,126 @@ test("renders an oversized Release focus as a boundary-balanced partial view wit
 
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual([]);
-	expect(scripted.userPrompts[1]).toContain("focusedReviewBlockCount=141");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewIncludedTargetBlockCount=96");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewContextBlockCount=32");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepTargetBlockCount=0");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=omitted");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=141");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=125");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=partial");
 	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=128");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewCoverage=partial");
-	expect(scripted.userPrompts[1]).toContain("FOCUS_TARGET|REMOVE_REVIEW|段落20：");
-	expect(scripted.userPrompts[1]).toContain("CONTEXT_ONLY|OUT|段落19：");
-	expect(scripted.userPrompts[1]).toContain("CONTEXT_ONLY|OUT|段落39：");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
+	expect(scripted.userPrompts[1]).toContain(
+		"ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落20：",
+	);
+	expect(scripted.userPrompts[1]).not.toContain("ATOMIC_KEEP_TARGET|");
+});
+
+test("renders both text-blind atomic navigation sides within one fixed budget", async () => {
+	const blocks = Array.from({ length: 400 }, (_, blockId) => ({
+		blockId,
+		text: `原子段落${blockId}。`,
+	}));
+	const packet = parseRequirementReviewPacket(packetValue(blocks, ["段落0-段落399"]));
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				remove_mode: "exact",
+				remove_ranges: ["段落100-段落102", "段落200-段落210", "段落350-段落399"],
+				preserve_ranges: [],
+				reason: "The exact challenge creates several mechanical keep/remove transitions.",
+			},
+			"reviewer-targeted-focus",
+		),
+		tool(
+			"submit_requirement_release",
+			release(["段落0-段落99", "段落103-段落199", "段落211-段落349"], "Approve the bounded removal."),
+			"release-targeted-focus",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "4".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepTargetBlockCount=336");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepIncludedTargetBlockCount=54");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=partial");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=64");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=64");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=128");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
+	expect(scripted.userPrompts[1]).toContain(
+		"the harness exposes both Candidate keep and proposed-change sides",
+	);
+	expect(scripted.userPrompts[1]).toContain("## CANDIDATE_KEEP_SIDE");
+	expect(scripted.userPrompts[1]).toContain("## PROPOSED_CHANGE_SIDE");
+	expect(scripted.userPrompts[1]).toContain(
+		"ATOMIC_CONTEXT|KEEP_RECHECK|段落99：",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落100：",
+	);
+	expect(
+		scripted.userPrompts[1].indexOf("ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落399："),
+	).toBeLessThan(
+		scripted.userPrompts[1].indexOf("ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落350："),
+	);
+});
+
+test("keeps the start boundary window of a large proposed-removal run visible", async () => {
+	const blocks = Array.from({ length: 1_068 }, (_, blockId) => ({
+		blockId,
+		text: `原子段落${blockId}。`,
+	}));
+	const packet = parseRequirementReviewPacket(
+		packetValue(blocks, ["段落1", "段落4-段落7", "段落9-段落102", "段落146-段落1067"]),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				remove_mode: "exact",
+				remove_ranges: ["段落1", "段落5-段落7", "段落9-段落102", "段落184-段落1067"],
+				preserve_ranges: ["段落4", "段落146-段落183"],
+				reason: "The exact proposal creates one very large change-side run after a qualified island.",
+			},
+			"reviewer-large-change-boundary",
+		),
+		tool(
+			"submit_requirement_release",
+			release(["段落146-段落200"], "Restore the independently qualified boundary island."),
+			"release-large-change-boundary",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "5".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=partial");
+	for (const blockId of [184, 198, 199, 200]) {
+		expect(scripted.userPrompts[1]).toContain(
+			`ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落${blockId}：`,
+		);
+	}
 });
 
 test("mechanically applies an independently approved operational precision removal", async () => {
@@ -1175,24 +1282,33 @@ test("mechanically expands a broad Candidate complement from protected technical
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 	expect(scripted.userPrompts[1]).not.toContain("REMOVE_REVIEW|段落1：");
 	expect(scripted.userPrompts[1]).toContain(
-		"independently attack every KEEP_RECHECK block for false protection",
+		"Form one neutral atomic partition of the complete Candidate by actual Owner and each block's primary direct effect",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only",
 	);
-	expect(scripted.userPrompts[1]).toContain("focusedReviewBlockCount=8");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewIncludedTargetBlockCount=8");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewContextBlockCount=0");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepTargetBlockCount=3");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepIncludedTargetBlockCount=3");
+	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=5");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=5");
+	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=15");
 	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
 	expect(scripted.userPrompts[1]).toContain(
-		"# Focused bounded review view with context-only neighbors (mechanical duplicate of source addresses)",
+		"# Text-blind dual-side atomic navigation view (bounded mechanical duplicate)",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"focusViewPurpose=Deterministic boundary-balanced duplicate of the bounded terminal audit surface only",
+		"focusViewPurpose=Text-blind dual-side atomic navigation only",
 	);
-	expect(scripted.userPrompts[1]).toContain("FOCUS_TARGET|KEEP_RECHECK|段落1：");
-	expect(scripted.userPrompts[1]).toContain("FOCUS_TARGET|REMOVE_REVIEW|段落0：");
+	expect(scripted.userPrompts[1].match(/^KEEP_RECHECK\|段落1：/gmu)).toHaveLength(1);
+	expect(scripted.userPrompts[1].match(/^REMOVE_REVIEW\|段落0：/gmu)).toHaveLength(1);
+	expect(scripted.userPrompts[1]).toContain(
+		"ATOMIC_KEEP_TARGET|KEEP_RECHECK|段落1：",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落0：",
+	);
 	expect(scripted.userPrompts[1]).toContain(
 		"an independent technical chapter outside the four carriers has fact payload",
 	);
@@ -1258,6 +1374,15 @@ test("mechanically expands a broad Candidate complement from protected technical
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"no uncited tail block may be absorbed merely by range continuity",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"false_protection_attack=<literal kept ranges to remove or none after checking each subheading/block>",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"A new commercial or legal heading is independently removable and cannot inherit the previous technical subsection",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"pure legal remedy/termination/dispute/formation/risk-allocation text",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"Closure never extends backward across the carrier start",
@@ -1580,7 +1705,7 @@ test("infers exact mode from a remove-only Reviewer challenge", async () => {
 	});
 });
 
-test("uses explicit exact mode when Reviewer redundantly submits preserve ranges", async () => {
+test("mechanically protects explicit keep addresses from a conflicting exact removal", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1600,11 +1725,11 @@ test("uses explicit exact mode when Reviewer redundantly submits preserve ranges
 				issue_type: "boundary",
 				add_ranges: [],
 				remove_mode: "exact",
-				remove_ranges: ["段落2"],
-				preserve_ranges: ["段落0-段落1"],
-				reason: "Ambiguous dual removal representation for fail-closed coverage.",
+				remove_ranges: ["段落1-段落2"],
+				preserve_ranges: ["段落1"],
+				reason: "The structural submission explicitly protects one address inside the removal range.",
 			},
-			"reviewer-ambiguous-removal-mode",
+			"reviewer-conflicting-exact-mode",
 		),
 		tool(
 			"submit_requirement_release",
@@ -1631,7 +1756,8 @@ test("uses explicit exact mode when Reviewer redundantly submits preserve ranges
 		verdict: "challenge",
 		removeMode: "exact",
 		removeRanges: ["段落2"],
-		preserveRanges: [],
+		submittedPreserveRanges: ["段落1"],
+		preserveRanges: ["段落1"],
 	});
 });
 
@@ -1677,6 +1803,51 @@ test("compacts many shorthand preserve ranges before schema validation", async (
 		removeRanges: ["段落30-段落35"],
 		preserveRanges: ["段落0-段落29"],
 	});
+});
+
+test("normalizes mechanically grouped paragraph addresses before schema validation", async () => {
+	const blocks = Array.from({ length: 13 }, (_, blockId) => ({
+		blockId,
+		text: `原子段落${blockId}。`,
+	}));
+	const packet = parseRequirementReviewPacket(packetValue(blocks, ["段落0-段落12"]));
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				remove_mode: "exact",
+				remove_ranges: ["段落0、3-4；段6-段7", "9, 11至12"],
+				preserve_ranges: [],
+				reason: "The exact mechanical address list is grouped into two strings.",
+			},
+			"reviewer-grouped-addresses",
+		),
+		tool(
+			"submit_requirement_release",
+			release(["段落1-段落2", "段落5", "段落8", "段落10"], "Approve the exact removal."),
+			"release-grouped-addresses",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "6".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.failure).toBeNull();
+	expect(result.reviewer).toMatchObject({
+		verdict: "challenge",
+		removeMode: "exact",
+		removeRanges: ["段落0", "段落3-段落4", "段落6-段落7", "段落9", "段落11-段落12"],
+	});
+	expect(result.finalRanges).toEqual(["段落1-段落2", "段落5", "段落8", "段落10"]);
 });
 
 test("fails closed when a protected range is outside the Candidate", async () => {
