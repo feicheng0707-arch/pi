@@ -1,0 +1,4 @@
+interface:
+  display_name: "Word Requirement Reviewer"
+  short_description: "Review and repair Word requirement extraction ranges"
+  default_prompt: "Use $word-requirement-extraction-reviewer to review a frozen Word requirement extraction candidate."
