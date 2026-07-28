@@ -16,6 +16,8 @@
 
 `source_role` 描述完整 source 的整体关系，不是某个 Candidate interval 或局部章节的 Owner。只有完整 source 本身是单一合同文档时才用 `contract`；采购人发布的多载体招标文件即使包含很长合同章，仍应按完整 source 关系使用 `buyer_issued`，然后逐局部载体判 membership。
 
+单一合同文档是终态门。若合同双方/当事人关系、订立或履行合同的总领关系、连续条款、价款或结算、违约、生效、解除/续约、争议解决、签署盖章等结构共同形成一份自洽双边合同，标题中的“服务要求”“技术要求”以及合同内部大量具体履约事实都不能把它改判为需求 handoff。若全文未退出到边界独立的技术规范、需求书、图纸、清单或有效技术附件，Candidate 非空时必须完整挑战为裸 `null`；禁止在建立 `source_role=contract` 后又对合同内部启动主要直接效力切分。
+
 Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 可以从合同章跨入同级技术标准、图纸、清单或附件，再进入投标格式；必须在 interval 内的每个顶层标题、章节过渡、附件和表格边界重新判断 Owner，不能把起始章节的 Owner 继承到整个地址区间。
 
 若完整 source 从头到尾是一个四类硬排除载体，且不存在边界独立的合格技术章节/附件，则正确结果只能是裸 `null`。Candidate 非空时必须挑战完整 Candidate；使用 `candidate_complement` 时提交 `preserve_ranges=[]`。不得把“内容具体”“当前项目专属”“对写方案有用”或“只在此处出现”当作保护理由。只有检查过全部后续顶层边界后，才可认定 source 从未退出该载体。
@@ -24,7 +26,9 @@ Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 
 
 判断外部引用时先问当前段是否已经声明义务：要求“必须遵守/达到”法律、图纸、规范或现行标准，是规范性纳入，义务已经存在；只有不声明任何当前义务、仅把全部内容推给未提供文件，才是裸外部指针。
 
-人员要求必须按 Owner 区分：公告/资格/须知中的投标资格或拟派人员表仍排除；只有退出这些载体后，独立合格来源中规定中标后实际履约组织、岗位职责或驻场义务的内容才可保留。
+不得用篇幅、通用性或参数密度覆盖该判断。项目已由其他事实实例化后，边界独立的技术标准/规范章节即使只有数段、措辞通用、没有型号数量，也只要直接要求当前项目必须遵守/达到/符合现行法律或标准，就不是裸指针。
+
+人员要求必须按 Owner、时间方向和直接效力区分。公告、须知、资格审查、投标/响应格式中用于证明投标人或拟派人员资格，或要求填写/提交人员名单、简历、证书、承诺的内容仍排除。source 退出这些载体后，边界独立的采购人要求若直接规定中标后实际履约必须投入的岗位、职责、最低人数、执业条件、驻场/进场时间或持续配置义务，就属于 requirement；不能仅因章节名称含“投标”“强制”、表格列出资格证书或表现为人员表而删除。
 
 ## 一次审查顺序
 
@@ -35,9 +39,15 @@ Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 
 5. **反事实材料性**：内部形成 `final = Candidate + add - remove`。correctness challenge 必须关闭一个完整 case-level 问题；同一 Owner/membership 问题分散在多个安全岛时，一次覆盖全部，不得只修一处或搭载无关清理。
 6. **运营精度**：只有前五步均无 correctness issue 时，才可提交 remove-only `operational_precision`。四类硬排除载体按边界安全判断；其他普通噪声必须同时满足零技术损失和材料性 token/截断/注意力收益。
 
-默认使用 `remove_mode=exact`，完整枚举所有安全删除岛；Candidate 很宽、应保护岛很少或 exact 书写较长都不是改用补集的理由。只有完整 exact 删除确实超过 64 个不连续 range、无法在 schema 内表达时，才使用 `remove_mode=candidate_complement`：在 `preserve_ranges` 一次性列全你判断必须保护的 Candidate 合格技术岛，保持 `remove_ranges=[]`，最后只做一次闭合检查。每个保护 range 必须完整落在一个 `candidateRanges` interval 内；遇到 OUT gap 立即拆分。Harness 机械把 Candidate 补集标记为 `REMOVE_REVIEW`，把保护岛标记为 `KEEP_LOCAL_AUDIT`；进入 Release 后 reason、证据和原始 preserve 表达隐藏。Release 会先防止补集误删，再只纠正块内或紧邻局部即可自证的 false protection，不能重新划分你建立的全局载体边界；因此不能依赖 Release 代替本轮保护岛完整性检查。
+默认使用 `remove_mode=exact`，完整枚举所有安全删除岛；Candidate 很宽、应保护岛很少或 exact 书写较长都不是改用补集的理由。只有完整 exact 删除确实超过 64 个不连续 range、无法在 schema 内表达时，才使用 `remove_mode=candidate_complement`：在 `preserve_ranges` 一次性列全你判断必须保护的 Candidate 合格技术岛，保持 `remove_ranges=[]`，最后只做一次闭合检查。每个保护 range 必须完整落在一个 `candidateRanges` interval 内；遇到 OUT gap 立即拆分。无论采用哪种 remove mode，只要有效删除非空，进入 Release 后完整 Candidate 都会成为有界重审面：本轮点名删除的 block 标记为 `REMOVE_REVIEW`，其他 Candidate 标记为 `KEEP_RECHECK`；reason、证据和原始 preserve 表达隐藏。Release 可恢复误删，也可删除本轮漏掉的 false protection。该机制用于抵消一次 Reviewer 分区的不可逆误差，不降低本轮举证责任：exact 仍只能提交你已经判断安全删除的 block，candidate_complement 仍必须完整保护你判断合格的岛，不能依赖 Release 代替本轮闭合检查。
 
 `preserve_ranges` 是逐原子 allowlist，不是章节投票。四类硬排除之外的混合商务/履约章节中，工期、地点、范围、质量、质保、交付、验收和服务响应可保留，但可分离的价格、付款、结算、保证金、投标有效期和纯报价承诺不得因相邻技术义务而进入保护岛；必须在这些 block 前后拆分 range。
+
+“主要直接效力”检查必须晚于载体 Owner，并且只允许用于 source 已经证明位于四类硬排除载体之外的混合 block。公告、须知、投标/响应格式或合同条款及格式尚未结束时，禁止用局部实施、服务、质量、安全、验收、人员或项目专属事实重新取得 membership。退出这些载体之后，主要在计算或约定报价、价款、支付、结算、扣款、审计、发票、保证金或价格调整时，即使工程量、完工、验收或质量保证金只是金额依据、前提或触发条件，也按纯商务删除；不得从“验收合格后结算”推导出独立验收需求。主要在要求实施、提供、配置、施工、交付、维护、响应或达到工期/质量/安全结果时，按履约事实保留，即使同段附带费用已含、不另支付或违约后果。按直接效力而非关键词数量、章节标题或相邻段落投票。
+
+`exact` 不是让 Release 从宽 envelope 中重新找答案的补集模式。每个 exact remove block 都必须是 Reviewer 已经逐 block 判断为安全删除的内容；不得把含有工期、地点、范围、质量、质保、交付、验收、安全或服务事实的整个混合章节先纳入 remove_ranges，再期待 Release 恢复。先在本轮拆出合格事实并留在 Candidate，Release 只复核真正有争议的删除提议。
+
+结构字段必须忠实投影已收敛的 reason。reason 中任何明确判定为保留的 Candidate block/岛，都不得落入 `remove_ranges`；调用工具前检查保留岛与删除范围是否相交，若相交必须拆分或修正 range。禁止一边在 reason 中确认合格履约事实，一边用跨越该事实的宽 `exact` range 删除，再把恢复责任交给 Release。
 
 提交方向前必须先读取 IN/OUT overlay：目标 block 已标记为 IN 时，它已经属于 Candidate，绝不能再提交为 add。若它是宽 Candidate 中唯一或少数合格技术岛，应把该 IN 岛列入 `preserve_ranges`，并用 Candidate 补集删除周围污染；若所有 IN 都应删除，则 `preserve_ranges=[]`。只有标记为 OUT 的合格来源才能进入 `add_ranges`。
 
@@ -46,6 +56,8 @@ Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 
 孤立技术标题、空标题或只指向本 Word 未提供材料的“详见/以另附技术任务书、规范书或附件为准”不是事实载荷。若排除其他载体后只剩这类壳，反事实 final 必须为空，不能为了保留标题或指针建立保护岛。
 
 标题与正文分别承担 membership。即使一个技术标题因边界上下文与前一合格区域连续保留，紧随其后的 block 若只说到招标人处查阅、另行提供或详见未随 Word 提供的图纸/附件，仍是裸外部指针，不能随标题进入 `preserve_ranges`。
+
+交叉引用也不转移 Owner。合格需求正文中的“详见附件/合同附件/考核表/响应表”只是一条指针；必须到被引用内容的实际结构位置重新判断。若引用目标位于公告、须知、投标/响应格式、评分、资格、合同条款及格式或其附件范本中，即使内容详细、唯一或与需求正文一致，也不得建立保护岛。source-fidelity 闭合只能在同一合格 Owner 内延伸。
 
 反过来，若一个合格章节标题之后在同一 Word 中确有实质正文，保护岛必须覆盖标题及其正文直到下一个同级 Owner 边界。图片占位、空行、分页和短续段不会结束章节。不得在 reason 中认定项目范围、质量、安全、质保、验收或技术标准章节有效，却只保护标题/概述并把其具体义务、参数、措施或责任正文放入补集删除。
 
