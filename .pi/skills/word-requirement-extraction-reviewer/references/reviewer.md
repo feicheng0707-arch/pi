@@ -35,7 +35,9 @@ Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 
 5. **反事实材料性**：内部形成 `final = Candidate + add - remove`。correctness challenge 必须关闭一个完整 case-level 问题；同一 Owner/membership 问题分散在多个安全岛时，一次覆盖全部，不得只修一处或搭载无关清理。
 6. **运营精度**：只有前五步均无 correctness issue 时，才可提交 remove-only `operational_precision`。四类硬排除载体按边界安全判断；其他普通噪声必须同时满足零技术损失和材料性 token/截断/注意力收益。
 
-Candidate 覆盖很宽且混有多个 Owner 时，使用“保护岛再求补集”：设置 `remove_mode=candidate_complement`，在 `preserve_ranges` 一次性列全你判断必须保护的 Candidate 合格技术岛，保持 `remove_ranges=[]`，最后只做一次闭合检查。每个保护 range 必须完整落在一个 `candidateRanges` interval 内；遇到 OUT gap 立即拆分，不能用连续 source range 跨过去。Harness 机械记录你的 Candidate 补集提案；进入 Release 后 reason、证据和原始 preserve 表达隐藏，但补集以 `PROPOSED_REMOVE`、其余 Candidate 以 `AUDIT_KEEP` 展示，完整 Candidate 仍是第二模型的最大删除 envelope。Release 会独立审查提案、攻击错误保护，并只用一个完整 `final_ranges` 表达最终保留集合；不能依赖它代替本轮保护岛完整性检查。该顺序不输出 ledger，也不增加调用。
+默认使用 `remove_mode=exact`，完整枚举所有安全删除岛；Candidate 很宽、应保护岛很少或 exact 书写较长都不是改用补集的理由。只有完整 exact 删除确实超过 64 个不连续 range、无法在 schema 内表达时，才使用 `remove_mode=candidate_complement`：在 `preserve_ranges` 一次性列全你判断必须保护的 Candidate 合格技术岛，保持 `remove_ranges=[]`，最后只做一次闭合检查。每个保护 range 必须完整落在一个 `candidateRanges` interval 内；遇到 OUT gap 立即拆分。Harness 机械把 Candidate 补集标记为 `REMOVE_REVIEW`，把保护岛标记为 `KEEP_LOCAL_AUDIT`；进入 Release 后 reason、证据和原始 preserve 表达隐藏。Release 会先防止补集误删，再只纠正块内或紧邻局部即可自证的 false protection，不能重新划分你建立的全局载体边界；因此不能依赖 Release 代替本轮保护岛完整性检查。
+
+`preserve_ranges` 是逐原子 allowlist，不是章节投票。四类硬排除之外的混合商务/履约章节中，工期、地点、范围、质量、质保、交付、验收和服务响应可保留，但可分离的价格、付款、结算、保证金、投标有效期和纯报价承诺不得因相邻技术义务而进入保护岛；必须在这些 block 前后拆分 range。
 
 提交方向前必须先读取 IN/OUT overlay：目标 block 已标记为 IN 时，它已经属于 Candidate，绝不能再提交为 add。若它是宽 Candidate 中唯一或少数合格技术岛，应把该 IN 岛列入 `preserve_ranges`，并用 Candidate 补集删除周围污染；若所有 IN 都应删除，则 `preserve_ranges=[]`。只有标记为 OUT 的合格来源才能进入 `add_ranges`。
 
@@ -43,7 +45,11 @@ Candidate 覆盖很宽且混有多个 Owner 时，使用“保护岛再求补集
 
 孤立技术标题、空标题或只指向本 Word 未提供材料的“详见/以另附技术任务书、规范书或附件为准”不是事实载荷。若排除其他载体后只剩这类壳，反事实 final 必须为空，不能为了保留标题或指针建立保护岛。
 
+标题与正文分别承担 membership。即使一个技术标题因边界上下文与前一合格区域连续保留，紧随其后的 block 若只说到招标人处查阅、另行提供或详见未随 Word 提供的图纸/附件，仍是裸外部指针，不能随标题进入 `preserve_ranges`。
+
 反过来，若一个合格章节标题之后在同一 Word 中确有实质正文，保护岛必须覆盖标题及其正文直到下一个同级 Owner 边界。图片占位、空行、分页和短续段不会结束章节。不得在 reason 中认定项目范围、质量、安全、质保、验收或技术标准章节有效，却只保护标题/概述并把其具体义务、参数、措施或责任正文放入补集删除。
+
+保护岛必须从合格载体自身的起点开始，不能为了连续而向前吸收上一载体的尾部。附件、清单或图纸前方的签署主体、日期、签章、落款、页眉页脚和版式图片仍按前一 Owner 判断；只有附件自身标题、名称或首个明确内容 block 及其后续闭合内容可进入该保护岛。
 
 若反事实 final 为空，必须额外扫描四类硬排除载体之外的全部顶层区域、边界过渡和不连续 OUT 岛；短小技术标准、项目专用要求、图纸/设计说明、清单或有效附件不能因夹在长载体之间而漏掉。
 

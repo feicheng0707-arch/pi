@@ -727,8 +727,8 @@ test("uses a narrative-blind Release to apply a bounded repair", async () => {
 	expect(scripted.userPrompts[1]).toContain("candidateBlockCount=1");
 	expect(scripted.userPrompts[1]).toContain("challengeAddBlockCount=1");
 	expect(scripted.userPrompts[1]).toContain("challengeRemoveBlockCount=0");
-	expect(scripted.userPrompts[1]).toContain("IN|段落1：");
-	expect(scripted.userPrompts[1]).toContain("ADD|段落2：");
+	expect(scripted.userPrompts[1]).toContain("BASE_KEEP|段落1：");
+	expect(scripted.userPrompts[1]).toContain("ADD_REVIEW|段落2：");
 	expect(scripted.userPrompts[1]).toContain("OUT|段落3：");
 	expect(scripted.userPrompts[1]).toContain(
 		"releaseTerminalContract=Write one short reason first and reach one settled conclusion",
@@ -980,8 +980,8 @@ test("mechanically clips Reviewer ranges to the declared candidate direction", a
 	});
 	expect(scripted.userPrompts[1]).toContain('challengeAddRanges=["段落2"]');
 	expect(scripted.userPrompts[1]).toContain('challengeRemoveRanges=["段落1"]');
-	expect(scripted.userPrompts[1]).toContain("REMOVE|段落1：");
-	expect(scripted.userPrompts[1]).toContain("ADD|段落2：");
+	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落1：");
+	expect(scripted.userPrompts[1]).toContain("ADD_REVIEW|段落2：");
 	expect(result.finalRanges).toEqual(["段落2"]);
 });
 
@@ -1102,10 +1102,19 @@ test("mechanically expands a broad Candidate complement from protected technical
 		'releaseRemoveEnvelopeRanges=["段落0-段落7"]',
 	);
 	expect(scripted.userPrompts[1]).toContain("reviewerPreserveRangesAndRationale=withheld");
+	expect(scripted.userPrompts[1]).toContain(
+		"reviewerMechanicalPatchVisibility=asymmetric REMOVE_REVIEW then KEEP_LOCAL_AUDIT review",
+	);
 	expect(scripted.userPrompts[1]).not.toContain("challengePreserveRanges=");
-	expect(scripted.userPrompts[1]).toContain("PROPOSED_REMOVE|段落0：");
-	expect(scripted.userPrompts[1]).toContain("AUDIT_KEEP|段落1：");
-	expect(scripted.userPrompts[1]).not.toContain("REMOVE|段落1：");
+	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
+	expect(scripted.userPrompts[1]).toContain("KEEP_LOCAL_AUDIT|段落1：");
+	expect(scripted.userPrompts[1]).not.toContain("PROPOSED_REMOVE|");
+	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
+	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
+	expect(scripted.userPrompts[1]).not.toContain("REMOVE_REVIEW|段落1：");
+	expect(scripted.userPrompts[1]).toContain(
+		"Never remove KEEP_LOCAL_AUDIT by extending a disputed outer announcement",
+	);
 	expect(scripted.userPrompts[1]).toContain(
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only",
 	);
@@ -1139,9 +1148,27 @@ test("mechanically expands a broad Candidate complement from protected technical
 	expect(scripted.userPrompts[1]).toContain(
 		"final_ranges must keep the heading and that body as one source-fidelity unit",
 	);
+	expect(scripted.userPrompts[0]).toContain(
+		"Closure never extends backward across the carrier start",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"preserve_ranges is a block-level allowlist, never a chapter vote",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"candidate_complement is exceptional address compression only when that complete exact deletion would genuinely exceed 64 disjoint ranges",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"that pointer block must be removed even when the heading is retained for boundary context",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"Remove separable funding-source declarations, contract price form",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"Closure never extends backward across the carrier start",
+	);
 });
 
-test("mechanically applies restore and false-protection decisions from one final range set", async () => {
+test("mechanically applies complement restores and false-protection removals", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1189,11 +1216,12 @@ test("mechanically applies restore and false-protection decisions from one final
 	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落0", "段落2"] });
 	expect(result.release).toMatchObject({
 		verdict: "publish",
+		submittedFinalRanges: ["段落1"],
 		finalRanges: ["段落1"],
 	});
 });
 
-test("allows independent Release to remove a falsely protected Candidate island", async () => {
+test("allows local complement review to remove a self-proving false protection", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1244,17 +1272,69 @@ test("allows independent Release to remove a falsely protected Candidate island"
 	});
 	expect(result.release).toMatchObject({
 		verdict: "publish",
+		submittedFinalRanges: [],
 		finalRanges: [],
 	});
-	expect(scripted.userPrompts[1]).toContain('challengeRemoveRanges=["段落0","段落3"]');
+	expect(scripted.userPrompts[1]).toContain(
+		'challengeRemoveRanges=["段落0","段落3"]',
+	);
 	expect(scripted.userPrompts[1]).toContain(
 		'releaseRemoveEnvelopeRanges=["段落0-段落3"]',
 	);
-	expect(scripted.userPrompts[1]).not.toContain("段落1-段落2\"]");
-	expect(scripted.userPrompts[1]).toContain("AUDIT_KEEP|段落1：");
+	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
+	expect(scripted.userPrompts[1]).toContain("KEEP_LOCAL_AUDIT|段落1：");
+	expect(scripted.userPrompts[1]).not.toContain("PROPOSED_REMOVE|");
+	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
+	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 });
 
-test("runs independent Release when complement proposal preserves the whole non-empty Candidate", async () => {
+test("keeps exact-mode Candidate blocks outside the Reviewer remove envelope mandatory", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "独立技术要求。" },
+				{ blockId: 1, text: "响应文件格式。" },
+			],
+			["段落0-段落1"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				remove_mode: "exact",
+				remove_ranges: ["段落1"],
+				preserve_ranges: [],
+				reason: "Only the response-format block is challenged.",
+			},
+			"reviewer-exact-base-keep",
+		),
+		tool(
+			"submit_requirement_release",
+			release([], "The release omits both blocks, but exact permissions protect the first."),
+			"release-exact-base-keep",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "1".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落0"]);
+	expect(scripted.userPrompts[1]).toContain("BASE_KEEP|段落0：");
+	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落1：");
+	expect(scripted.userPrompts[1]).not.toContain("KEEP_LOCAL_AUDIT|");
+});
+
+test("does not run Release when a complement proposal has no net patch", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1280,14 +1360,6 @@ test("runs independent Release when complement proposal preserves the whole non-
 			},
 			"reviewer-whole-candidate-preserve",
 		),
-		tool(
-			"submit_requirement_release",
-			release(
-				["段落0-段落2"],
-				"Every Candidate block is independently qualified and must remain.",
-			),
-			"release-rejects-whole-candidate-removal",
-		),
 	]);
 	const result = await runRequirementReview({
 		packet,
@@ -1297,21 +1369,18 @@ test("runs independent Release when complement proposal preserves the whole non-
 		releaseRuntime: roleRuntime(scripted.streamFunction),
 	});
 
-	expect(scripted.callCount()).toBe(2);
+	expect(scripted.callCount()).toBe(1);
 	expect(result.status).toBe("preserved");
-	expect(result.resolution).toBe("release_rejected_challenge");
+	expect(result.resolution).toBe("reviewer_noop_challenge");
 	expect(result.finalRanges).toEqual(["段落0-段落2"]);
 	expect(result.reviewer).toMatchObject({
-		verdict: "challenge",
-		addRanges: [],
+		verdict: "noop_challenge",
+		submittedAddRanges: ["段落1"],
 		removeMode: "candidate_complement",
-		removeRanges: [],
+		submittedRemoveRanges: [],
 		preserveRanges: ["段落0-段落2"],
 	});
-	expect(scripted.userPrompts[1]).toContain("challengeRemoveRanges=[]");
-	expect(scripted.userPrompts[1]).toContain(
-		'releaseRemoveEnvelopeRanges=["段落0-段落2"]',
-	);
+	expect(result.release).toBeNull();
 });
 
 test("infers candidate complement mode from a preserve-only Reviewer challenge", async () => {
@@ -1470,7 +1539,7 @@ test("uses explicit exact mode when Reviewer redundantly submits preserve ranges
 	});
 });
 
-test("compacts more than 24 shorthand preserve ranges before schema validation", async () => {
+test("compacts many shorthand preserve ranges before schema validation", async () => {
 	const blocks = Array.from({ length: 36 }, (_, blockId) => ({
 		blockId,
 		text: `原子段落${blockId}。`,

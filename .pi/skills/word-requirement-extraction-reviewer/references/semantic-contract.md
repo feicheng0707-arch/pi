@@ -16,6 +16,8 @@
 
 一旦判断某个项目范围、质量、安全、质保、验收、技术标准或其他合格章节应保留，必须继续检查该标题之后、下一个同级 Owner 边界之前的实质正文，并让标题与正文共同闭合。图片占位、空行、分页或短续段不构成章节结束；不能保留章节标题或概述，却删除同章承载具体义务、参数、措施、响应时限或责任的正文。表头、清单明细、跨页续行和末项同理。
 
+载体闭合不得反向跨越起点。独立技术附件、清单或图纸从其自身标题、名称或首个明确内容 block 开始；其前方仍在上一载体内的签署主体、日期、签章、落款、页眉页脚和版式图片不得因紧邻附件而获得 membership。进入合格载体之后的图片占位、分页和短续段仍不构成结束边界。
+
 ## 载体硬排除与合格来源
 
 以下四类载体不属于 `requirement`：招标/采购/资格预审公告及其摘要；投标人/供应商/响应人须知及其前附表、正文和通用程序；投标/响应/报价文件格式、投标函、授权书、声明函、承诺函、目录模板、封面和签章占位模板；合同条款及格式、合同协议书格式、通用或专用合同条款模板、履约考核模板和合同附件范本。
@@ -141,10 +143,10 @@ correctness challenge 必须以反事实 final 关闭一个完整的 case-level 
 
 最终只能是空 ranges（代表裸 `null`），或 `段落N` / `段落N-段落M` 的合法集合。
 
-Reviewer 的删除表达有两种机械模式：`exact` 直接提交 Candidate 内的 `remove_ranges`；`candidate_complement` 只提交 Candidate 内其判断必须保护的全部 `preserve_ranges`，Harness 计算 Reviewer 提案 `proposed remove = Candidate - preserve`。每个保护 range 应完整位于一个 `candidateRanges` interval 内，遇到 OUT block 必须拆开；若模型误跨 OUT gap，Harness 只能机械取其与 Candidate 的交集，保护模式绝不会把 Candidate 外 block 加入 final。非空 preserve 若与 Candidate 完全无交集必须 fail-closed。
+Reviewer 的删除表达有两种机械模式，但 `exact` 是强制默认：直接完整提交 Candidate 内所有安全 `remove_ranges`，最多 64 个不连续 range。只有完整 exact 删除确实超过该地址容量时，才可使用 `candidate_complement`，只提交 Candidate 内其判断必须保护的全部 `preserve_ranges`，Harness 计算 Reviewer 提案 `proposed remove = Candidate - preserve`。Candidate 宽度、删除比例或书写便利不构成 fallback 条件。每个保护 range 应完整位于一个 `candidateRanges` interval 内，遇到 OUT block 必须拆开；若模型误跨 OUT gap，Harness 只能机械取其与 Candidate 的交集，保护模式绝不会把 Candidate 外 block 加入 final。非空 preserve 若与 Candidate 完全无交集必须 fail-closed。
 
-进入独立 Release 后，`exact` 的 remove envelope 等于 Reviewer 的 exact ranges；`candidate_complement` 的 remove envelope 确定性扩展为完整 Candidate。Harness 将 Reviewer 的机械补集标记为 `PROPOSED_REMOVE`，其余 Candidate 标记为 `AUDIT_KEEP`，但隐藏 reason、证据线索和原始 `preserve_ranges` 表达。前者只是待验证 patch，后者只是待对抗复核的未提议删除区；两者都不是语义结论。Release 只提交一个完整 `final_ranges` 作为唯一结构终态：显式列出所有应保留的 Candidate block 和接受的 challenged add，并省略批准删除的 block。该机制不改变任何 Owner、事实载荷或材料性门槛；代码不得依据 reason 补充或删减语义范围。
+进入独立 Release 后，`exact` 的 remove envelope 等于 Reviewer 的 exact ranges，envelope 外 Candidate 标记为强制 `BASE_KEEP`；`candidate_complement` 的 remove envelope 扩展为完整 Candidate，其中 `Candidate - preserve` 标记为 `REMOVE_REVIEW`，Reviewer 保护岛标记为 `KEEP_LOCAL_AUDIT`。Reviewer 的 reason、证据线索和原始 `preserve_ranges` 不进入 Release。Release 必须先攻击删除提议是否造成材料性遗漏或上下文断裂，再只审查块内或紧邻局部即可自证的 false protection；它不得通过延长有争议的外层公告、邀请、须知、格式或合同 Owner 跨越顶层功能边界来删除 `KEEP_LOCAL_AUDIT`，并独立审查新增提议。标记不构成角色投票，它不能加入 OUT。该机制不改变任何 Owner、事实载荷或材料性门槛；代码不得依据 reason 补充或删减语义范围。
 
 remove envelope 的大小、字符覆盖率或覆盖完整 Candidate 只描述机械权限边界，不表达应删除多少内容。Release 必须逐原子判断 challenged 子集，并让 `final_ranges` 保留全部合格事实、排除全部获准删除内容；100% envelope 既不要求全删，也不允许因其中存在合格岛而整包保留。
 
-Release 的 `final_ranges` 若越过机械权限，Harness 只做集合约束：只允许加入 Candidate 或 Reviewer challenged add；`exact` mode 自动恢复 remove envelope 外的 Candidate block，`candidate_complement` mode 则允许 Release 在完整 Candidate 内显式保留或省略。该裁剪不改变任何段落的语义判断。
+Release 的 `final_ranges` 若越过机械权限，Harness 只做集合约束：只允许加入 Candidate 或 Reviewer challenged add；`exact` mode 自动恢复 remove envelope 外的 Candidate block，`candidate_complement` mode 允许 Release 在完整 Candidate 内显式保留或省略。该裁剪不改变任何段落的语义判断。

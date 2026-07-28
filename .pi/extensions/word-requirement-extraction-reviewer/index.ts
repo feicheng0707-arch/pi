@@ -40,7 +40,7 @@ const MAX_PROVIDER_CALLS = 2;
 const MAX_RUN_INPUT_TOKENS = 480_000;
 const MAX_RUN_OUTPUT_TOKENS = 14_000;
 const MAX_RUN_REASONING_TOKENS = 30_000;
-const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v33";
+const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v40";
 const extensionDirectory = dirname(fileURLToPath(import.meta.url));
 const promptDirectory = resolve(
 	extensionDirectory,
@@ -110,21 +110,21 @@ function createReviewerDecisionSchema() {
 				enum: ["none", ...reviewerIssueTypes],
 			}),
 			add_ranges: Type.Array(RangeSchema, {
-				maxItems: 24,
+				maxItems: 64,
 				description: "Only qualified blocks marked OUT. A block already marked IN is never an add.",
 			}),
 			remove_mode: Type.Unsafe<ReviewerRemoveMode>({
 				type: "string",
 				enum: ["exact", "candidate_complement"],
 				description:
-					"Use exact with remove_ranges. For a broad mixed Candidate, use candidate_complement with all Candidate blocks that must remain in preserve_ranges and leave remove_ranges empty. Every preserve range must stay inside one candidateRanges interval and split at each OUT gap.",
+					"Use exact by default with complete safe remove_ranges, even for a broad mixed Candidate. candidate_complement is an exceptional address-compression fallback only when the complete exact deletion genuinely requires more than 64 disjoint ranges; Candidate width alone is never a reason. In that fallback list every Candidate block that must remain in preserve_ranges and leave remove_ranges empty.",
 			}),
 			remove_ranges: Type.Array(RangeSchema, {
-				maxItems: 24,
+				maxItems: 64,
 				description: "Exact Candidate blocks to remove; leave empty in candidate_complement mode.",
 			}),
 			preserve_ranges: Type.Array(RangeSchema, {
-				maxItems: 24,
+				maxItems: 64,
 				description:
 					"Write this structural field last, after reason has reached a settled conclusion. List only qualified IN islands with actual fact payload after outer-carrier containment. Never protect hard-excluded carrier content or a title/external-pointer shell.",
 			}),
@@ -599,7 +599,7 @@ export async function runRequirementReview(
 				toolName: "submit_requirement_residual_review",
 				toolLabel: "Submit requirement residual review",
 				toolDescription:
-					"Write reason first and settle the complete source relationship and residual judgment before any categorical or range fields. Then submit exact enum-only source_role and instantiation fields and either pass or one exact challenge. Add may contain only OUT blocks. Use candidate_complement only by listing every qualified IN fact island that must remain; never protect hard-excluded carrier content or a title/external-pointer shell. Re-read the literal overlay marker for every range named in reason, and write preserve_ranges last. Each preserve range must be wholly inside one candidateRanges interval and split at OUT gaps. A non-empty candidate cannot pass when source_role is non_procurement.",
+					"Write reason first and settle the complete source relationship and residual judgment before any categorical or range fields. Then submit exact enum-only source_role and instantiation fields and either pass or one exact challenge. Add may contain only OUT blocks. Use exact remove_ranges by default and enumerate every safe removal island; use candidate_complement only if exact removal genuinely exceeds 64 disjoint ranges. Never protect hard-excluded carrier content or a title/external-pointer shell. Re-read the literal overlay marker for every range named in reason, and write range fields last. A non-empty candidate cannot pass when source_role is non_procurement.",
 				schema: reviewerDecisionSchema,
 				normalize: normalizeReviewerSubmission,
 				parse: (raw) => validateReviewerDecision(raw, candidate.blockIds, availableBlockIds),
@@ -1008,8 +1008,7 @@ function validateReviewerDecision(
 	const removeBlockIds = submittedRemovals.blockIds.filter((blockId) => candidate.has(blockId));
 	if (
 		addBlockIds.length === 0 &&
-		removeBlockIds.length === 0 &&
-		(raw.remove_mode !== "candidate_complement" || candidateBlockIds.length === 0)
+		removeBlockIds.length === 0
 	) {
 		return {
 			verdict: "noop_challenge",
@@ -1384,8 +1383,10 @@ function buildReviewerUserPrompt(
 		"2. Apply the hard-exclusion terminal gate before preserve: instantiation=present, unique current-project facts, and downstream usefulness never override an open announcement, bidder-instruction, response-format, or contract-format Owner. An announcement carrier need not have an explicit announcement heading: a self-contained public-notice sequence that moves through project synopsis, participation eligibility, document acquisition, submission, publication channel, and contact information keeps announcement Owner until a source-proven exit. This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region; never stitch those elements across peer response-format, contract, evaluation, technical-chapter, or detailed-technical-appendix boundaries to label the whole physical file a notice. When such heterogeneous peer carriers exist, first treat the file as a multi-carrier procurement container and reopen Owner at every boundary. Do not invent an invitation-body Owner spanning all numbered sections: invitation is the physical container, not a fifth hard-excluded carrier. A top-level functional shift into project scope, procurement content, execution quality or safety, warranty, technical standards, or a detailed technical appendix is itself a source-proven boundary and needs no explicit end-of-invitation sentence. Continuous numbering and later contact information do not erase that boundary. If you preserve a project-summary island from a true notice sequence, identify its actual regional boundary; without one, do not preserve it.",
 		"3. Candidate interval boundaries are not carrier boundaries. A wide IN interval can cross several peer chapters and Owners. Before claiming that a carrier never exits, inspect every later top-level heading, chapter transition, appendix, table heading, and post-carrier island inside that same IN interval; reopen Owner judgment at each source-proven boundary.",
 		"4. A staffing, scope, quality, service, acceptance, or technical subheading inside an open announcement, qualification, bidder-instruction, response-format, or contract carrier retains that outer Owner. Only a boundary-independent post-exit technical source can be protected.",
-		"5. Distinguish normative incorporation from a bare external pointer. After global instantiation, an independent standards chapter that says work must comply with or reach cited laws, drawings, codes, or current standards directly imposes an executable duty and has fact payload even without copied parameters. Only a heading, empty section, or text that merely says to see an absent document without stating any present duty is a non-fact shell. Conversely, when a qualified project-scope, quality, safety, warranty, acceptance, or technical-standard heading has substantive body text before the next peer Owner boundary, preserve the heading and that body as one source-fidelity unit. An image placeholder, blank line, page break, or short continuation does not end the section; never keep the heading while deleting its concrete duties, parameters, measures, response times, or responsibilities.",
-		"6. Compute final = Candidate + add - remove once. After reason is settled, write add/remove/preserve fields as its exact structural projection and write preserve_ranges last. The submitted final must close the whole stated issue; do not delete an IN island that reason says must remain, and do not preserve the whole Candidate while claiming an IN island is missing.",
+		"5. Distinguish normative incorporation from a bare external pointer. After global instantiation, an independent standards chapter that says work must comply with or reach cited laws, drawings, codes, or current standards directly imposes an executable duty and has fact payload even without copied parameters. Only a heading, empty section, or text that merely says to see an absent document without stating any present duty is a non-fact shell. Conversely, when a qualified project-scope, quality, safety, warranty, acceptance, or technical-standard heading has substantive body text before the next peer Owner boundary, preserve the heading and that body as one source-fidelity unit. An image placeholder, blank line, page break, or short continuation after that heading does not end the section; never keep the heading while deleting its concrete duties, parameters, measures, response times, or responsibilities. Closure never extends backward across the carrier start: an independent appendix, list, or drawing begins at its own heading, name, or first explicit content block, and never absorbs the preceding carrier's signature party, date, seal, closing line, header/footer, or layout image merely because it is adjacent.",
+		"6. Regardless of remove mode, split every mixed project, business, performance, or other chapter at literal block addresses. Keep schedule/service period, location, scope, quality, warranty, delivery, acceptance, safety, and service-response duties. Remove separable funding-source declarations, contract price form, pure price/quotation, payment, settlement, guarantee, bid-validity, and quotation-commitment blocks even when adjacent qualified facts remain. A technical heading does not grant membership to its body: if the next block only says to inspect, obtain later, or see drawings/specifications/attachments absent from this Word and states no present duty, that pointer block must be removed even when the heading is retained for boundary context.",
+		"7. Use exact remove_ranges by default, even when Candidate is wide: enumerate every safe removal island and split around all qualified facts. candidate_complement is exceptional address compression only when that complete exact deletion would genuinely exceed 64 disjoint ranges; width, convenience, or a desire to protect a few islands is insufficient. If the fallback is truly necessary, preserve_ranges is a block-level allowlist, never a chapter vote.",
+		"8. Compute final = Candidate + add - remove once. After reason is settled, write add/remove/preserve fields as its exact structural projection and write all range fields last. The submitted final must close the whole stated issue; do not delete an IN island that reason says must remain, and do not preserve the whole Candidate while claiming an IN island is missing.",
 	].join("\n\n");
 }
 
@@ -1393,13 +1394,13 @@ function buildReleaseUserPrompt(
 	blocks: readonly RequirementReviewBlock[],
 	candidateBlockIds: ReadonlySet<number>,
 	addBlockIds: ReadonlySet<number>,
-	removeBlockIds: ReadonlySet<number>,
+	removeEnvelopeBlockIds: ReadonlySet<number>,
 	proposedRemoveBlockIds: ReadonlySet<number>,
 	candidateRanges: readonly string[],
 	issueType: ReviewerIssueType,
 	addRanges: readonly string[],
 	removeMode: ReviewerRemoveMode,
-	removeRanges: readonly string[],
+	removeEnvelopeRanges: readonly string[],
 	proposedRemoveRanges: readonly string[],
 ): string {
 	const candidateCharacterCount = blocks.reduce(
@@ -1411,7 +1412,11 @@ function buildReleaseUserPrompt(
 		0,
 	);
 	const challengeRemoveCharacterCount = blocks.reduce(
-		(sum, block) => sum + (removeBlockIds.has(block.blockId) ? block.text.length : 0),
+		(sum, block) => sum + (proposedRemoveBlockIds.has(block.blockId) ? block.text.length : 0),
+		0,
+	);
+	const releaseRemoveEnvelopeCharacterCount = blocks.reduce(
+		(sum, block) => sum + (removeEnvelopeBlockIds.has(block.blockId) ? block.text.length : 0),
 		0,
 	);
 	const challengeRemoveCandidateCharacterRatio =
@@ -1419,15 +1424,13 @@ function buildReleaseUserPrompt(
 	const source = blocks
 		.map((block) => {
 			const marker = addBlockIds.has(block.blockId)
-				? "ADD"
+				? "ADD_REVIEW"
 				: proposedRemoveBlockIds.has(block.blockId)
-					? removeMode === "candidate_complement"
-						? "PROPOSED_REMOVE"
-						: "REMOVE"
-					: removeMode === "candidate_complement" && removeBlockIds.has(block.blockId)
-						? "AUDIT_KEEP"
+					? "REMOVE_REVIEW"
+					: removeMode === "candidate_complement" && candidateBlockIds.has(block.blockId)
+						? "KEEP_LOCAL_AUDIT"
 						: candidateBlockIds.has(block.blockId)
-							? "IN"
+							? "BASE_KEEP"
 							: "OUT";
 			return `${marker}|段落${block.blockId}：${block.text}`;
 		})
@@ -1436,47 +1439,54 @@ function buildReleaseUserPrompt(
 		"sourceCoverage=complete",
 		"reviewerNarrativeAndEvidenceVisibility=withheld",
 		removeMode === "candidate_complement"
-			? "challengeOverlay=PROPOSED_REMOVE is the Reviewer's mechanical removal proposal; AUDIT_KEEP is Candidate the Reviewer did not propose removing but remains open to adversarial false-protection review. Neither marker is semantic truth. ADD is challenged external; OUT is Candidate-external. Markers are mechanical and not source text."
-			: "challengeOverlay=REMOVE means challenged Candidate block; ADD means challenged external block; IN/OUT are unchanged mechanical membership; markers are not source text",
+			? "challengeOverlay=REMOVE_REVIEW means a Candidate block the Reviewer proposes removing; KEEP_LOCAL_AUDIT means Candidate content the Reviewer preserved and that is open only to locally self-proving false-protection review; ADD_REVIEW means a Candidate-external block the Reviewer proposes adding; OUT is unavailable external source. Markers define the bounded review surface, not semantic truth, confidence, or votes."
+			: "challengeOverlay=REMOVE_REVIEW means a Candidate block the Reviewer proposes removing; ADD_REVIEW means a Candidate-external block the Reviewer proposes adding; BASE_KEEP means Candidate content outside the exact removal envelope and is mechanically mandatory. OUT is unavailable external source. Markers are permissions, not semantic truth.",
 		`availableSourceRanges=${JSON.stringify(compactBlockRanges(blocks.map((block) => block.blockId)))}`,
 		`candidateRanges=${JSON.stringify(candidateRanges)}`,
 		`challengeIssueType=${JSON.stringify(issueType)}`,
 		`challengeAddRanges=${JSON.stringify(addRanges)}`,
 		`challengeRemoveMode=${JSON.stringify(removeMode)}`,
 		`challengeRemoveRanges=${JSON.stringify(proposedRemoveRanges)}`,
-		`releaseRemoveEnvelopeRanges=${JSON.stringify(removeRanges)}`,
+		`releaseRemoveEnvelopeRanges=${JSON.stringify(removeEnvelopeRanges)}`,
 		"reviewerPreserveRangesAndRationale=withheld",
 		removeMode === "candidate_complement"
-			? "reviewerMechanicalPatchVisibility=visible as PROPOSED_REMOVE versus AUDIT_KEEP"
-			: "reviewerMechanicalPatchVisibility=exact REMOVE envelope",
+			? "reviewerMechanicalPatchVisibility=asymmetric REMOVE_REVIEW then KEEP_LOCAL_AUDIT review"
+			: "reviewerMechanicalPatchVisibility=bounded ADD_REVIEW and exact REMOVE_REVIEW envelope only",
 		`candidateBlockCount=${candidateBlockIds.size}`,
 		`challengeAddBlockCount=${addBlockIds.size}`,
-		`challengeRemoveBlockCount=${removeBlockIds.size}`,
+		`challengeRemoveBlockCount=${proposedRemoveBlockIds.size}`,
+		`releaseRemoveEnvelopeBlockCount=${removeEnvelopeBlockIds.size}`,
 		`candidateCharacterCount=${candidateCharacterCount}`,
 		`challengeAddCharacterCount=${challengeAddCharacterCount}`,
 		`challengeRemoveCharacterCount=${challengeRemoveCharacterCount}`,
+		`releaseRemoveEnvelopeCharacterCount=${releaseRemoveEnvelopeCharacterCount}`,
 		`challengeRemoveCandidateCharacterRatio=${challengeRemoveCandidateCharacterRatio.toFixed(4)}`,
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only. Counts, character ratio, and 100% Candidate coverage do not express a requested deletion amount and are never semantic evidence.",
 		"challengeIssueTypeSemantics=challengeIssueType is a non-authoritative label. Adjudicate each challenged paragraph from source and publish any safe subset regardless of the label.",
-		"challengeAtom=Each paragraph block is independently correctable. In exact mode, only REMOVE blocks may be omitted from Candidate. In candidate_complement mode, every Candidate block is inside the removal envelope, so PROPOSED_REMOVE may be restored and AUDIT_KEEP may be removed when source proves it.",
 		removeMode === "candidate_complement"
-			? "releaseAuthorization=final_ranges may contain any Candidate block plus any challenged ADD block. This permits restoring mistaken PROPOSED_REMOVE blocks and deleting independently proven false protections in AUDIT_KEEP."
-			: "releaseAuthorization=All unchanged Candidate blocks outside REMOVE are mechanically mandatory. final_ranges may decide only the challenged REMOVE blocks and challenged ADD blocks.",
+			? "challengeAtom=First attack every REMOVE_REVIEW block for over-deletion, material omission and broken heading/body/table closure. Then inspect KEEP_LOCAL_AUDIT only for locally self-proving false protection: the block itself or an explicit immediately enclosing local heading must establish scoring/qualification/response-format/contract content, supplier-authored response, separable pure price/payment/settlement/guarantee/bid-validity content, or a bare external pointer. Never remove KEEP_LOCAL_AUDIT by extending a disputed outer announcement, invitation, bidder-instruction, format, or contract Owner across a top-level functional boundary; when deletion depends on that global containment claim, preserve it. Neither marker is a vote. Independently approve or reject each ADD_REVIEW."
+			: "challengeAtom=Attack every REMOVE_REVIEW block for over-deletion, material omission and broken heading/body/table closure. Independently approve or reject each ADD_REVIEW. Do not create a new removal outside REMOVE_REVIEW.",
+		removeMode === "candidate_complement"
+			? "releaseAuthorization=final_ranges may contain any Candidate block plus any challenged ADD_REVIEW block. This permits restoring mistaken REMOVE_REVIEW blocks and deleting only locally self-proving false protections in KEEP_LOCAL_AUDIT. Global carrier repartition remains the Reviewer's responsibility."
+			: "releaseAuthorization=Every BASE_KEEP block is mechanically mandatory. final_ranges may restore any REMOVE_REVIEW block and accept any ADD_REVIEW block; it cannot remove BASE_KEEP or add OUT.",
 		"releaseTerminalContract=Write one short reason first and reach one settled conclusion. Then write final_ranges last as the single authoritative complete final selected set, not a delta. Copy every block that must remain, include accepted ADD blocks, omit approved removals, and use [] only for an explicit null result. Do not reopen or revise the conclusion after final_ranges.",
 		"terminalReasonBudget=Keep reason under 800 characters; final_ranges carries the complete structural decision.",
 		"Independently adjudicate only this exact envelope, then call submit_requirement_release exactly once.",
 		"# Complete immutable source with mechanical challenge overlay",
 		source,
 		"# Final release checklist after reading the complete source",
-		"1. Review the bounded patch, not a replacement extraction. Verify every PROPOSED_REMOVE, then adversarially inspect every AUDIT_KEEP. Express all restores, false-protection removals, accepted additions, and rejected additions once in the complete final_ranges set.",
-		"2. Keeping a proposed removal needs affirmative proof that the block is outside the four hard-excluded carriers. Current-project facts, unique scope, staffing, quality, service, acceptance, or technical wording inside an open announcement, bidder-instruction, response-format, or contract carrier are never protection evidence. An announcement need not carry an explicit title: a self-contained public-notice sequence covering project synopsis, participation eligibility, acquisition, submission, publication channel, and contacts remains announcement Owner until a source-proven exit. This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region; never stitch those elements across peer response-format, contract, evaluation, technical-chapter, or detailed-technical-appendix boundaries to label the whole physical file a notice. When such heterogeneous peer carriers exist, first treat the file as a multi-carrier procurement container and reopen Owner at every boundary. Do not invent an invitation-body Owner spanning all numbered sections: invitation is the physical container, not a fifth hard-excluded carrier. A top-level functional shift into project scope, procurement content, execution quality or safety, warranty, technical standards, or a detailed technical appendix is itself a source-proven boundary and needs no explicit end-of-invitation sentence. Continuous numbering and later contact information do not erase that boundary. If retaining a project-summary island from a true notice sequence, state its actual regional boundary; otherwise omit it.",
-		"3. Candidate interval boundaries are not carrier boundaries. A wide Candidate range can start inside a contract or format chapter and later cross into peer technical chapters before entering another excluded carrier. Reopen Owner judgment at every top-level heading, chapter transition, appendix, table heading, and short post-carrier island inside the interval; never inherit the first heading across the whole range.",
+		removeMode === "candidate_complement"
+			? "1. Review the bounded asymmetric patch, not a replacement extraction. First adversarially search REMOVE_REVIEW for qualified facts the proposal would lose, especially project scope, detailed body text after a kept heading, cross-page continuations, table headings/details, quality, safety, warranty, acceptance and technical standards. Then inspect every KEEP_LOCAL_AUDIT address independently, but remove only locally self-proving false protection; do not reopen the Reviewer's global carrier partition. Decide ADD_REVIEW independently and express the complete final set once in final_ranges."
+			: "1. Review only the bounded exact patch, not a replacement extraction. Start from all BASE_KEEP blocks. Adversarially search REMOVE_REVIEW for qualified facts the proposal would lose, especially project scope, detailed body text after a kept heading, cross-page continuations, table headings/details, quality, safety, warranty, acceptance and technical standards. Decide ADD_REVIEW independently, then express the complete final set once in final_ranges.",
+		"2. Keeping any disputed block needs affirmative proof that it is outside the four hard-excluded carriers. Current-project facts, unique scope, staffing, quality, service, acceptance, or technical wording inside an open announcement, bidder-instruction, response-format, or contract carrier are never protection evidence. An announcement need not carry an explicit title: a self-contained public-notice sequence covering project synopsis, participation eligibility, acquisition, submission, publication channel, and contacts remains announcement Owner until a source-proven exit. This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region; never stitch those elements across peer response-format, contract, evaluation, technical-chapter, or detailed-technical-appendix boundaries to label the whole physical file a notice. When such heterogeneous peer carriers exist, first treat the file as a multi-carrier procurement container and reopen Owner at every boundary. Do not invent an invitation-body Owner spanning all numbered sections: invitation is the physical container, not a fifth hard-excluded carrier. A top-level functional shift into project scope, procurement content, execution quality or safety, warranty, technical standards, or a detailed technical appendix is itself a source-proven boundary and needs no explicit end-of-invitation sentence. Continuous numbering and later contact information do not erase that boundary. If retaining a project-summary island from a true notice sequence, state its actual regional boundary; otherwise omit it.",
+		"3. REMOVE_REVIEW interval boundaries are not carrier boundaries. A wide removal proposal can start inside a contract or format chapter and later cross into peer technical chapters before entering another excluded carrier. Reopen Owner judgment at every top-level heading, chapter transition, appendix, table heading, and short post-carrier island inside the interval; never inherit the first heading across the whole range.",
 		"4. If the complete source is one hard-excluded carrier, never exits it, and contains no independent qualified region, the correct final_ranges is [] even when the carrier is fully instantiated and technically detailed. Before submitting [], positively establish that Owner partitioning leaves no peer qualified technical region; a physical-file title, invitation act, attachment relationship, or notice elements scattered across separate chapters is insufficient evidence for a null result.",
 		"5. Before a broad removal or null result, inspect every later top-level boundary and short island for independent technical standards, requirements, specifications, drawings, lists, or appendices. Outer containment ends only at a source-proven boundary, not at a local technical label.",
-		"6. Distinguish normative incorporation from a bare external pointer. Once the source is instantiated by other project facts, an independent technical chapter outside the four carriers has fact payload when it directly requires work to comply with or reach cited laws, drawings, codes, or current standards, even if generally worded or only a few lines. Do not demand repeated project-specific parameters. Only a heading, empty section, or text that merely says to see an absent document without stating any present duty has no payload. Conversely, when a qualified project-scope, quality, safety, warranty, acceptance, or technical-standard heading has substantive body text before the next peer Owner boundary, final_ranges must keep the heading and that body as one source-fidelity unit. An image placeholder, blank line, page break, or short continuation does not end the section; never keep the heading while omitting its concrete duties, parameters, measures, response times, or responsibilities.",
+		"6. Distinguish normative incorporation from a bare external pointer. Once the source is instantiated by other project facts, an independent technical chapter outside the four carriers has fact payload when it directly requires work to comply with or reach cited laws, drawings, codes, or current standards, even if generally worded or only a few lines. Do not demand repeated project-specific parameters. Only a heading, empty section, or text that merely says to see an absent document without stating any present duty has no payload. Conversely, when a qualified project-scope, quality, safety, warranty, acceptance, or technical-standard heading has substantive body text before the next peer Owner boundary, final_ranges must keep the heading and that body as one source-fidelity unit. An image placeholder, blank line, page break, or short continuation after that heading does not end the section; never keep the heading while omitting its concrete duties, parameters, measures, response times, or responsibilities. Closure never extends backward across the carrier start: an independent appendix, list, or drawing begins at its own heading, name, or first explicit content block, and never absorbs the preceding carrier's signature party, date, seal, closing line, header/footer, or layout image merely because it is adjacent.",
 		"7. Outside the four hard-excluded carriers, a heading such as business, fulfillment, delivery, or after-sales requirements is not a pure-commerce verdict. Keep project schedule/service period, location, scope, quality, warranty, delivery, acceptance, and service-response obligations; only separately proven price, payment, settlement, guarantee, bid-validity, or other non-work-content blocks may be removed.",
-		"8. Envelope size is not a semantic vote. Even when the remove envelope covers 100% of Candidate, omit every independently safe excluded paragraph, keep every qualified island, and decide each challenged ADD independently.",
-		"9. Perform one terminal consistency check on final_ranges itself: every block named as kept in your conclusion must be present, every block named as removed must be absent, and [] means an explicit null result.",
+		"8. In KEEP_LOCAL_AUDIT, split mixed chapters at each literal block address. Adjacent qualified schedule, quality, warranty, scope, or acceptance duties do not protect separable payment, settlement, guarantee, bid-validity, or pure quotation blocks. A retained technical heading also does not protect a following block whose only content is to inspect later or see drawings/specifications/attachments absent from this Word. These local exclusions are allowed; extending an outer invitation or announcement Owner across a peer project-scope, quality, safety, warranty, technical-standard, or detailed-appendix boundary is not.",
+		"9. Envelope size and prior-role agreement are not semantic votes. Even when the remove envelope covers 100% of Candidate, omit every independently safe excluded paragraph, keep every qualified island, and decide each challenged ADD independently.",
+		"10. Perform one terminal consistency check on final_ranges itself: re-read the literal source addresses for every chapter cited in reason; every block named as kept must be present, every block named as removed must be absent, and [] means an explicit null result.",
 	].join("\n\n");
 }
 
