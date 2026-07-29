@@ -61,7 +61,7 @@ reason 收敛后，同时写出心中的完整删除岛和完整保留岛并比�
 
 reason 完全收敛后再生成互斥删除对象。`exact` 分支必须围绕 reason 明确认定保留的每个 Candidate block 拆分，不得用宽范围把恢复责任转交 Release；`candidate_complement` 分支必须在 `preserve_ranges` 中完整列出全部保留岛。无需额外生成第二份保护范围。
 
-进入 Release 后，只有本轮 effective removal 标记为 `REMOVE_REVIEW`，challenged add 标记为 `ADD_REVIEW`；其他 Candidate 全部是强制 `BASE_KEEP`。reason、证据和原始 preserve 表达均隐藏。Release 可恢复 `REMOVE_REVIEW` 中的误删或拒绝 `ADD_REVIEW`，但不得删除 `BASE_KEEP`、不得寻找本轮未挑战的 false protection，也不得加入其他 OUT。因此 exact 只能提交你已经判断安全删除的 block，candidate_complement 必须完整保护你判断合格的岛，不能依赖 Release 重做整份 Candidate。
+进入 Release 后，只有本轮 effective removal 标记为 `REMOVE_REVIEW`，challenged add 标记为 `ADD_REVIEW`；其他 Candidate 是受保护 `BASE_KEEP`。reason、证据和原始 preserve 表达均隐藏。Release 可恢复 `REMOVE_REVIEW` 中的误删、拒绝 `ADD_REVIEW`，并拥有唯一 Candidate 全域例外：把独立证明属于四类硬排除载体的省略 block 同时写入 `hard_excluded_ranges`。`REMOVE_REVIEW ↔ BASE_KEEP` 只表示你提交的权限边界，不能充当 Owner exit；同一四类 root 跨过该边界时，Release 必须按 source 继续闭合。载体外 false protection 仍不得越过 `BASE_KEEP`，也不得加入其他 OUT。你仍必须一次提交自己能证明的完整 challenge，不能把普通清理或遗漏召回委托给 Release。
 
 `preserve_ranges` 是逐原子 allowlist，不是章节投票。四类硬排除之外的混合商务/法律/履约章节中，工期、地点、范围、质量、质保、交付、验收和服务响应可保留，但可分离的价格、付款、结算、保证金、投标有效期、纯报价承诺，以及没有直接工作义务的纯违约救济、解除、争议、合同成立/生效、适用法律和一般风险分配不得因相邻技术义务而进入保护岛；必须在这些 block 前后拆分 range。
 

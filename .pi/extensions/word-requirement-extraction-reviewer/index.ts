@@ -50,7 +50,10 @@ const MAX_STRUCTURE_MAP_CHARACTERS = 36_000;
 const MAX_STRUCTURE_TEXT_PREVIEW_CHARACTERS = 64;
 const MAX_RELEASE_STRUCTURE_FOCUS_NODES = 64;
 const MAX_RELEASE_STRUCTURE_FOCUS_CHARACTERS = 8_000;
-const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v106-whole-source-role-veto";
+const MAX_RELEASE_PERMISSION_TRANSITIONS = 32;
+const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v108-marker-transition-closure";
+const HARD_CARRIER_VETO_CONTRACT =
+	"hardCarrierVetoContract=Release has one candidate-wide safety authority in addition to the bounded Reviewer patch: any Candidate block may be omitted only when Release independently proves that block is inside an actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root and writes the same omitted block to hard_excluded_ranges. This is a four-carrier root-and-exit sweep, not a general BASE_KEEP cleanup pass. A REMOVE_REVIEW-to-BASE_KEEP or BASE_KEEP-to-REMOVE_REVIEW marker transition is only a permission boundary and can never prove a semantic Owner exit; follow the actual source root across the transition and through any later OUT or marker change until the first different-Owner peer root or EOF. Outside-carrier price, procedure, proof, legal, or other atom-level deletions remain limited to REMOVE_REVIEW. If an omitted BASE_KEEP block is absent from hard_excluded_ranges, the Harness restores it mechanically; final_ranges remains the authoritative final set.";
 const WHOLE_SOURCE_IDENTITY_VETO_CONTRACT =
 	"wholeSourceIdentityVetoContract=Before carrier or atom gates, independently inspect the beginning, middle, and end to decide whole-source authorship and use. If affirmative source evidence establishes one completed supplier-authored bid, response, technical proposal, implementation plan, or deliverable; one non-procurement document; or one uninstantiated template or form through its true end, and whole_container_disconfirmation finds no boundary-independent buyer-issued requirement region, that identity is terminal for every challenged block. Copied tender clauses, technical detail, future duties, response tables, or commitments cannot reopen membership, and duty_survival_attack is forbidden. When the removal envelope covers all Candidate and no BASE_KEEP remains, final_ranges must be []; put the challenged terminal-veto range in outside_carrier_excluded_ranges as an audit trace. Do not infer this veto from a title, completed tone, or one supplier phrase; mixed-author handoffs and buyer-provided technical reports require block-level Owner judgment.";
 const PERFORMANCE_TRANSITION_ATTACK_CONTRACT =
@@ -71,7 +74,7 @@ const ReleaseReasonSchema = Type.String({
 	minLength: 1,
 	maxLength: 1_200,
 	description:
-		"Adjudicate only REMOVE_REVIEW and ADD_REVIEW; every BASE_KEEP block is mechanically mandatory. First settle whole-source authorship and use. A source-proven completed supplier response or deliverable, non-procurement document, or uninstantiated template is a terminal veto when no boundary-independent buyer-issued requirement region exists; copied or technically detailed response content cannot reopen membership, and atom-level duty_survival_attack must not run. Otherwise, for each disputed removal identify the decisive source Owner and boundary, then run over_deletion_attack. Use carrier_root_exit_attack only when the challenged block's four-class carrier boundary is disputed; use duty_survival_attack only after the block is proven outside those carriers. Preserve an indivisible challenged block whenever stripping incidental approval, filing, cost, deduction, breach, termination, damages, proof, or settlement language leaves a direct implementation, resource, plan/report, record, delivery, transition, data-control, timed replacement/replenishment, response, platform-execution, staffing, quality, safety, acceptance, warranty, or result duty. A short or general must-comply duty in an independent technical chapter still has fact payload. Explain the approved or rejected challenged ranges and any ADD_REVIEW decision. Do not search BASE_KEEP for unrelated false protections, and do not revise the structured range fields in reason.",
+		"Adjudicate REMOVE_REVIEW and ADD_REVIEW, plus one candidate-wide four-carrier veto. A BASE_KEEP block may be omitted only when the same block is independently proven inside an actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root and submitted in hard_excluded_ranges. First settle whole-source authorship and use. A source-proven completed supplier response or deliverable, non-procurement document, or uninstantiated template is terminal only within the authorized Reviewer envelope. Otherwise identify decisive Owner roots and exits before atom review. Use duty_survival_attack only after a challenged block is proven outside the four carriers. Preserve an indivisible challenged block whenever stripping incidental approval, filing, cost, deduction, breach, termination, damages, proof, or settlement language leaves a direct implementation, resource, plan/report, record, delivery, transition, data-control, replacement, response, platform-execution, staffing, quality, safety, acceptance, warranty, or result duty. Do not search BASE_KEEP for ordinary outside-carrier cleanup, and do not revise structured fields in reason.",
 });
 type ReviewerIssueType =
 	| "material_omission"
@@ -178,7 +181,7 @@ const ReleaseDecisionSchema = Type.Object(
 		hard_excluded_ranges: Type.Array(RangeSchema, {
 			maxItems: 64,
 			description:
-				"Write this audit trace first. List only REMOVE_REVIEW or ADD_REVIEW blocks inside the authorized challenge envelope whose actual Owner is announcement/notice, bidder or supplier instructions, bid/response/quotation format, or contract terms/format. When a challenged boundary is disputed, confirm the actual root and semantic peer exit; include every challenged descendant inside that root-closed interval, but never classify BASE_KEEP or OUT. Keep it consistent with final_ranges, which is the sole structural verdict. Use [] when no challenged block belongs to a four-class carrier.",
+				"Write this typed authorization first. List Candidate or ADD_REVIEW blocks independently proven inside an actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root. Confirm each root and semantic peer exit; include every omitted descendant in the root-closed interval. This is the only field that may authorize omission of BASE_KEEP, and every omitted BASE_KEEP block must appear here. Never include OUT. final_ranges remains authoritative, so retained blocks are removed from this trace mechanically. Use [] when no selected or challenged block belongs to a four-class carrier.",
 		}),
 		outside_carrier_excluded_ranges: Type.Array(RangeSchema, {
 			maxItems: 64,
@@ -189,7 +192,7 @@ const ReleaseDecisionSchema = Type.Object(
 		final_ranges: Type.Array(RangeSchema, {
 			maxItems: 128,
 			description:
-				"Write this field last, after hard_excluded_ranges, outside_carrier_excluded_ranges, and reason have reached one settled conclusion. It is the sole authoritative complete final selected range set, not a delta. Every BASE_KEEP Candidate block is mandatory. Within REMOVE_REVIEW, include each block whose proposed deletion is rejected and omit each independently approved deletion. Include only approved ADD_REVIEW blocks; OUT is unavailable. Keep the two exclusion traces consistent, but resolve any accidental structural conflict here. Use [] when no BASE_KEEP remains and the source independently proves a terminal whole-source identity veto or another authorized explicit null result.",
+				"Write this field last, after hard_excluded_ranges, outside_carrier_excluded_ranges, and reason have reached one settled conclusion. It is the sole authoritative complete final selected range set, not a delta. Every BASE_KEEP Candidate block is mandatory unless the same omitted block is independently submitted in hard_excluded_ranges under the candidate-wide four-carrier veto. Within REMOVE_REVIEW, include each block whose proposed deletion is rejected and omit each independently approved deletion. Include only approved ADD_REVIEW blocks; OUT is unavailable. Keep the two exclusion fields consistent, but resolve any accidental structural conflict here.",
 		}),
 	},
 	{ additionalProperties: false },
@@ -289,6 +292,19 @@ interface FocusedDuplicate {
 interface FocusSourceRow {
 	blockId: number;
 	text: string;
+}
+
+type ReleaseOverlayMarker = "ADD_REVIEW" | "REMOVE_REVIEW" | "BASE_KEEP" | "OUT";
+
+interface ReleaseSourceRow extends FocusSourceRow {
+	marker: ReleaseOverlayMarker;
+}
+
+interface ReleasePermissionTransitions {
+	totalCount: number;
+	renderedCount: number;
+	coverage: "none" | "complete" | "partial";
+	source: string;
 }
 
 interface FocusedSource {
@@ -919,9 +935,10 @@ export async function runRequirementReview(
 				maxStructureMapNodes: MAX_STRUCTURE_MAP_NODES,
 				maxStructureMapCharacters: MAX_STRUCTURE_MAP_CHARACTERS,
 				maxStructureTextPreviewCharacters: MAX_STRUCTURE_TEXT_PREVIEW_CHARACTERS,
-				maxReleaseStructureFocusNodes: MAX_RELEASE_STRUCTURE_FOCUS_NODES,
-				maxReleaseStructureFocusCharacters: MAX_RELEASE_STRUCTURE_FOCUS_CHARACTERS,
-			},
+					maxReleaseStructureFocusNodes: MAX_RELEASE_STRUCTURE_FOCUS_NODES,
+					maxReleaseStructureFocusCharacters: MAX_RELEASE_STRUCTURE_FOCUS_CHARACTERS,
+					maxReleasePermissionTransitions: MAX_RELEASE_PERMISSION_TRANSITIONS,
+				},
 			terminalContract: "tool-call-or-strict-json-text-v1",
 		}),
 	);
@@ -1085,8 +1102,8 @@ export async function runRequirementReview(
 				userPrompt: releaseUserPrompt,
 				toolName: "submit_requirement_release",
 				toolLabel: "Submit requirement release",
-					toolDescription:
-						"Adjudicate only the bounded Reviewer challenge. BASE_KEEP is mechanically mandatory; REMOVE_REVIEW is the only Candidate subset that may be omitted, ADD_REVIEW is the only external subset that may be added, and OUT is unavailable. First independently test whether the complete source has a terminal wrong-author, non-procurement, or uninstantiated-template identity with no separable buyer-issued requirement region. Otherwise test the relevant carrier boundaries and outside-carrier atoms. Write hard_excluded_ranges first for challenged four-class carrier blocks, then outside_carrier_excluded_ranges for a proven whole-source veto or challenged outside-carrier non-requirement atoms. Both exclusion fields are bounded audit traces. Explain the settled decision briefly, then write final_ranges last as the sole authoritative complete result with all BASE_KEEP blocks restored.",
+				toolDescription:
+						"Adjudicate the bounded Reviewer patch and one candidate-wide four-carrier veto. BASE_KEEP is protected from ordinary cleanup, but a BASE_KEEP block may be omitted when Release independently proves it lies inside an actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root and submits it in hard_excluded_ranges. REMOVE_REVIEW remains the only authority for outside-carrier Candidate deletions; ADD_REVIEW is the only external subset that may be added; OUT is unavailable. Write hard_excluded_ranges first, outside_carrier_excluded_ranges second, then final_ranges as the sole authoritative complete result.",
 				schema: ReleaseDecisionSchema,
 				normalize: normalizeReleaseSubmission,
 				parse: (raw) =>
@@ -1630,6 +1647,9 @@ function validateReleaseDecision(
 	const allowedAdd = new Set(allowedAddBlockIds);
 	const removeEnvelope = new Set(removeEnvelopeBlockIds);
 	const authorizedChange = new Set([...removeEnvelopeBlockIds, ...allowedAddBlockIds]);
+	const submittedHardCandidateVeto = new Set(
+		submittedHardExclusions.blockIds.filter((blockId) => candidate.has(blockId)),
+	);
 	const finalBlockIds = new Set<number>();
 	for (const blockId of submitted.blockIds) {
 		if (candidate.has(blockId) || allowedAdd.has(blockId)) {
@@ -1637,11 +1657,13 @@ function validateReleaseDecision(
 		}
 	}
 	for (const blockId of candidateBlockIds) {
-		if (!removeEnvelope.has(blockId)) finalBlockIds.add(blockId);
+		if (!removeEnvelope.has(blockId) && !submittedHardCandidateVeto.has(blockId)) {
+			finalBlockIds.add(blockId);
+		}
 	}
 	const orderedFinalBlockIds = [...finalBlockIds].sort((left, right) => left - right);
 	const hardExcludedBlockIds = submittedHardExclusions.blockIds.filter(
-		(blockId) => authorizedChange.has(blockId) && !finalBlockIds.has(blockId),
+		(blockId) => (candidate.has(blockId) || allowedAdd.has(blockId)) && !finalBlockIds.has(blockId),
 	);
 	const hardExcluded = new Set(hardExcludedBlockIds);
 	const outsideCarrierExcludedBlockIds = submittedOutsideCarrierExclusions.blockIds.filter(
@@ -2209,7 +2231,7 @@ function buildReleaseUserPrompt(
 	);
 	const challengeRemoveCandidateCharacterRatio =
 		candidateCharacterCount === 0 ? 0 : challengeRemoveCharacterCount / candidateCharacterCount;
-	const sourceRows = blocks.map((block) => {
+	const sourceRows: ReleaseSourceRow[] = blocks.map((block) => {
 			const marker = addBlockIds.has(block.blockId)
 				? "ADD_REVIEW"
 				: proposedRemoveBlockIds.has(block.blockId)
@@ -2219,10 +2241,12 @@ function buildReleaseUserPrompt(
 						: "OUT";
 			return {
 				blockId: block.blockId,
+				marker,
 				text: `${marker}|段落${block.blockId}：${block.text}`,
 			};
 		});
 	const source = sourceRows.map((row) => row.text).join("\n");
+	const permissionTransitions = buildReleasePermissionTransitions(sourceRows);
 	const focusedReview = buildReleaseAdversarialNavigation(
 		sourceRows,
 		proposedRemoveBlockIds,
@@ -2237,8 +2261,8 @@ function buildReleaseUserPrompt(
 		"sourceCoverage=complete",
 		"reviewerNarrativeAndEvidenceVisibility=withheld",
 		releaseHasRemoval
-			? "challengeOverlay=REMOVE_REVIEW means the exact Candidate subset the Reviewer proposes deleting; BASE_KEEP means every other Candidate block is mechanically mandatory and outside Release deletion authority; ADD_REVIEW is the only Candidate-external subset that may be added; OUT is unavailable. Markers define authorization, not semantic truth, confidence, or votes."
-			: "challengeOverlay=ADD_REVIEW means a Candidate-external block the Reviewer proposes adding; BASE_KEEP means all Candidate content is mechanically mandatory because the challenge is add-only. OUT is unavailable external source. Markers define authorization, not semantic truth.",
+			? "challengeOverlay=REMOVE_REVIEW means the exact Candidate subset the Reviewer proposes deleting outside the four hard carriers; BASE_KEEP means every other Candidate block is protected from ordinary deletion, with only the explicit candidate-wide four-carrier veto able to override it through hard_excluded_ranges; ADD_REVIEW is the only Candidate-external subset that may be added; OUT is unavailable. Markers define authorization, not semantic truth, confidence, or votes."
+			: "challengeOverlay=ADD_REVIEW means a Candidate-external block the Reviewer proposes adding; BASE_KEEP means all Candidate content is protected from ordinary deletion, with only the explicit candidate-wide four-carrier veto able to override it through hard_excluded_ranges. OUT is unavailable external source. Markers define authorization, not semantic truth.",
 		`availableSourceRanges=${JSON.stringify(compactBlockRanges(blocks.map((block) => block.blockId)))}`,
 		`candidateRanges=${JSON.stringify(candidateRanges)}`,
 		`challengeIssueType=${JSON.stringify(issueType)}`,
@@ -2249,8 +2273,8 @@ function buildReleaseUserPrompt(
 		"reviewerPreserveRangesAndRationale=withheld",
 		`releaseAuditMode=${releaseHasRemoval ? "bounded_patch" : "add_only"}`,
 		releaseHasRemoval
-			? "reviewerMechanicalPatchVisibility=exact REMOVE_REVIEW envelope only; all other Candidate blocks are mandatory BASE_KEEP"
-			: "reviewerMechanicalPatchVisibility=bounded ADD_REVIEW with mechanically mandatory BASE_KEEP Candidate",
+			? "reviewerMechanicalPatchVisibility=exact REMOVE_REVIEW envelope for ordinary changes; all other Candidate blocks are protected BASE_KEEP except the explicit four-carrier veto"
+			: "reviewerMechanicalPatchVisibility=bounded ADD_REVIEW with protected BASE_KEEP Candidate except the explicit four-carrier veto",
 		`candidateBlockCount=${candidateBlockIds.size}`,
 		`challengeAddBlockCount=${addBlockIds.size}`,
 		`challengeRemoveBlockCount=${proposedRemoveBlockIds.size}`,
@@ -2273,14 +2297,19 @@ function buildReleaseUserPrompt(
 		`structureMapCoverage=${structureMap.coverage}`,
 		`releaseChallengeStructureFocusTargetNodeCount=${challengeStructureFocus.targetNodeCount}`,
 		`releaseChallengeStructureFocusIncludedNodeCount=${challengeStructureFocus.includedNodeCount}`,
-		`releaseChallengeStructureFocusCharacterCount=${challengeStructureFocus.renderedCharacterCount}`,
-		`releaseChallengeStructureFocusCoverage=${challengeStructureFocus.coverage}`,
-		"focusViewPurpose=Text-blind challenged-side atomic navigation only. The harness repeats only REMOVE_REVIEW and ADD_REVIEW addresses plus deterministic immediate boundary context; oversized change sets use continuous-run boundary windows and recursively layered addresses. It never reads headings or keywords. ATOMIC_CHANGE_TARGET and ATOMIC_CONTEXT add no evidence, semantic label, vote, or permission; the complete source above remains the only truth source.",
+			`releaseChallengeStructureFocusCharacterCount=${challengeStructureFocus.renderedCharacterCount}`,
+			`releaseChallengeStructureFocusCoverage=${challengeStructureFocus.coverage}`,
+			`permissionTransitionCount=${permissionTransitions.totalCount}`,
+			`permissionTransitionRenderedCount=${permissionTransitions.renderedCount}`,
+			`permissionTransitionCoverage=${permissionTransitions.coverage}`,
+			"focusViewPurpose=Text-blind challenged-side atomic navigation only. The harness repeats only REMOVE_REVIEW and ADD_REVIEW addresses plus deterministic immediate boundary context; oversized change sets use continuous-run boundary windows and recursively layered addresses. It never reads headings or keywords. ATOMIC_CHANGE_TARGET and ATOMIC_CONTEXT add no evidence, semantic label, vote, or permission; the complete source above remains the only truth source.",
+			"markerPermissionBoundaryContract=The address-only REMOVE_REVIEW/BASE_KEEP transition list is mechanical navigation, not a semantic label, vote, or exit. For every listed transition, read the actual source before and after both runs. The marker change itself never ends an announcement, bidder-instruction, response-format, quotation-format, or contract-terms Owner. Follow a source-proven hard-carrier root across BASE_KEEP, OUT, attachments, tables, and later marker changes until the first different-Owner peer root or EOF. If an omitted BASE_KEEP descendant remains inside that root, put the same block in hard_excluded_ranges; otherwise keep it in final_ranges.",
 		"wordStructureEvidenceContract=Optional structure is the same answer-free mechanical map seen by Reviewer: body order, paragraph/table form, style/outline, numbering, formatting, page-break, table-size, and outline-ancestry facts only. tx is a bounded exact prefix copied from the same canonical source after content-blind node selection, solely to join structure back to source addresses. It never carries Reviewer conclusions or semantic labels. Use it only to reconstruct true hierarchy and peer exits; complete source text remains authoritative.",
 		"outlineNavigationContract=For every S row with sc=node@parent~exit, node is the active mechanically observed outline scope, parent is its nearest shallower ancestor, and exit is the first later same-or-shallower outline node. These fields describe physical scope only. A structural exit never automatically ends Owner: read the exit node from source, and if it continues the same Owner, chain through its scope until the first different-Owner peer root. Before keeping any title, table, or ordinary paragraph inside a hard-excluded scope, require that different-Owner exit; otherwise the root and all nested or same-Owner continuation content remain excluded.",
 		"visualNavigationContract=For every S row with vc=node@parent~exit, formatting alone marks node as a non-outline visual heading candidate, parent as its mechanical enclosing candidate, and exit as the next equal-or-larger visual peer. vc is not a semantic heading or Owner label. Read node tx and complete source first; when source semantics confirms a carrier start, use exit as the bounded peer-exit hypothesis and keep descendants under that Owner until source proves otherwise. Ignore vc when source semantics does not confirm a carrier start.",
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only. Counts, character ratio, and 100% Candidate coverage do not express a requested deletion amount and are never semantic evidence.",
 		"challengeIssueTypeSemantics=challengeIssueType is a non-authoritative label. Adjudicate each challenged paragraph from source and publish any safe subset regardless of the label.",
+		HARD_CARRIER_VETO_CONTRACT,
 		WHOLE_SOURCE_IDENTITY_VETO_CONTRACT,
 		"remedyTriggerSeparation=Quality error, misconduct, or false deliverables used only as a trigger for deduction, damages, disqualification, termination, replacement procedure, or legal pursuit do not create an independent quality requirement. Strip the remedy itself: if no deliverable accountability, measurable quality threshold, inspection/review/acceptance, correction duty, or work act remains, place that separable atom on the remove side.",
 		"prospectiveResponsibilityBoundary=An explicit requirement that the successful supplier bear responsibility for current-project design, construction, safety, quality, or deliverables is prospective performance governance and survives even when paired with economic-loss allocation. Distinguish it from a buyer-only after-the-fact right to deduct, terminate, replace, or pursue legal liability with no independent supplier responsibility or work act.",
@@ -2290,12 +2319,12 @@ function buildReleaseUserPrompt(
 		"headingMembershipIndependenceContract=Outside the four hard-excluded carriers, a subsection heading and its child blocks carry independent membership. A surviving child duty does not protect a separable heading whose own function is only price, payment, settlement, deduction, penalty, breach, remedy, termination, dispute, or another non-work consequence. Put that heading alone in outside_carrier_excluded_ranges when the child remains understandable; preserve a qualified technical, service, safety, or acceptance heading and any heading indispensable to the child's meaning. Isolated legal wording never creates a contract carrier, and this rule never carves inside an established four-class root.",
 		PERFORMANCE_TRANSITION_ATTACK_CONTRACT,
 		releaseHasRemoval
-			? "challengeAtom=Adjudicate only REMOVE_REVIEW and ADD_REVIEW. For each proposed deletion, run over_deletion_attack and retain it when a qualified fact, direct duty, necessary heading, or source-fidelity dependency survives; approve deletion only when the challenged block is independently proven non-requirement. Do not search BASE_KEEP for unrelated false protections. Decide each ADD_REVIEW independently."
-			: "challengeAtom=Independently approve or reject each ADD_REVIEW. The challenge is add-only, so every BASE_KEEP Candidate block is mechanically mandatory and cannot be removed.",
+			? "challengeAtom=Adjudicate REMOVE_REVIEW and ADD_REVIEW. For each proposed outside-carrier deletion, run over_deletion_attack and retain it when a qualified fact, direct duty, necessary heading, or source-fidelity dependency survives. Separately run one candidate-wide four-carrier root-and-exit sweep; do not search BASE_KEEP for ordinary outside-carrier cleanup. Decide each ADD_REVIEW independently."
+			: "challengeAtom=Independently approve or reject each ADD_REVIEW, plus run one candidate-wide four-carrier root-and-exit sweep. BASE_KEEP remains mandatory for every outside-carrier decision.",
 		releaseHasRemoval
-			? "releaseAuthorization=Every BASE_KEEP block is mechanically mandatory. final_ranges may restore or omit only REMOVE_REVIEW blocks and may accept challenged ADD_REVIEW blocks; it cannot delete any other Candidate block or add OUT."
-			: "releaseAuthorization=Every BASE_KEEP block is mechanically mandatory. final_ranges may accept challenged ADD_REVIEW blocks; it cannot remove BASE_KEEP or add OUT.",
-		"releaseTerminalContract=Within the exact authorized change envelope, settle whole_source_identity_veto first. If it applies, write its challenged omitted blocks to outside_carrier_excluded_ranges and do not reopen them through carrier or atom tests. Otherwise run carrier_root_exit_attack where a challenged carrier boundary is disputed, write hard_excluded_ranges only for challenged blocks proven inside a four-class carrier, and write outside_carrier_excluded_ranges only for challenged outside-carrier atoms that remain non-requirement after duty_survival_attack. Both are bounded audit traces and neither may classify BASE_KEEP. Write one short reason, then final_ranges as the sole authoritative complete result with every BASE_KEEP block restored; use [] only when no mandatory Candidate block remains and the source independently supports null.",
+			? "releaseAuthorization=Every BASE_KEEP block is mechanically mandatory for outside-carrier decisions. final_ranges may restore or omit REMOVE_REVIEW blocks, accept challenged ADD_REVIEW blocks, and omit an otherwise protected Candidate block only when the same block is submitted in hard_excluded_ranges under the four-carrier veto. OUT remains unavailable."
+			: "releaseAuthorization=Every BASE_KEEP block is mechanically mandatory for outside-carrier decisions. final_ranges may accept challenged ADD_REVIEW blocks and may omit an otherwise protected Candidate block only when the same block is submitted in hard_excluded_ranges under the four-carrier veto. OUT remains unavailable.",
+		"releaseTerminalContract=Settle whole_source_identity_veto within the Reviewer envelope first. Then run one candidate-wide four-carrier root-and-exit sweep and write every omitted Candidate or ADD_REVIEW carrier block to hard_excluded_ranges. Write outside_carrier_excluded_ranges only for authorized challenged atoms that remain non-requirement after duty_survival_attack. final_ranges is authoritative; any omitted BASE_KEEP absent from hard_excluded_ranges is mechanically restored.",
 		"terminalReasonBudget=Keep reason under 800 characters; final_ranges carries the complete structural decision.",
 		"Independently adjudicate only this exact envelope, then call submit_requirement_release exactly once.",
 		"# Complete immutable source with mechanical challenge overlay",
@@ -2304,23 +2333,26 @@ function buildReleaseUserPrompt(
 		structureMap.source,
 		"# Text-blind challenged-side atomic navigation view (bounded mechanical duplicate)",
 		focusedReview.source,
-		"# Challenged-side structural navigation focus (bounded mechanical duplicate)",
-		challengeStructureFocus.source,
-		"# Final release checklist after reading the complete source",
+			"# Challenged-side structural navigation focus (bounded mechanical duplicate)",
+			challengeStructureFocus.source,
+			"# Address-only REMOVE_REVIEW/BASE_KEEP permission transitions",
+			permissionTransitions.source,
+			"# Final release checklist after reading the complete source",
 		"0.4. Mandatory whole_source_identity_veto before every local gate: inspect the beginning, middle, and end for affirmative authorship and use evidence. If the complete source is one supplier-authored completed bid, response, technical proposal, implementation plan, or deliverable; one non-procurement document; or one uninstantiated template/form, and no boundary-independent buyer-issued requirement region exists, the identity is terminal. Copied tender text, project-specific technical detail, future work duties, response tables, and commitments remain part of that wrong-author or non-fact source and cannot be reopened by duty_survival_attack. Put all authorized challenged omissions in outside_carrier_excluded_ranges and submit final_ranges=[] when no BASE_KEEP remains. Do not infer the veto from a title, completed tone, or one supplier phrase; mixed-author handoffs and buyer-provided technical reports require actual Owner partitioning.",
 		"0.5. Mandatory pre_award_stage_gate ordering: close the four hard-excluded carrier gate first; then close each boundary-complete pre-award qualification/response-proof subsection from its own root through its peer exit; only after both gates may you run outside-carrier atom-level primary-effect or duty_survival_attack. A future-staffing child never reopens a subsection whose collective function is pre-award admissibility.",
 		"0.6. Mandatory non_fact_shell_closure: when a peer-bounded subsection has only an explicit no-content marker, blank/placeholder body, bare unavailable-material pointer, or generic legal/catch-all wrapper with no concrete task, workflow, output, deadline, or result, exclude its root and body together. Do not inherit membership across the peer boundary from the preceding retained table or duty subsection.",
 		"0.7. Mandatory heading membership independence outside the four carrier gate: a surviving child duty does not protect a separable price/payment/settlement/deduction/penalty/breach/remedy/termination/dispute heading. Put the heading alone in outside_carrier_excluded_ranges when its removal leaves the child understandable; preserve qualified technical/service/safety/acceptance headings and indispensable context. Never use isolated legal wording to create a contract carrier.",
 		releaseHasRemoval
-			? "1. Review only REMOVE_REVIEW and ADD_REVIEW against the complete source. Every BASE_KEEP block is outside deletion authority. For each proposed removal, independently approve it or restore it; do not search the rest of Candidate for unrelated cleanup."
-			: "1. Review only the bounded add-only patch. Start from all mechanically mandatory BASE_KEEP blocks, decide ADD_REVIEW independently, then express the complete final set once in final_ranges.",
+			? "1. Review REMOVE_REVIEW and ADD_REVIEW against the complete source. BASE_KEEP is outside ordinary deletion authority. Independently approve or restore each proposed removal, then perform exactly one four-carrier coverage sweep across Candidate; do not scan BASE_KEEP for any other cleanup."
+			: "1. Review the bounded add-only patch, then perform exactly one four-carrier coverage sweep across Candidate. BASE_KEEP remains mandatory for every other decision.",
 		"1a. Before local partitioning, test the whole-document communicative-role hypothesis from the beginning, middle, and end. A whole-source notice is possible only when an actual notice root governs one uninterrupted, functionally homogeneous outward act through its true end. Run whole_container_disconfirmation before accepting it: a peer qualification, evaluation, contract, response-format, requirement, specification, drawing, list, or technical-appendix root makes the source a multi-carrier procurement container. The physical file or invitation is not itself a hard-excluded root, and all chapters participating in one procurement does not make them one notice.",
 		"2. Keeping any disputed block needs affirmative proof that it is outside the four hard-excluded carriers. Current-project facts, unique scope, staffing, quality, service, acceptance, or technical wording inside an open announcement, bidder-instruction, response-format, or contract carrier are never protection evidence. An announcement need not carry an explicit title: a self-contained public-notice sequence covering project synopsis, participation eligibility, acquisition, submission, publication channel, and contacts remains announcement Owner until a source-proven exit. This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region; never stitch those elements across peer response-format, contract, evaluation, technical-chapter, or detailed-technical-appendix boundaries to label the whole physical file a notice. When such heterogeneous peer carriers exist, first treat the file as a multi-carrier procurement container and reopen Owner at every boundary. Do not invent an invitation-body Owner spanning all numbered sections: invitation is the physical container, not a fifth hard-excluded carrier. A top-level functional shift into project scope, procurement content, execution quality or safety, warranty, technical standards, or a detailed technical appendix is itself a source-proven boundary and needs no explicit end-of-invitation sentence. Continuous numbering and later contact information do not erase that boundary. If retaining a project-summary island from a true notice sequence, state its actual regional boundary; otherwise omit it.",
 		"3. REMOVE_REVIEW interval boundaries are not carrier boundaries. A wide removal proposal can start inside a contract or format chapter and later cross into peer technical chapters before entering another excluded carrier. Reopen Owner judgment at every top-level heading, chapter transition, appendix, table heading, and short post-carrier island inside the interval; never inherit the first heading across the whole range.",
-		"3a. When structure navigation is available, use the challenged-side focus only to locate the physical ancestry and peer boundaries of REMOVE_REVIEW or ADD_REVIEW. It is navigation, not an Owner label; BASE_KEEP remains mandatory regardless of what the focus suggests.",
+		"3a. When structure navigation is available, use the challenged-side focus only as bounded navigation; use the complete source and full answer-free structure map for the candidate-wide four-carrier sweep. Structure is never an Owner label. BASE_KEEP remains mandatory unless Release itself proves and submits the same block in hard_excluded_ranges.",
 		"3b. A source-proven carrier boundary does not require Word outline metadata. A numbered, bold, centered, or plain-text local subsection that establishes contract terms or formats, response/quotation format, bidder instructions, or an announcement/notice sequence starts a hard-excluded Owner even when nested under a broader chapter. A bounded bidder/supplier commitment, response-commitment, no-deviation commitment, or declaration section is a response-format root when its operative function is to require the bidder before award to declare, confirm, guarantee, or commit future compliance. It remains root-closed even without blanks, signature fields, or a format/template label and even when child lines restate warranty, quality, service, staffing, or delivery duties. Isolated commitment or guarantee wording does not create that carrier; a buyer's direct post-award command outside it remains a work duty. Carry that Owner through all child clauses until the next peer exit. Do not apply primary direct effect to rescue service period, location, quality, acceptance, technical parameters, or unique project facts inside it. A detailed technical table remains excluded while its active response or quotation-format scope is open.",
 		"3c. Contract-format containment requires an actual source-proven contract agreement, terms/format, performance-assessment template, or contract-appendix root. A local tender section whose stated function is to disclose the main terms of the future procurement contract is itself a contract-terms root; it does not need to be a complete bilateral contract, carry signatures, or make the whole source_role=contract. Isolated contract, breach, confidentiality, intellectual-property, approval, responsibility, or deduction wording does not create that carrier, and a later contract section never expands backward over earlier peer technical chapters. Once a local contract-terms root is source-proven, its embedded attachment, technical list, and detailed child rules inherit that carrier until a peer exit; an attachment label alone does not reopen membership. Within a qualified technical Owner, result/source-code delivery, confidentiality and data handling, cybersecurity, continued maintenance, reports, approval workflow, and replacement obligations remain subject to direct-duty review.",
-		"3d. If a challenged carrier boundary is disputed, state carrier_root_exit_attack=<actual four-class root address -> first different-Owner peer root address or EOF>. Use it only to decide challenged blocks; a later carrier never expands backward and no carrier conclusion may classify BASE_KEEP outside the envelope.",
+			"3d. For every four-carrier omission, state carrier_root_exit_attack=<actual four-class root address -> first different-Owner peer root address or EOF>. Apply it to challenged blocks and to any BASE_KEEP block proposed under the candidate-wide hard-carrier veto. A later carrier never expands backward; adjacent different Owners require separate roots and exits.",
+			"3d.1. Mandatory marker-transition closure: inspect every address-only REMOVE_REVIEW/BASE_KEEP transition listed above. A permission-marker switch is never a source-proven Owner exit. Start from the actual carrier root, read across both marker runs, and continue through any following OUT or marker change until the first different-Owner peer root or EOF. If the same four-class root spans the transition, either keep every BASE_KEEP descendant or omit it with matching hard_excluded_ranges authorization; never preserve it merely because Reviewer placed it outside REMOVE_REVIEW.",
 		"3e. Mandatory mixed_container_root_sweep before atom review: a parent chapter combining technical, service, contract, business, or other requirements is only a mixed container. Classify every child heading candidate from source. A tentative final that drops payment, guarantee, breach, or other commercial/legal children but keeps service period, location, quality, acceptance, personnel, or technical children after the same local four-class root is a forbidden holey selection; either disprove the root or put its complete root-to-semantic-exit interval in hard_excluded_ranges.",
 		"4. Whole-source terminal identities outrank local technical content. If affirmative source evidence establishes one completed supplier-authored response/proposal/deliverable, one non-procurement document, one uninstantiated template/form, or one actual hard-excluded carrier through its true end, and no boundary-independent buyer-issued qualified region exists, the correct final_ranges is [] when the authorization envelope leaves no BASE_KEEP. A supplier response does not become buyer requirement because it copies tender clauses, describes the same project, or contains detailed future duties. Before submitting [], whole_container_disconfirmation must inspect every later top-level boundary and short island; for a four-class carrier, carrier_root_exit_attack must also establish its real root through EOF. Multiple heterogeneous peer roots prove a mixed or multi-carrier source, not a terminal whole-source identity. A physical-file title, invitation act, attachment relationship, or notice elements scattered across separate chapters is insufficient evidence for null; completed tone or isolated supplier wording is likewise insufficient.",
 		"5. Before a broad removal or null result, inspect every later top-level boundary and short island for independent technical standards, requirements, specifications, drawings, lists, or appendices. Outer containment ends only at a source-proven boundary, not at a local technical label.",
@@ -2329,10 +2361,10 @@ function buildReleaseUserPrompt(
 		"7. Carrier Owner is the terminal gate before primary effect. Never apply the block-level primary-effect test inside an open announcement, bidder-instruction, response-format, or contract-format carrier; internal project-specific duties still follow that hard-excluded Owner until a source-proven exit. A complete source whose parties, agreement language, continuous articles, price/payment, breach, effectiveness, termination, dispute and signature structure jointly form one bilateral contract remains a contract even when its title says service or technical requirements and most articles are technically detailed. If reason establishes that contract-only identity and no boundary-independent qualified source, final_ranges must be []; a later 'but the duties are technical' clause is a direct contradiction. Only outside the four hard-excluded carriers, a heading such as business, fulfillment, delivery, or after-sales requirements is not a pure-commerce verdict. Judge every disputed block by its primary direct effect and state the approved keep/remove address islands in reason. Keep project schedule/service period, location, scope, quality, warranty, delivery, acceptance, implementation, resource-provision and service-response obligations. Remove separately proven price, payment, settlement, deduction, audit, invoice, guarantee, bid-validity or other non-work-content blocks. Engineering quantities, completion, acceptance or quality-retention language used only as a monetary basis, payment condition or settlement trigger is not an acceptance or quality requirement; a direct work duty remains qualified when cost inclusion is merely incidental.",
 		"8. In every mixed non-excluded chapter, re-read each numbered sub-item, table row, heading transition, and operative sentence as its own addressable decision. Procurement/evaluation method, price or quotation construction, payment, settlement, guarantee, bid validity, pure breach damages or remedies, termination, dispute resolution, contract formation, governing law, general legal risk allocation, and bare external inspection pointers remain removable when separable and when they impose no direct work duty. Direct construction, supply, configuration, resource, schedule, quality, safety, warranty, acceptance, service-response, or post-award staffing duties remain qualified even when adjacent to commercial or legal text. A new peer heading starts a new Owner decision; range continuity never carries the prior chapter across it.",
 		"8a. Stage Owner outranks future-tense wording. A complete bid/response mandatory-requirements section or mandatory response table remains pre-award proof/commitment Owner even when it lists future roles, headcount, certificates, or mobilization dates. First close personnel Stage Owner at subsection level: when a subsection has its own root and peer exit, and multiple child items collectively require credentials, social-insurance proof, commitments, or invalid-response consequences to establish pre-award admissibility, put the root and every child through that exit in outside_carrier_excluded_ranges. Do not carve out one child merely because it also describes future staffing. Only when source proves the subsection is primarily post-award staffing may a separable note whose operative act tells the response document to fill, attach, or provide personnel names, credentials, certificates, screenshots, social-insurance evidence, or commitments be excluded locally without deleting the staffing duties around it. Outside those proof Owners, a direct requirement on the successful supplier's post-award staffing, resources, submission, review, approval, filing, records, or data handling is performance content. Confidentiality rules governing project-data storage, processing, transmission, copying, disclosure, retention, return, or destruction are direct data-control duties; a platform-execution command remains direct when termination is only the stated consequence.",
-		"9. Envelope size and prior-role agreement are not semantic votes. Decide every REMOVE_REVIEW and ADD_REVIEW block from source, but never enlarge the envelope.",
-		"10. Before final_ranges, write hard_excluded_ranges only for challenged blocks inside an actual four-class root. The field cannot include BASE_KEEP or OUT, even when the semantic carrier continues beyond the authorized envelope.",
+		"9. Envelope size and prior-role agreement are not semantic votes. Outside-carrier deletion remains bounded to REMOVE_REVIEW. The only candidate-wide exception is the explicit four-carrier veto recorded in hard_excluded_ranges.",
+		"10. Before final_ranges, write hard_excluded_ranges for every omitted Candidate or ADD_REVIEW block independently proven inside an actual four-class root. It may include BASE_KEEP only under this root-and-exit veto and can never include OUT.",
 		"11. Next write outside_carrier_excluded_ranges. If whole_source_identity_veto applies, write every authorized challenged omission covered by that terminal identity and do not run duty_survival_attack. Otherwise write only challenged outside-carrier atoms and record over_deletion_attack=<challenged removals to restore or none> and duty_survival_attack=<challenged removals whose direct duty survives after stripping incidental language or none>. Pure budget, pre-award proof/procedure, price/payment/settlement/guarantee, pure legal remedy, and bare pointers may be excluded when separable; direct implementation, resources, plans/reports, records, data control, delivery, transitions, replacement, response, platform execution, staffing, quality, safety, acceptance, warranty, or result duties survive. Do not run a global false-protection sweep over BASE_KEEP.",
-		"12. Check final_ranges itself as the sole structural verdict: every BASE_KEEP block is present, every approved ADD_REVIEW is present, only approved REMOVE_REVIEW blocks are absent, and OUT remains absent. Make both exclusion traces consistent with those omissions; if an earlier trace draft conflicts, correct the trace rather than changing the settled final. [] is allowed only when no mandatory block remains and a terminal whole-source identity or the bounded local adjudication independently supports null.",
+		"12. Check final_ranges itself as the sole structural verdict: every BASE_KEEP block is present unless the same omitted block appears in hard_excluded_ranges, every approved ADD_REVIEW is present, only approved REMOVE_REVIEW or hard-carrier-veto Candidate blocks are absent, and OUT remains absent. If an omitted BASE_KEEP is not in hard_excluded_ranges, restore it. Make both exclusion fields consistent with final_ranges.",
 	].join("\n\n");
 }
 
@@ -2484,6 +2516,60 @@ function buildReleaseStructureFocus(
 	};
 }
 
+function buildReleasePermissionTransitions(
+	rows: readonly ReleaseSourceRow[],
+): ReleasePermissionTransitions {
+	const runs: Array<{ marker: ReleaseOverlayMarker; blockIds: number[] }> = [];
+	for (const row of rows) {
+		const previous = runs.at(-1);
+		if (previous?.marker === row.marker) previous.blockIds.push(row.blockId);
+		else runs.push({ marker: row.marker, blockIds: [row.blockId] });
+	}
+	const transitions: Array<{
+		left: { marker: ReleaseOverlayMarker; blockIds: number[] };
+		right: { marker: ReleaseOverlayMarker; blockIds: number[] };
+	}> = [];
+	for (let index = 0; index < runs.length - 1; index += 1) {
+		const left = runs[index];
+		const right = runs[index + 1];
+		if (
+			(left.marker === "REMOVE_REVIEW" && right.marker === "BASE_KEEP") ||
+			(left.marker === "BASE_KEEP" && right.marker === "REMOVE_REVIEW")
+		) {
+			transitions.push({ left, right });
+		}
+	}
+	if (transitions.length === 0) {
+		return {
+			totalCount: 0,
+			renderedCount: 0,
+			coverage: "none",
+			source: "no direct REMOVE_REVIEW/BASE_KEEP permission transition",
+		};
+	}
+	const selectedIndexes = spreadIndexes(transitions.length)
+		.slice(0, MAX_RELEASE_PERMISSION_TRANSITIONS)
+		.sort((left, right) => left - right);
+	const source = selectedIndexes
+		.map((index) => {
+			const transition = transitions[index];
+			return [
+				"PERMISSION_TRANSITION",
+				transition.left.marker,
+				JSON.stringify(compactBlockRanges(transition.left.blockIds)),
+				transition.right.marker,
+				JSON.stringify(compactBlockRanges(transition.right.blockIds)),
+			].join("|");
+		})
+		.join("\n");
+	return {
+		totalCount: transitions.length,
+		renderedCount: selectedIndexes.length,
+		coverage: selectedIndexes.length === transitions.length ? "complete" : "partial",
+		source,
+	};
+}
+
 function buildReleaseAdversarialNavigation(
 	rows: readonly FocusSourceRow[],
 	proposedRemoveBlockIds: ReadonlySet<number>,
@@ -2506,7 +2592,8 @@ function buildReleaseAdversarialNavigation(
 		renderedBlockCount: 0,
 		renderedCharacterCount: 0,
 		coverage: "omitted",
-		source: "BASE_KEEP duplication omitted because it is outside the Release change envelope",
+		source:
+			"BASE_KEEP duplicate text omitted from atomic change navigation; use the complete source and structure map for the candidate-wide four-carrier sweep, while ordinary cleanup remains unauthorized",
 	};
 	const source =
 		change.renderedBlockCount === 0
