@@ -10,6 +10,8 @@
 
 `instantiation=present` 只证明当前真实项目存在，不证明任何 block 属于 `requirement`。Owner 先于实例化：只要 source 尚未退出公告、须知、投标/响应格式或合同条款及格式，内部已经填写的项目名称、人员、范围、服务、质量、安全、验收和其他技术义务仍随外层载体排除。
 
+实例化必须由至少一个已填写且能区分本次真实采购的对象、范围、工作包、数量、现场或委托关系事实证明。若 source 明示为模板、范本或制式表单，且完整 source 不存在上述事实，必须提交 `instantiation=absent`；采购机构名称、通用批次、平台规则、投标时间、范本版本、默认条款、空表和外部指针都不能单独建立实例化。
+
 公告 Owner 不依赖明示“公告”标题。若一个自包含通知序列连续承担项目概况、参与资格、文件获取、递交、发布媒介和联系方式等对外通知功能，其中项目概况仍是公告性摘要；“唯一事实”“最具体范围”或“对技术写作有用”都不是例外。若要保护该序列中的项目概况，必须先找到 source 明确退出通知序列、进入独立技术来源的边界。
 
 在任何局部 Owner 分区前先冻结整文角色。若标题/称谓、开篇邀请报价或响应、内部连续编号章节、报价资料要求、递交与联系方式、落款以及随附报价格式共同形成一份首尾自洽的询价函、报价邀请、采购通知或类似单一对外沟通，则整份沟通载体属于公告/通知摘要 Owner；内部项目概况、服务内容、期限、质量和交付只是函件子项。只有 source 在该沟通行为之外建立平级、边界独立的需求书、技术规范、图纸、清单或有效技术附件，才可按多载体采购容器重开 Owner。封面词或单个邀请动作本身仍不足以判空。
@@ -20,6 +22,8 @@
 
 先做一次层级自检：所谓“同级技术区域”必须与具体公告/邀请载体本身平级。若 source 已建立一个顶层公告或邀请章节，章内的项目概况、采购内容、范围、期限、地点、质量标准等次级标题、编号子节和表格仍是该载体内部摘要，不能建立 preserve island；只有退出该章后进入与它平级的独立采购需求、技术规范、图纸、清单或有效技术附件才可重开 Owner。后续存在这些章节不能反向把前一邀请章内部摘要改判为需求。
 
+终态提交前再次对账 reason 与删除范围：只要 reason 已承认某个 Candidate 岛仍处于公告/通知、须知、响应/报价格式或合同格式 root 内，该岛就必须随 root 进入删除判断。详细、唯一、当前项目专属或对技术写作有用都不能覆盖这个 Owner 门。
+
 `source_role` 描述完整 source 的整体关系，不是某个 Candidate interval 或局部章节的 Owner。只有完整 source 本身是单一合同文档时才用 `contract`；采购人发布的多载体招标文件即使包含很长合同章，仍应按完整 source 关系使用 `buyer_issued`，然后逐局部载体判 membership。
 
 单一合同文档是终态门。若合同双方/当事人关系、订立或履行合同的总领关系、连续条款、价款或结算、违约、生效、解除/续约、争议解决、签署盖章等结构共同形成一份自洽双边合同，标题中的“服务要求”“技术要求”以及合同内部大量具体履约事实都不能把它改判为需求 handoff。若全文未退出到边界独立的技术规范、需求书、图纸、清单或有效技术附件，Candidate 非空时必须完整挑战为裸 `null`；禁止在建立 `source_role=contract` 后又对合同内部启动主要直接效力切分。
@@ -28,7 +32,9 @@
 
 Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 可以从合同章跨入同级技术标准、图纸、清单或附件，再进入投标格式；必须在 interval 内的每个顶层标题、章节过渡、附件和表格边界重新判断 Owner，不能把起始章节的 Owner 继承到整个地址区间。
 
-若完整 source 从头到尾是一个四类硬排除载体，且不存在边界独立的合格技术章节/附件，则正确结果只能是裸 `null`。Candidate 非空时必须挑战完整 Candidate；若确有理由使用 `candidate_complement`，提交 `removal.preserve_ranges=[]`。不得把“内容具体”“当前项目专属”“对写方案有用”或“只在此处出现”当作保护理由。只有检查过全部后续顶层边界后，才可认定 source 从未退出该载体。
+边界完整的投标方/供应商承诺、响应承诺、无偏离承诺或声明章节，若实际功能是在成交前要求投标/响应主体声明、确认、保证或承诺未来履约，就是响应格式 root。它不要求空格、签章位或“格式/模板”字样；子项即使复述质保、质量、服务、人员、交付等真实履约义务，也从 root 到 peer exit 整体排除，不得进入 `duty_survival_attack`。不能从孤立的承诺/保证措辞建立该载体；四类载体外采购人直接命令中标后执行的义务仍按直接工作效力保留。
+
+若完整 source 从头到尾是一个四类硬排除载体，且不存在边界独立的合格技术章节/附件，则正确结果只能是裸 `null`。Candidate 非空时必须挑战完整 Candidate，并使用最短的 `removal={mode: candidate_complement, preserve_ranges: []}`。不得把“内容具体”“当前项目专属”“对写方案有用”或“只在此处出现”当作保护理由。只有检查过全部后续顶层边界后，才可认定 source 从未退出该载体。
 
 项目已由其他事实证明实例化后，四类载体之外的独立技术标准章节若直接要求材料、设备、施工、质量、安全、环保、服务或验收遵守现行法律、规范或标准，即有可执行事实载荷；引用通用规范不等于仅指向缺失附件。只有空标题或单纯“详见未随 Word 提供的文件”才是非事实壳。
 
@@ -36,7 +42,11 @@ Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 
 
 不得用篇幅、通用性或参数密度覆盖该判断。项目已由其他事实实例化后，边界独立的技术标准/规范章节即使只有数段、措辞通用、没有型号数量，也只要直接要求当前项目必须遵守/达到/符合现行法律或标准，就不是裸指针。
 
-人员要求必须按 Owner、发生阶段和直接效力区分。公告、须知、资格审查、投标/响应格式中用于证明投标人或拟派人员资格，或要求填写/提交人员名单、简历、证书、承诺的内容仍排除；边界完整的投标/响应强制性要求章节或强制响应表，即使以未来时态列出拟投入岗位、人数和进场时间，也仍是成交前响应载体。source 退出这些载体后，边界独立的采购人要求若直接规定中标后实际履约必须投入的岗位、职责、最低人数、执业条件、驻场/进场时间或持续配置义务，就属于 requirement，不得只因相邻文字含审批、违约或资格字段而删除。履约期的独立性、职业纪律、利益冲突申报和回避义务直接治理成交供应商及其人员如何执行项目，不是成交前资格证明。
+人员要求必须按 Owner、发生阶段和直接效力区分。公告、须知、资格审查、投标/响应格式中用于证明投标人或拟派人员资格，或要求填写/提交人员名单、简历、证书、承诺的内容仍排除；边界完整的投标/响应强制性要求章节或强制响应表，即使以未来时态列出拟投入岗位、人数和进场时间，也仍是成交前响应载体。先做 subsection-level Stage Owner closure：若一个有明确 root 与 peer exit 的人员 subsection 由多项证书、社保、资格承诺、无在建承诺或无效响应后果共同定义成交前准入/响应证明，则 root 标题及全部子项直到 peer exit 整体排除；不得因单个子项描述未来履约配置而挖出保留岛。只有 source 证明 subsection 主要是成交后实际履约配置，填写、附证或承诺要求只是可分离注释时，才只删除该局部 proof atom。source 退出这些载体后，边界独立的采购人要求若直接规定中标后实际履约必须投入的岗位、职责、最低人数、执业条件、驻场/进场时间或持续配置义务，就属于 requirement，不得只因相邻文字含审批、违约或资格字段而删除。履约期的独立性、职业纪律、利益冲突申报和回避义务直接治理成交供应商及其人员如何执行项目，不是成交前资格证明。
+
+## 成交前资格/响应 Stage Gate
+
+在四类载体之外、逐 block 主要直接效力之前执行一次 `pre_award_stage_gate`。若一个有明确 root 与 peer exit 的人员或强制响应 subsection，通过多个子项共同要求证书、社保、资格材料、承诺或其他证明，并以无效响应、不得参与或类似成交前后果定义准入，则整个 subsection 从 root 到 peer exit 是成交前资格/响应证明，必须整体提交为 outside-carrier removal；禁止因其中某个子项描述未来岗位、人数、进场或配置而运行 `duty_survival_attack` 建立保留岛。只有 source 肯定证明 subsection 主要是成交后实际履约配置，而证明要求只是可分离注释时，才进入原子门并只删除该 proof atom。
 
 ## 一次审查顺序
 
@@ -47,15 +57,23 @@ Candidate 的连续地址范围不是语义载体边界。一个宽 IN interval 
 5. **反事实材料性**：内部形成 `final = Candidate + add - remove`。correctness challenge 必须关闭一个完整 case-level 问题；同一 Owner/membership 问题分散在多个安全岛时，一次覆盖全部，不得只修一处或搭载无关清理。
 6. **运营精度**：只有前五步均无 correctness issue 时，才可提交 remove-only `operational_precision`。四类硬排除载体按边界安全判断；其他普通噪声必须同时满足零技术损失和材料性 token/截断/注意力收益。
 
-默认使用互斥对象 `removal.mode=exact`，在该分支唯一的 `remove_ranges` 中完整枚举所有安全删除岛；Candidate 很宽、应保护岛很少或 exact 书写较长都不是改用补集的理由。只有完整 exact 删除确实超过 64 个不连续 range、无法在 schema 内表达时，才使用互斥分支 `removal.mode=candidate_complement`，在该分支唯一的 `preserve_ranges` 中一次列全你判断必须保护的 Candidate 合格技术岛，最后只做一次闭合检查。两个分支不能同时表达 remove 与 preserve。每个保护 range 必须完整落在一个 `candidateRanges` interval 内；遇到 OUT gap 立即拆分。无论采用哪种 mode，只要有效删除非空，进入 Release 后完整 Candidate 都会成为有界重审面：本轮点名删除的 block 标记为 `REMOVE_REVIEW`，其他 Candidate 标记为 `KEEP_RECHECK`；reason、证据和原始 preserve 表达隐藏。Release 可恢复误删，也可删除本轮漏掉的 false protection。该机制用于抵消一次 Reviewer 分区的不可逆误差，不降低本轮举证责任：exact 仍只能提交你已经判断安全删除的 block，candidate_complement 仍必须完整保护你判断合格的岛，不能依赖 Release 代替本轮闭合检查。
+reason 收敛后，同时写出心中的完整删除岛和完整保留岛并比较不连续 range 数量。删除岛数量不多于保留岛时，使用互斥对象 `removal.mode=exact`，在唯一的 `remove_ranges` 中完整枚举所有安全删除岛；保留岛更少时，使用 `removal.mode=candidate_complement`，在唯一的 `preserve_ranges` 中一次列全必须保留的 Candidate 合格技术岛；平局使用 exact。若只有一个分支能落入 64 个 range 的 schema 容量，则使用该分支。整文 veto、`source_role=non_procurement` 或 `instantiation=absent` 的非空 Candidate 保留岛为零，使用 complement 与空 preserve。两个分支不能同时表达 remove 与 preserve。每个 preserve range 必须完整落在一个 `candidateRanges` interval 内；遇到 OUT gap 立即拆分。
+
+reason 完全收敛后再生成互斥删除对象。`exact` 分支必须围绕 reason 明确认定保留的每个 Candidate block 拆分，不得用宽范围把恢复责任转交 Release；`candidate_complement` 分支必须在 `preserve_ranges` 中完整列出全部保留岛。无需额外生成第二份保护范围。
+
+进入 Release 后，只有本轮 effective removal 标记为 `REMOVE_REVIEW`，challenged add 标记为 `ADD_REVIEW`；其他 Candidate 全部是强制 `BASE_KEEP`。reason、证据和原始 preserve 表达均隐藏。Release 可恢复 `REMOVE_REVIEW` 中的误删或拒绝 `ADD_REVIEW`，但不得删除 `BASE_KEEP`、不得寻找本轮未挑战的 false protection，也不得加入其他 OUT。因此 exact 只能提交你已经判断安全删除的 block，candidate_complement 必须完整保护你判断合格的岛，不能依赖 Release 重做整份 Candidate。
 
 `preserve_ranges` 是逐原子 allowlist，不是章节投票。四类硬排除之外的混合商务/法律/履约章节中，工期、地点、范围、质量、质保、交付、验收和服务响应可保留，但可分离的价格、付款、结算、保证金、投标有效期、纯报价承诺，以及没有直接工作义务的纯违约救济、解除、争议、合同成立/生效、适用法律和一般风险分配不得因相邻技术义务而进入保护岛；必须在这些 block 前后拆分 range。
 
 “主要直接效力”检查必须晚于载体 Owner，并且只允许用于 source 已经证明位于四类硬排除载体之外的混合 block。公告、须知、投标/响应格式或合同条款及格式尚未结束时，禁止用局部实施、服务、质量、安全、验收、人员或项目专属事实重新取得 membership。退出这些载体之后，主要在计算或约定报价、价款、支付、结算、扣款、审计、发票、保证金或价格调整时，即使工程量、完工、验收或质量保证金只是金额依据、前提或触发条件，也按纯商务删除；不得从“验收合格后结算”推导出独立验收需求。只规定违约赔偿/救济、合同解除、生效/成立、争议解决、适用法律或一般风险分配而没有直接工作义务时，按纯法律非工作内容删除。主要在要求实施、提供、配置、施工、交付、维护、响应或达到工期/质量/安全结果时，按履约事实保留，即使同段附带费用已含、不另支付、违约后果或其他法律后果。按直接效力而非关键词数量、章节标题或相邻段落投票。
 
-对每个拟删除的载体外 block 做一次 `duty_survival_attack`：暂时剥离审批、报审、备案、费用承担、扣款、违约、解除和赔偿等附带后果；若剩余主句仍要求实施、配置资源、编制/提交计划方案报告、形成或保存记录、交付、限时替换/补齐、响应、按平台执行或达到结果，则保留整个不可分原子 block。成果准确性/完整性/误差/质量责任、与成果质量直接相连的检查复核验收及纠正机制、适用技术标准的现行版本/替代/优先规则都属于直接工作或履约基线，不要求句法上出现供应商祈使句。明确要求中标/成交供应商对当前项目设计、施工、安全、质量或成果承担前置责任，也属于履约治理；附带经济损失承担不取消它。若 block 在处罚或救济之前先声明独立保证、禁止、质量/结果基线，或把一个具体的供应商可控制失败写成处罚前件，剥离后果后必须对该前件做极性归一。归一后仍具体要求及时维护、正确稳定的产品或版本、保证不侵权、避免返工或其他可执行/可验收结果时，直接 duty 存活，整段保留；只有泛称违约、违规、与合同不符、损失或质量问题且没有动作、阈值、交付结果或纠正责任时，才是纯救济触发器。质量差错、违规或虚假成果若只作为扣款、赔偿、取消资格、解除、递补或依法追责的触发条件，不产生独立质量 requirement；剥离救济后没有独立供应商责任、成果责任、质量阈值、复核验收、纠正或工作动作时仍删除。保密文字若直接控制当前项目数据/资料的存储、处理、传递、复制、披露、留存、返还或销毁，就是直接数据控制义务；按平台执行的命令也不会因末尾附带解除合同后果而消失。中标后提交、审核、批准、备案和记录管理属于实施流程；不得把这些动作当成成交前采购程序。成交前证明 atom 从实际要求填写、附上或提交证明的 operative block 开始；相邻中性标题、序号、空标签或履约 block 不因地址连续自动继承该 Owner，除非 source 证明它们共同建立资格/响应载体。后续法律章节也不能反向改写前一平级技术章节。
+对每个拟删除的载体外 block 做一次 `duty_survival_attack`：暂时剥离审批、报审、备案、费用承担、扣款、违约、解除和赔偿等附带后果；若剩余主句仍要求实施、配置资源、编制/提交计划方案报告、形成或保存记录、交付、限时替换/补齐、响应、按平台执行或达到结果，则保留整个不可分原子 block。费用语言不能抹掉资源提供义务：若主句要求供应商负责当前实施所需材料、耗材、工具、设备、设施或人员的提供、准备、保障或可用性，即使同段又说费用由其承担、已含或不另支付，也保留；若资源只作为丢失、损坏、浪费、赔偿或计价对象，或没有实际提供资源的要求，才按纯费用/救济删除。成果准确性/完整性/误差/质量责任、与成果质量直接相连的检查复核验收及纠正机制、适用技术标准的现行版本/替代/优先规则都属于直接工作或履约基线，不要求句法上出现供应商祈使句。明确要求中标/成交供应商对当前项目设计、施工、安全、质量或成果承担前置责任，也属于履约治理；附带经济损失承担不取消它。合同签订后或履约期间的变更控制命令也必须存活：采购人书面提出标准、范围或条件变更且供应商必须配合、执行、调整或补充时，价款、费用或补偿另行协商只是附带商务处理，不能把不可分 block 整体删除。若 block 在处罚或救济之前先声明独立保证、禁止、质量/结果基线，或把一个具体的供应商可控制失败写成处罚前件，剥离后果后必须对该前件做极性归一。归一后仍具体要求及时维护、正确稳定的产品或版本、保证不侵权、避免返工或其他可执行/可验收结果时，直接 duty 存活，整段保留；只有泛称违约、违规、与合同不符、损失或质量问题且没有动作、阈值、交付结果或纠正责任时，才是纯救济触发器。质量差错、违规或虚假成果若只作为扣款、赔偿、取消资格、解除、递补或依法追责的触发条件，不产生独立质量 requirement；剥离救济后没有独立供应商责任、成果责任、质量阈值、复核验收、纠正或工作动作时仍删除。保密文字若直接控制当前项目数据/资料的存储、处理、传递、复制、披露、留存、返还或销毁，就是直接数据控制义务；按平台执行的命令也不会因末尾附带解除合同后果而消失。中标后提交、审核、批准、备案和记录管理属于实施流程；不得把这些动作当成成交前采购程序。成交前未提出异议/偏离即视为完全响应、同意、接受或无偏离，或要求在响应文件中提出异议/偏离的规则，是响应解释/证明 atom，不是履约 duty；即使位于四类载体之外也应删除。成交前证明 atom 从实际要求填写、附上或提交证明的 operative block 开始；相邻中性标题、序号、空标签或履约 block 不因地址连续自动继承该 Owner，除非 source 证明它们共同建立资格/响应载体。后续法律章节也不能反向改写前一平级技术章节。
 
 Candidate IN 已覆盖处罚、扣款或救济 cluster 时，做一次紧凑的 `consequence_cluster_attack`：先列出经极性归一后仍存活的 duty 岛，再攻击同簇内可安全分离的纯后果岛。泛化违约/不符触发、处罚依据指针、只服务处罚的事件定义、确认/扣除/付款执行，以及在相邻详细义务已经保留后只重复遵守并附处罚、却不新增动作/阈值/结果/纠正责任的 wrapper，不能因邻近 duty 而保留。只有 Candidate IN 的纯后果岛可提交 remove；若你找到的非 requirement atom 全部是 OUT，必须 pass，不得制造 noop challenge。该攻击只在 reason 中给出决定性地址，不输出 ledger。
+
+载体门和 `pre_award_stage_gate` 之后，对混合交接 block 执行 `performance_transition_attack`。成交后要求供应商协调、盘点、与实际转移相连的验收、接收、接管、迁移、移交或返还资产、设备、材料、数据、账户、场地或在制工作，是实施启动/连续性 duty。剥离估值、折旧、价款、补偿、结算、承诺/证明和救济后，只要还剩实际交接动作，整个不可分 block 必须保留；只有剩余内容纯粹分配金额、估值、所有权或付款且没有实际交接动作时才可删除。可分离标题继续独立判 membership。只在 reason 中记录决定性地址，不输出 ledger。
+
+四类载体之外，对 cluster heading 和 child 分别判 membership。存活 child 不会保护只命名价格、付款、结算、扣款、处罚、违约、救济、解除或争议后果的可分离标题。若删除标题不会使存活 child 丧失必要语义，将标题单独提交 removal；合格技术/服务/安全/验收标题或理解正文不可替代的标题仍保留。这不会从孤立法律词建立 contract carrier，也不允许在四类 root 内挖洞。
 
 最后对完整 Candidate IN 做一次全局纯法律 wrapper 扫描，不得只审查当前处罚 cluster。仅说明规范/附件/成果成为合同组成部分、具有同等法律效力或以合同为准，且不新增技术标准、动作、结果或纠正责任的 block，是合同效力说明；只说未尽事宜由双方协商/另行解决且没有具体任务、流程、输出或时限的 block，是合同空缺/争议 fallback。两者都应作为可分离 false protection 删除，不能因邻近技术正文或“协商”字样被解释为实施协调。
 
@@ -63,7 +81,7 @@ Candidate IN 已覆盖处罚、扣款或救济 cluster 时，做一次紧凑的 
 
 结构字段必须忠实投影已收敛的 reason。reason 中任何明确判定为保留的 Candidate block/岛，都不得落入 `remove_ranges`；调用工具前检查保留岛与删除范围是否相交，若相交必须拆分或修正 range。禁止一边在 reason 中确认合格履约事实，一边用跨越该事实的宽 `exact` range 删除，再把恢复责任交给 Release。
 
-提交方向前必须先读取 IN/OUT overlay：目标 block 已标记为 IN 时，它已经属于 Candidate，绝不能再提交为 add。在默认 exact 分支中，合格 IN 岛只需确保不被写入 `removal.remove_ranges`；只有确实满足超过 64 个不连续 exact 删除的 fallback 条件时，才在 `removal.preserve_ranges` 中完整列出合格 IN 岛。只有标记为 OUT 的合格来源才能进入 `add_ranges`。
+提交方向前必须先读取 IN/OUT overlay：目标 block 已标记为 IN 时，它已经属于 Candidate，绝不能再提交为 add。若最终选择 exact，合格 IN 岛必须完整留在 `removal.remove_ranges` 之外；若最终选择 candidate_complement，必须在 `removal.preserve_ranges` 中完整列出全部合格 IN 岛。只有标记为 OUT 的合格来源才能进入 `add_ranges`。
 
 外层载体包含关系必须落实到保护岛：只要 source 尚未清晰退出公告、须知、投标/响应格式或合同条款及格式，内部的“采购范围”“技术要求”“服务要求”“质量”“验收”等局部标题和具体事实都不能成为 preserve island。必须有结构证据证明已退出排除载体并进入独立合格来源，才允许保护。
 
@@ -71,7 +89,7 @@ Candidate IN 已覆盖处罚、扣款或救济 cluster 时，做一次紧凑的 
 
 父章同时列出技术、服务、合同、商务等类别时，把它当作 mixed container，而不是统一 Owner。进入主要直接效力前做一次 `mixed_container_root_sweep`：读取各 child heading candidate，先关闭其中实际成立的局部四类 root。若暂定 final 在同一 root 下删除付款、保证金、违约等子项，却保留后续服务期、地点、质量、验收、人员或技术子项，必须视为 holey selection；要么从 source 否定该 root，要么完整删除 root 到语义 exit。不要输出逐 block ledger，只在 reason 中记录决定性的 root 与 exit。
 
-孤立技术标题、空标题或只指向本 Word 未提供材料的“详见/以另附技术任务书、规范书或附件为准”不是事实载荷。若排除其他载体后只剩这类壳，反事实 final 必须为空，不能为了保留标题或指针建立保护岛。
+孤立技术标题、空标题或只指向本 Word 未提供材料的“详见/以另附技术任务书、规范书或附件为准”不是事实载荷。执行 `non_fact_shell_closure`：若一个有明确 root 与 peer exit 的 subsection 从标题到出口只有“无”、空白、占位、裸外部指针，或不新增具体任务、流程、输出、时限和结果的泛化遵法/兜底 wrapper，则 root、空正文和 wrapper 整体提交为 removal；不能因前一个相邻技术表或履约章节被保留，就单独留下该空壳标题。若排除其他载体后只剩这类壳，反事实 final 必须为空，不能为了保留标题或指针建立保护岛。
 
 标题与正文分别承担 membership。即使一个技术标题因边界上下文与前一合格区域连续保留，紧随其后的 block 若只说到招标人处查阅、另行提供或详见未随 Word 提供的图纸/附件，仍是裸外部指针，不能随标题进入 `preserve_ranges`。
 
@@ -88,8 +106,8 @@ Candidate IN 已覆盖处罚、扣款或救济 cluster 时，做一次紧凑的 
 - 先写 reason 并让整文关系、Owner、材料性和反事实 final 到达单一结论；再填写 source_role、instantiation、verdict、issue_type 和 ranges。所有 range 字段必须是该已收敛 reason 的结构投影，互斥 `removal` 对象最后生成。
 - 每次提交 typed `source_role=buyer_issued|contract|completed_supplier_response|non_procurement` 与 `instantiation=present|absent`。
 - reason 先写 `role_evidence=<依据>; instantiation_evidence=<依据>`，再写决定性反事实影响；不复述整份 source。
-- `pass`：`issue_type=none`，add/remove 均为空。`source_role=non_procurement` 且 Candidate 非空时不得 pass。
-- `challenge`：只提交一个具体 issue type；add 只能指向 Candidate 外。普通精确删除使用 `removal={mode: exact, remove_ranges: [...]}`；只有 exact 删除确实超过 64 个不连续 range 时，才使用 `removal={mode: candidate_complement, preserve_ranges: [...]}`。两个分支结构互斥，不存在另一个方向字段。保护 range 不得跨 Candidate 外 block，必须按 `candidateRanges` 拆分。每个 range 必须使用 `段落N` 或 `段落N-段落M`。
+- `pass`：`issue_type=none`，add/remove 均为空。`source_role=non_procurement` 或 `instantiation=absent` 且 Candidate 非空时不得 pass。
+- `challenge`：只提交一个具体 issue type；add 只能指向 Candidate 外。语义 final 收敛后选择较短的互斥表达：删除岛不多于保留岛时使用 `removal={mode: exact, remove_ranges: [...]}`，保留岛更少时使用 `removal={mode: candidate_complement, preserve_ranges: [...]}`，平局 exact。两个分支结构互斥，不存在另一个方向字段。保护 range 不得跨 Candidate 外 block，必须按 `candidateRanges` 拆分。每个 range 必须使用 `段落N` 或 `段落N-段落M`。
 - `operational_precision` 必须 remove-only；存在 correctness issue 时不得使用。
 - schema 合法但机械归一化后无净变化会保留 Candidate；不得为了触发 Release 制造 noop challenge。
 - reason 提到的每个目标 block 都必须重新读取 source 行首的字面 overlay：IN 只能保留/删除，OUT 只能新增/忽略。不得在 reason 中把 IN 称为遗漏的 OUT；exact 分支不得删除 reason 已确认保留的 IN 岛，candidate_complement 分支不得漏写 reason 已确认保留的 IN 岛。
