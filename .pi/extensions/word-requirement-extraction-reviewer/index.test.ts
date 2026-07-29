@@ -1301,7 +1301,7 @@ test("uses a narrative-blind Release to apply a bounded repair", async () => {
 	expect(scripted.userPrompts[1]).toContain("ADD_REVIEW|段落2：");
 	expect(scripted.userPrompts[1]).toContain("OUT|段落3：");
 	expect(scripted.userPrompts[1]).toContain(
-		"releaseTerminalContract=Within the exact authorized change envelope",
+		"releaseTerminalContract=Settle whole_source_identity_veto within the Reviewer envelope first",
 	);
 	expect(scripted.userPrompts[1].lastIndexOf("# Final release checklist")).toBeGreaterThan(
 		scripted.userPrompts[1].lastIndexOf("OUT|段落3："),
@@ -1848,7 +1848,7 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	);
 	expect(scripted.userPrompts[1]).toContain("reviewerPreserveRangesAndRationale=withheld");
 	expect(scripted.userPrompts[1]).toContain(
-		"reviewerMechanicalPatchVisibility=exact REMOVE_REVIEW envelope only; all other Candidate blocks are mandatory BASE_KEEP",
+		"reviewerMechanicalPatchVisibility=exact REMOVE_REVIEW envelope for ordinary changes; all other Candidate blocks are protected BASE_KEEP except the explicit four-carrier veto",
 	);
 	expect(scripted.userPrompts[1]).not.toContain("challengePreserveRanges=");
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
@@ -1857,7 +1857,9 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 	expect(scripted.userPrompts[1]).not.toContain("REMOVE_REVIEW|段落1：");
-	expect(scripted.userPrompts[1]).toContain("Do not search BASE_KEEP for unrelated false protections");
+	expect(scripted.userPrompts[1]).toContain(
+		"do not scan BASE_KEEP for any other cleanup",
+	);
 	expect(scripted.userPrompts[1]).toContain(
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only",
 	);
@@ -1955,7 +1957,7 @@ test("mechanically expands a broad Candidate complement around preserved technic
 		"A new peer heading starts a new Owner decision",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"outside_carrier_excluded_ranges only for challenged outside-carrier atoms",
+		"Write outside_carrier_excluded_ranges only for authorized challenged atoms",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"Closure never extends backward across the carrier start",
@@ -1985,10 +1987,10 @@ test("mechanically expands a broad Candidate complement around preserved technic
 		"Carry that Owner through all child clauses until the next peer exit",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"a later carrier never expands backward",
+		"A later carrier never expands backward",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"Do not search BASE_KEEP for unrelated false protections",
+		"do not search BASE_KEEP for ordinary outside-carrier cleanup",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"A structural exit never automatically ends Owner",
@@ -2235,6 +2237,123 @@ test("does not let complement Release delete Candidate outside the submitted rem
 	expect(scripted.userPrompts[1]).not.toContain("PROPOSED_REMOVE|");
 	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
+});
+
+test("lets Release close a Reviewer-missed hard carrier without opening ordinary BASE_KEEP cleanup", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "第一章 招标公告。" },
+				{ blockId: 1, text: "公告内部项目概况。" },
+				{ blockId: 2, text: "第二章 投标人须知。" },
+				{ blockId: 3, text: "须知内部工期摘要。" },
+			],
+			["段落0-段落3"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: ["段落1", "段落3"] },
+				reason: "The Reviewer misses two child blocks while challenging their carrier roots.",
+			},
+			"reviewer-missed-hard-carrier-children",
+		),
+		tool(
+			"submit_requirement_release",
+			{
+				hard_excluded_ranges: ["段落0-段落3"],
+				outside_carrier_excluded_ranges: [],
+				reason:
+					"Both preserved children remain inside source-proven announcement or bidder-instruction roots.",
+				final_ranges: [],
+			},
+			"release-hard-carrier-veto",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "4".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落0-段落3"] });
+	expect(result.release).toMatchObject({
+		submittedHardExcludedRanges: ["段落0-段落3"],
+		hardExcludedRanges: ["段落0-段落3"],
+		finalRanges: [],
+	});
+	expect(scripted.userPrompts[1]).toContain("hardCarrierVetoContract=");
+	expect(scripted.userPrompts[1]).toContain(
+		"any omitted BASE_KEEP absent from hard_excluded_ranges is mechanically restored",
+	);
+});
+
+test("renders address-only permission transitions for hard-carrier root closure", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			Array.from({ length: 7 }, (_, blockId) => ({
+				blockId,
+				text: `机械源段落${blockId}。`,
+			})),
+			["段落0-段落6"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: ["段落2-段落4"] },
+				reason: "The Reviewer leaves one protected run between two challenged runs.",
+			},
+			"reviewer-permission-transitions",
+		),
+		tool(
+			"submit_requirement_release",
+			{
+				hard_excluded_ranges: ["段落0-段落6"],
+				outside_carrier_excluded_ranges: [],
+				reason: "One source-proven hard carrier crosses both permission transitions.",
+				final_ranges: [],
+			},
+			"release-permission-transitions",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "5".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(scripted.userPrompts[1]).toContain("permissionTransitionCount=2");
+	expect(scripted.userPrompts[1]).toContain("permissionTransitionRenderedCount=2");
+	expect(scripted.userPrompts[1]).toContain("permissionTransitionCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain(
+		'PERMISSION_TRANSITION|REMOVE_REVIEW|["段落0-段落1"]|BASE_KEEP|["段落2-段落4"]',
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		'PERMISSION_TRANSITION|BASE_KEEP|["段落2-段落4"]|REMOVE_REVIEW|["段落5-段落6"]',
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"A permission-marker switch is never a source-proven Owner exit",
+	);
 });
 
 test("does not let exact Release delete an unchallenged Candidate block", async () => {
