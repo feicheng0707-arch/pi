@@ -66,9 +66,9 @@
 
 只调用一次终态工具：
 
-1. 完成 `whole_container_disconfirmation` 与必要的 `carrier_root_exit_attack` 后，`hard_excluded_ranges` 只写出授权 envelope 内、已证明属于四类载体的 challenged blocks；完整 root→semantic-exit 用于判断，不能把 envelope 外 `BASE_KEEP` 写入字段；
-2. 仅对授权 envelope 内且位于这些载体之外的 challenged blocks 完成主要直接效力与 `duty_survival_attack`，把可安全分离的纯预算、成交前证明/程序、价格商务、纯法律和裸指针 block 投影到 `outside_carrier_excluded_ranges`，绕开每个仍存活的直接工作义务；
+1. 完成 `whole_container_disconfirmation` 与必要的 `carrier_root_exit_attack` 后，`hard_excluded_ranges` 只写出授权 envelope 内、已证明属于四类载体的 challenged blocks，作为审计 trace；完整 root→semantic-exit 用于判断，不能把 envelope 外 `BASE_KEEP` 写入字段；
+2. 仅对授权 envelope 内且位于这些载体之外的 challenged blocks 完成主要直接效力与 `duty_survival_attack`，把可安全分离的纯预算、成交前证明/程序、价格商务、纯法律和裸指针 block 投影到 `outside_carrier_excluded_ranges` 审计 trace，绕开每个仍存活的直接工作义务；
 3. `reason` 紧凑记录决定性的 root、peer exit、Owner 边界和两个 exclusion gate 的反例结论，不得改写结构字段；
-4. `final_ranges` 最后写出唯一权威完整集合：全部 `BASE_KEEP` 必须存在；`REMOVE_REVIEW` 可恢复或省略；`ADD_REVIEW` 可接受或拒绝。
+4. `final_ranges` 最后写出唯一权威完整集合：全部 `BASE_KEEP` 必须存在；`REMOVE_REVIEW` 可恢复或省略；`ADD_REVIEW` 可接受或拒绝。若前面的 trace 草稿与已收敛 final 冲突，修正 trace，不得让 trace 改写 final。
 
-两个 exclusion 字段都是 bounded challenge 的粗粒度范围，不是逐 block ledger，且只能落入 `REMOVE_REVIEW ∪ ADD_REVIEW`。`final_ranges` 必须省略其中全部 block 和其他批准删除的 `REMOVE_REVIEW`，只能包含 Candidate 与批准的 `ADD_REVIEW`。只有不存在任何 `BASE_KEEP` 且 challenged envelope 独立支持 null 时才可提交 `[]`。不得在提交后重新打开结论，不得读取 expected、历史答案、case 身份或 evaluator。
+两个 exclusion 字段都是 bounded challenge 的粗粒度审计 trace，不是逐 block ledger，且只能落入 `REMOVE_REVIEW ∪ ADD_REVIEW`。它们应与最终省略集合一致，但不具备发布优先级；Harness 会从 trace 中移除 `final_ranges` 已保留的地址，而不会据此删除 final。`final_ranges` 只能包含 Candidate 与批准的 `ADD_REVIEW`。只有不存在任何 `BASE_KEEP` 且 challenged envelope 独立支持 null 时才可提交 `[]`。不得在提交后重新打开结论，不得读取 expected、历史答案、case 身份或 evaluator。

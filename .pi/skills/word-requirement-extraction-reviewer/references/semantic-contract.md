@@ -195,7 +195,7 @@ Reviewer 的结构字段必须是已收敛语义结论的无冲突投影。若 r
 
 进入独立 Release 后，`removal.mode` 只记录 Reviewer 如何表达删除提案。机械归一化后的 effective removal 本身就是完整 remove envelope，并标记为 `REMOVE_REVIEW`；challenged add 标记为 `ADD_REVIEW`；其余 Candidate 全部标记为强制 `BASE_KEEP`。Reviewer 的 reason、证据线索和原始 `preserve_ranges` 不进入 Release。Release 必须攻击 `REMOVE_REVIEW` 是否造成材料性遗漏或上下文断裂，并独立判断 `ADD_REVIEW` 是否有合法 Owner 与事实负载；它不得删除 `BASE_KEEP`、不得寻找 envelope 外的 false protection、不得加入未被挑战的 OUT。标记不构成语义投票，代码不得依据 reason 补充或删减语义范围。
 
-Release 的唯一终态工具按 `hard_excluded_ranges -> outside_carrier_excluded_ranges -> reason -> final_ranges` 生成。`hard_excluded_ranges` 只承载授权 envelope 内、已证明属于四类硬排除载体的 challenged blocks；完整 root→semantic-exit 用于判断，但不能扩大字段权限。`outside_carrier_excluded_ranges` 只承载授权 envelope 内、已经证明位于四类载体之外、经过主要直接效力与 `duty_survival_attack` 后仍可安全分离的非 requirement atoms。两个字段都是 bounded challenge 的粗粒度范围，不是逐 block ledger。Harness 只将模型声明的地址与 `REMOVE_REVIEW ∪ ADD_REVIEW` 做机械交集、消除两个集合的地址重叠，并阻止 `final_ranges` 重新纳入这些地址；它不识别载体或 atom 语义，也不生成或扩张 exclusion ranges。
+Release 的唯一终态工具按 `hard_excluded_ranges -> outside_carrier_excluded_ranges -> reason -> final_ranges` 生成。`hard_excluded_ranges` 只承载授权 envelope 内、已证明属于四类硬排除载体的 challenged blocks；完整 root→semantic-exit 用于判断，但不能扩大字段权限。`outside_carrier_excluded_ranges` 只承载授权 envelope 内、已经证明位于四类载体之外、经过主要直接效力与 `duty_survival_attack` 后仍可安全分离的非 requirement atoms。两个字段都是 bounded challenge 的粗粒度审计 trace，不是逐 block ledger。`final_ranges` 是唯一权威完整集合。Harness 先将 final 裁剪到 Candidate 与 challenged add 并恢复全部 `BASE_KEEP`，再将两个 trace 与 `REMOVE_REVIEW ∪ ADD_REVIEW` 做机械交集、从 trace 移除 final 已保留的地址并消除 trace 间重叠；它不得用 trace 覆盖 final，不识别载体或 atom 语义，也不生成或扩张 exclusion ranges。
 
 remove envelope 的大小、字符覆盖率或偶然覆盖完整 Candidate 只描述机械权限边界，不表达应删除多少内容。Release 必须逐原子判断 challenged 子集；100% envelope 既不要求全删，也不允许因其中存在一个合格岛而整包恢复。
 

@@ -50,7 +50,7 @@ const MAX_STRUCTURE_MAP_CHARACTERS = 36_000;
 const MAX_STRUCTURE_TEXT_PREVIEW_CHARACTERS = 64;
 const MAX_RELEASE_STRUCTURE_FOCUS_NODES = 64;
 const MAX_RELEASE_STRUCTURE_FOCUS_CHARACTERS = 8_000;
-const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v104-minimal-range-encoding";
+const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v105-final-authoritative-release";
 const PERFORMANCE_TRANSITION_ATTACK_CONTRACT =
 	"performanceTransitionAttackContract=After the carrier and pre-award stage gates, run performance_transition_attack before deleting any indivisible block that combines commercial or proof language with a post-award transition. Actual coordination, inventory, transfer-linked acceptance, receipt, takeover, migration, handover, or return of assets, equipment, materials, data, accounts, sites, or work in progress is an implementation-start or continuity duty. Strip valuation, depreciation, price, compensation, settlement, commitment, proof, and remedy language; if an actual transition action remains, preserve the indivisible block. Delete only when the remainder solely allocates money, valuation, title, or payment and imposes no actual transition action. Heading membership remains governed by the existing independent-heading rule.";
 const extensionDirectory = dirname(fileURLToPath(import.meta.url));
@@ -176,18 +176,18 @@ const ReleaseDecisionSchema = Type.Object(
 		hard_excluded_ranges: Type.Array(RangeSchema, {
 			maxItems: 64,
 			description:
-				"Write this field first. List only REMOVE_REVIEW or ADD_REVIEW blocks inside the authorized challenge envelope whose actual Owner is announcement/notice, bidder or supplier instructions, bid/response/quotation format, or contract terms/format. When a challenged boundary is disputed, confirm the actual root and semantic peer exit; include every challenged descendant inside that root-closed interval, but never classify BASE_KEEP or OUT. Use [] when no challenged block belongs to a four-class carrier.",
+				"Write this audit trace first. List only REMOVE_REVIEW or ADD_REVIEW blocks inside the authorized challenge envelope whose actual Owner is announcement/notice, bidder or supplier instructions, bid/response/quotation format, or contract terms/format. When a challenged boundary is disputed, confirm the actual root and semantic peer exit; include every challenged descendant inside that root-closed interval, but never classify BASE_KEEP or OUT. Keep it consistent with final_ranges, which is the sole structural verdict. Use [] when no challenged block belongs to a four-class carrier.",
 		}),
 		outside_carrier_excluded_ranges: Type.Array(RangeSchema, {
 			maxItems: 64,
 			description:
-				"Write this field second. List only authorized REMOVE_REVIEW or ADD_REVIEW blocks already proven outside the four hard-excluded carriers whose own primary direct effect is safely separable non-requirement content. Run duty_survival_attack first and split around every surviving direct work duty, short normative obligation, necessary heading, or source-fidelity dependency. This field must not overlap hard_excluded_ranges and must never classify BASE_KEEP or OUT. Use [] when no challenged outside-carrier block is safely excludable.",
+				"Write this audit trace second. List only authorized REMOVE_REVIEW or ADD_REVIEW blocks already proven outside the four hard-excluded carriers whose own primary direct effect is safely separable non-requirement content. Run duty_survival_attack first and split around every surviving direct work duty, short normative obligation, necessary heading, or source-fidelity dependency. This field must not overlap hard_excluded_ranges, final_ranges, BASE_KEEP, or OUT. final_ranges is the sole structural verdict. Use [] when no challenged outside-carrier block is safely excludable.",
 		}),
 		reason: ReleaseReasonSchema,
 		final_ranges: Type.Array(RangeSchema, {
 			maxItems: 128,
 			description:
-				"Write this field last, after hard_excluded_ranges, outside_carrier_excluded_ranges, and reason have reached one settled conclusion. It is the complete final selected range set, not a delta. Every BASE_KEEP Candidate block is mandatory. Within REMOVE_REVIEW, include each block whose proposed deletion is rejected and omit each independently approved deletion. Include only approved ADD_REVIEW blocks; OUT is unavailable. Omit every authorized block already listed in either exclusion field. Use [] only when the authorized envelope permits an explicit null result.",
+				"Write this field last, after hard_excluded_ranges, outside_carrier_excluded_ranges, and reason have reached one settled conclusion. It is the sole authoritative complete final selected range set, not a delta. Every BASE_KEEP Candidate block is mandatory. Within REMOVE_REVIEW, include each block whose proposed deletion is rejected and omit each independently approved deletion. Include only approved ADD_REVIEW blocks; OUT is unavailable. Keep the two exclusion traces consistent, but resolve any accidental structural conflict here. Use [] only when the authorized envelope permits an explicit null result.",
 		}),
 	},
 	{ additionalProperties: false },
@@ -1084,7 +1084,7 @@ export async function runRequirementReview(
 				toolName: "submit_requirement_release",
 				toolLabel: "Submit requirement release",
 					toolDescription:
-						"Adjudicate only the bounded Reviewer challenge. BASE_KEEP is mechanically mandatory; REMOVE_REVIEW is the only Candidate subset that may be omitted, ADD_REVIEW is the only external subset that may be added, and OUT is unavailable. Test the whole-document role and relevant source boundaries only as needed to decide those challenged blocks. Write hard_excluded_ranges first for challenged blocks whose actual Owner is one of the four excluded carriers, then outside_carrier_excluded_ranges for challenged outside-carrier non-requirement atoms after duty_survival_attack. Both exclusion fields must stay inside the authorized challenge envelope. Explain the settled decision briefly, then write final_ranges last as the complete result with all BASE_KEEP blocks restored.",
+						"Adjudicate only the bounded Reviewer challenge. BASE_KEEP is mechanically mandatory; REMOVE_REVIEW is the only Candidate subset that may be omitted, ADD_REVIEW is the only external subset that may be added, and OUT is unavailable. Test the whole-document role and relevant source boundaries only as needed to decide those challenged blocks. Write hard_excluded_ranges first for challenged blocks whose actual Owner is one of the four excluded carriers, then outside_carrier_excluded_ranges for challenged outside-carrier non-requirement atoms after duty_survival_attack. Both exclusion fields are bounded audit traces. Explain the settled decision briefly, then write final_ranges last as the sole authoritative complete result with all BASE_KEEP blocks restored.",
 				schema: ReleaseDecisionSchema,
 				normalize: normalizeReleaseSubmission,
 				parse: (raw) =>
@@ -1628,21 +1628,9 @@ function validateReleaseDecision(
 	const allowedAdd = new Set(allowedAddBlockIds);
 	const removeEnvelope = new Set(removeEnvelopeBlockIds);
 	const authorizedChange = new Set([...removeEnvelopeBlockIds, ...allowedAddBlockIds]);
-	const hardExcludedBlockIds = submittedHardExclusions.blockIds.filter(
-		(blockId) => authorizedChange.has(blockId),
-	);
-	const hardExcluded = new Set(hardExcludedBlockIds);
-	const outsideCarrierExcludedBlockIds = submittedOutsideCarrierExclusions.blockIds.filter(
-		(blockId) => authorizedChange.has(blockId) && !hardExcluded.has(blockId),
-	);
-	const outsideCarrierExcluded = new Set(outsideCarrierExcludedBlockIds);
 	const finalBlockIds = new Set<number>();
 	for (const blockId of submitted.blockIds) {
-		if (
-			(candidate.has(blockId) || allowedAdd.has(blockId)) &&
-			!hardExcluded.has(blockId) &&
-			!outsideCarrierExcluded.has(blockId)
-		) {
+		if (candidate.has(blockId) || allowedAdd.has(blockId)) {
 			finalBlockIds.add(blockId);
 		}
 	}
@@ -1650,6 +1638,16 @@ function validateReleaseDecision(
 		if (!removeEnvelope.has(blockId)) finalBlockIds.add(blockId);
 	}
 	const orderedFinalBlockIds = [...finalBlockIds].sort((left, right) => left - right);
+	const hardExcludedBlockIds = submittedHardExclusions.blockIds.filter(
+		(blockId) => authorizedChange.has(blockId) && !finalBlockIds.has(blockId),
+	);
+	const hardExcluded = new Set(hardExcludedBlockIds);
+	const outsideCarrierExcludedBlockIds = submittedOutsideCarrierExclusions.blockIds.filter(
+		(blockId) =>
+			authorizedChange.has(blockId) &&
+			!finalBlockIds.has(blockId) &&
+			!hardExcluded.has(blockId),
+	);
 	const finalRanges = compactBlockRanges(orderedFinalBlockIds);
 	const unchanged =
 		orderedFinalBlockIds.length === candidateBlockIds.length &&
@@ -2294,7 +2292,7 @@ function buildReleaseUserPrompt(
 		releaseHasRemoval
 			? "releaseAuthorization=Every BASE_KEEP block is mechanically mandatory. final_ranges may restore or omit only REMOVE_REVIEW blocks and may accept challenged ADD_REVIEW blocks; it cannot delete any other Candidate block or add OUT."
 			: "releaseAuthorization=Every BASE_KEEP block is mechanically mandatory. final_ranges may accept challenged ADD_REVIEW blocks; it cannot remove BASE_KEEP or add OUT.",
-		"releaseTerminalContract=Within the exact authorized change envelope, run carrier_root_exit_attack where a challenged carrier boundary is disputed, then write hard_excluded_ranges only for challenged blocks proven inside a four-class carrier. Write outside_carrier_excluded_ranges only for challenged outside-carrier atoms that remain non-requirement after duty_survival_attack. Neither field may classify or remove BASE_KEEP. Write one short reason, then final_ranges as the complete result with every BASE_KEEP block restored; use [] only when no mandatory Candidate block remains and the challenged envelope independently supports null.",
+		"releaseTerminalContract=Within the exact authorized change envelope, run carrier_root_exit_attack where a challenged carrier boundary is disputed, then write hard_excluded_ranges only for challenged blocks proven inside a four-class carrier. Write outside_carrier_excluded_ranges only for challenged outside-carrier atoms that remain non-requirement after duty_survival_attack. Both are bounded audit traces and neither may classify BASE_KEEP. Write one short reason, then final_ranges as the sole authoritative complete result with every BASE_KEEP block restored; use [] only when no mandatory Candidate block remains and the challenged envelope independently supports null.",
 		"terminalReasonBudget=Keep reason under 800 characters; final_ranges carries the complete structural decision.",
 		"Independently adjudicate only this exact envelope, then call submit_requirement_release exactly once.",
 		"# Complete immutable source with mechanical challenge overlay",
@@ -2330,7 +2328,7 @@ function buildReleaseUserPrompt(
 		"9. Envelope size and prior-role agreement are not semantic votes. Decide every REMOVE_REVIEW and ADD_REVIEW block from source, but never enlarge the envelope.",
 		"10. Before final_ranges, write hard_excluded_ranges only for challenged blocks inside an actual four-class root. The field cannot include BASE_KEEP or OUT, even when the semantic carrier continues beyond the authorized envelope.",
 		"11. Next write outside_carrier_excluded_ranges only for challenged outside-carrier atoms. Record over_deletion_attack=<challenged removals to restore or none> and duty_survival_attack=<challenged removals whose direct duty survives after stripping incidental language or none>. Pure budget, pre-award proof/procedure, price/payment/settlement/guarantee, pure legal remedy, and bare pointers may be excluded when separable; direct implementation, resources, plans/reports, records, data control, delivery, transitions, replacement, response, platform execution, staffing, quality, safety, acceptance, warranty, or result duties survive. Do not run a global false-protection sweep over BASE_KEEP.",
-		"12. Check final_ranges itself: every BASE_KEEP block is present, every approved ADD_REVIEW is present, only approved REMOVE_REVIEW blocks are absent, every authorized block in either exclusion field is absent, and OUT remains absent. [] is allowed only when no mandatory block remains.",
+		"12. Check final_ranges itself as the sole structural verdict: every BASE_KEEP block is present, every approved ADD_REVIEW is present, only approved REMOVE_REVIEW blocks are absent, and OUT remains absent. Make both exclusion traces consistent with those omissions; if an earlier trace draft conflicts, correct the trace rather than changing the settled final. [] is allowed only when no mandatory block remains.",
 	].join("\n\n");
 }
 

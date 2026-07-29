@@ -994,7 +994,12 @@ test("uses final ranges as the sole Release structural verdict", async () => {
 		),
 		tool(
 			"submit_requirement_release",
-			release(["段落1-段落2"], "The final range set independently accepts the challenged addition."),
+			{
+				hard_excluded_ranges: ["段落2"],
+				outside_carrier_excluded_ranges: [],
+				reason: "The settled final range independently accepts the challenged addition.",
+				final_ranges: ["段落1-段落2"],
+			},
 			"release-authoritative-final",
 		),
 	]);
@@ -1010,6 +1015,8 @@ test("uses final ranges as the sole Release structural verdict", async () => {
 	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.release).toMatchObject({
 		verdict: "publish",
+		submittedHardExcludedRanges: ["段落2"],
+		hardExcludedRanges: [],
 		finalRanges: ["段落1-段落2"],
 		finalBlockIds: [1, 2],
 	});
@@ -1021,7 +1028,7 @@ test("uses final ranges as the sole Release structural verdict", async () => {
 	]);
 });
 
-test("mechanically enforces both coarse Release exclusion gates", async () => {
+test("clips coarse Release exclusion traces without overriding final ranges", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1051,8 +1058,8 @@ test("mechanically enforces both coarse Release exclusion gates", async () => {
 			{
 				hard_excluded_ranges: ["段落2-段落3"],
 				outside_carrier_excluded_ranges: ["段落1"],
-				reason: "The two exclusion gates are independently settled.",
-				final_ranges: ["段落0-段落3"],
+				reason: "The final verdict restores one challenged block and removes the other.",
+				final_ranges: ["段落0-段落1", "段落3"],
 			},
 			"release-two-gate-release",
 		),
@@ -1066,13 +1073,13 @@ test("mechanically enforces both coarse Release exclusion gates", async () => {
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落0-段落1"]);
+	expect(result.finalRanges).toEqual(["段落0-段落1", "段落3"]);
 	expect(result.release).toMatchObject({
 		submittedHardExcludedRanges: ["段落2-段落3"],
-		hardExcludedRanges: ["段落2-段落3"],
+		hardExcludedRanges: ["段落2"],
 		submittedOutsideCarrierExcludedRanges: ["段落1"],
 		outsideCarrierExcludedRanges: [],
-		finalRanges: ["段落0-段落1"],
+		finalRanges: ["段落0-段落1", "段落3"],
 	});
 });
 

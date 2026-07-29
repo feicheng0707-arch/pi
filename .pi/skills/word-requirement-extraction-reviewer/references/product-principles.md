@@ -14,8 +14,8 @@
 - Reviewer `pass` 后一调用结束；
 - Reviewer 必须先在短 reason 中完成整文关系、Owner、材料性与反事实 final 的单一结论，再最后生成 add/remove/preserve 结构字段；结构字段是 reason 的终态投影，不能在 reason 中发现正确范围后仍保留先前生成的旧 ranges；
 - 只有 contract-valid challenge 才启动 Call 2 Independent Release；Release 固定使用与 Reviewer 不同的模型家族，以减少同模型共模偏差；
-- Reviewer 是 challenge 的主语义判断和第二次调用门。Release 看不到 Reviewer 的 claim、reason、evidence leads 或历史，只看到完整 source 与机械 challenge overlay。add-only challenge 中，Candidate 全部标记为强制 `BASE_KEEP`。删除 challenge 中，只有 Reviewer 明确提交的有效删除 block 标记为 `REMOVE_REVIEW`，其余 Candidate 全部是强制 `BASE_KEEP`；Release 可恢复误删，但不得删除 envelope 外的 Candidate，也不得加入未挑战的 OUT。Release 只对 `REMOVE_REVIEW` / `ADD_REVIEW` 完成独立裁决并提交完整 `final_ranges`。Harness 只机械校验地址权限、exclusion 范围和 Candidate 差分，不能解释 reason、识别载体或补写语义；
-- Release 的终态是两个粗粒度语义门加一个最终集合：`hard_excluded_ranges` 与 `outside_carrier_excluded_ranges` 都只能投影 Reviewer 已授权的 `REMOVE_REVIEW` / `ADD_REVIEW` block，前者表达四类载体，后者表达载体外经 `duty_survival_attack` 后仍可安全分离的非 requirement atom；`final_ranges` 最后恢复全部 `BASE_KEEP` 并表达对 challenge 的批准子集。两个 exclusion 字段都由模型判断，Harness 只做授权交集、去重和 final 不相交约束，不识别语义；
+- Reviewer 是 challenge 的主语义判断和第二次调用门。Release 看不到 Reviewer 的 claim、reason、evidence leads 或历史，只看到完整 source 与机械 challenge overlay。add-only challenge 中，Candidate 全部标记为强制 `BASE_KEEP`。删除 challenge 中，只有 Reviewer 明确提交的有效删除 block 标记为 `REMOVE_REVIEW`，其余 Candidate 全部是强制 `BASE_KEEP`；Release 可恢复误删，但不得删除 envelope 外的 Candidate，也不得加入未挑战的 OUT。Release 只对 `REMOVE_REVIEW` / `ADD_REVIEW` 完成独立裁决并提交完整 `final_ranges`。Harness 只机械校验地址权限、exclusion trace 和 Candidate 差分，不能解释 reason、识别载体或补写语义；
+- Release 的终态是两个粗粒度语义门 trace 加一个最终集合：`hard_excluded_ranges` 与 `outside_carrier_excluded_ranges` 都只能投影 Reviewer 已授权的 `REMOVE_REVIEW` / `ADD_REVIEW` block，前者表达四类载体，后者表达载体外经 `duty_survival_attack` 后仍可安全分离的非 requirement atom；`final_ranges` 最后恢复全部 `BASE_KEEP` 并表达对 challenge 的批准子集，是唯一权威结构裁决。两个 exclusion 字段都由模型判断，Harness 只做授权交集、trace 间去重，并从 trace 中移除与最终集合重叠的地址；不得用辅助 trace 覆盖或改写 `final_ranges`，也不识别语义；
 - packet 可选携带从同一原始 DOCX 机械抽取并与 canonical block 高置信对齐的结构证据：Word body 顺序、段落/表格类型、样式、outline、编号、字号、粗体、对齐、分页、表格规模和 outline ancestry。Reviewer 与 Release 看到同一份 answer-free 结构图；它只用于恢复物理层级和真实同级边界，不携带 Owner、membership、keep/drop、历史结果或评测标签。低置信或未匹配 block 必须省略，省略不构成负面证据；
 - 任一失败、降级或越界都静态保留 candidate。
 
@@ -168,7 +168,7 @@ remove envelope 的 block 数、字符数、覆盖比例和是否恰好等于完
 
 Release 的对抗性检查必须是有界反例问题，不是第二份整文答案或逐 block ledger：`over_deletion_attack` 只攻击 `REMOVE_REVIEW` 内的真实范围、实施、资源、工期、质量、安全、质保、验收、服务及同一合格 Owner 的标题—正文闭合；对 `ADD_REVIEW` 则攻击错误 Owner、错误项目/包、排除载体和无事实负载。对每个 challenged outside-carrier removal 必须执行一次紧凑的 `duty_survival_attack`，检查被审批、合同、保密、证明、违约、费用或结算语言包围的 block 在剥离附带后果后是否仍有直接工作义务。不得扩张成对 `BASE_KEEP` 的全局 false-protection sweep。
 
-Release 提交的 `hard_excluded_ranges` 与 `outside_carrier_excluded_ranges` 必须机械裁剪到 `REMOVE_REVIEW ∪ ADD_REVIEW`，二者重叠时以后者去除已被前者覆盖的地址。`final_ranges` 只允许包含 Candidate 或 challenged add；Harness 随后强制恢复全部 `BASE_KEEP`，因此 Release 只能恢复或省略 `REMOVE_REVIEW`，并接受或拒绝 `ADD_REVIEW`。该集合约束不读取 reason，不推断任何 Owner、membership 或安全删除语义。
+Release 提交的 `final_ranges` 是唯一权威完整集合。Harness 先把它机械裁剪为 Candidate 与 challenged add，并强制恢复全部 `BASE_KEEP`，因此 Release 只能恢复或省略 `REMOVE_REVIEW`，并接受或拒绝 `ADD_REVIEW`。随后 `hard_excluded_ranges` 与 `outside_carrier_excluded_ranges` 仅作为审计 trace 裁剪到 `REMOVE_REVIEW ∪ ADD_REVIEW`，从二者中移除已被最终集合保留的地址，并消除 trace 间重叠。任何 exclusion trace 都不得覆盖 `final_ranges`。这些集合约束不读取 reason，不推断任何 Owner、membership 或安全删除语义。
 
 任何使反事实 final 变成裸 `null` 的 challenge 都承担完整外部召回义务。Reviewer 必须先检查四类硬排除载体之外的全部顶层区域、载体边界过渡和不连续 OUT 岛，确认不存在独立采购需求、技术标准和要求、项目专用技术条款、图纸/设计说明、清单或有效技术附件。合格来源可能只有数段并夹在很长的合同、格式或程序载体之间；长度短、Candidate 未选或相邻载体很大都不能成为跳过理由。
 
