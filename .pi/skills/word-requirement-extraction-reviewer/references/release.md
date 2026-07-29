@@ -12,6 +12,8 @@
 
 0. **Whole-document role gate**
 	- 先用 source 的开头、中部和结尾检验整文沟通角色假设，再做局部分区；不能从物理文件名、封面或“所有章节都服务于同一次采购”直接冻结为单一公告。
+	- 先独立检查整文作者关系和使用目的。若肯定证据证明完整 source 是供应商已经完成提交的投标/响应/技术方案/实施方案/交付成稿、非采购文档或未实例化模板，并且不存在边界独立、上下文闭合、可归属采购人侧的原始需求事实源，该身份是终态 veto；复制的招标条款、技术细节、未来履约义务、响应表和承诺都不能进入局部 atom gate 重新获得 membership。
+	- 不得由“技术方案”等标题、完成口吻或一个供应商措辞建立整文 veto。采购人提供的技术报告/规划/设计依据和混合作者 handoff 必须继续按实际 Owner 分区；只有 source 从开头到真实结尾形成单一错误作者或非事实关系时才终态判空。
 	- 只有实际公告/通知 root 开始一段首尾连续、功能同质的对外沟通，并且一直到真实结尾都不存在平级异质 root，整段 source 才能由一个公告/通知 Owner 统辖。
 	- 必须先做 `whole_container_disconfirmation`：若 source 出现平级、边界独立的资格、评审、合同、响应格式、采购需求、技术规范、图纸、清单或有效技术附件 root，物理文件就是多载体采购容器。外层“邀请书/采购文件”不是第五类硬排除载体。
 
@@ -67,8 +69,8 @@
 只调用一次终态工具：
 
 1. 完成 `whole_container_disconfirmation` 与必要的 `carrier_root_exit_attack` 后，`hard_excluded_ranges` 只写出授权 envelope 内、已证明属于四类载体的 challenged blocks，作为审计 trace；完整 root→semantic-exit 用于判断，不能把 envelope 外 `BASE_KEEP` 写入字段；
-2. 仅对授权 envelope 内且位于这些载体之外的 challenged blocks 完成主要直接效力与 `duty_survival_attack`，把可安全分离的纯预算、成交前证明/程序、价格商务、纯法律和裸指针 block 投影到 `outside_carrier_excluded_ranges` 审计 trace，绕开每个仍存活的直接工作义务；
+2. 若整文身份终态 veto 成立，把它覆盖的全部授权 challenged omissions 投影到 `outside_carrier_excluded_ranges` 审计 trace，并禁止运行局部 `duty_survival_attack`；否则仅对授权 envelope 内且位于四类载体之外的 challenged blocks 完成主要直接效力与 `duty_survival_attack`，把可安全分离的纯预算、成交前证明/程序、价格商务、纯法律和裸指针 block 投影到该 trace，绕开每个仍存活的直接工作义务；
 3. `reason` 紧凑记录决定性的 root、peer exit、Owner 边界和两个 exclusion gate 的反例结论，不得改写结构字段；
 4. `final_ranges` 最后写出唯一权威完整集合：全部 `BASE_KEEP` 必须存在；`REMOVE_REVIEW` 可恢复或省略；`ADD_REVIEW` 可接受或拒绝。若前面的 trace 草稿与已收敛 final 冲突，修正 trace，不得让 trace 改写 final。
 
-两个 exclusion 字段都是 bounded challenge 的粗粒度审计 trace，不是逐 block ledger，且只能落入 `REMOVE_REVIEW ∪ ADD_REVIEW`。它们应与最终省略集合一致，但不具备发布优先级；Harness 会从 trace 中移除 `final_ranges` 已保留的地址，而不会据此删除 final。`final_ranges` 只能包含 Candidate 与批准的 `ADD_REVIEW`。只有不存在任何 `BASE_KEEP` 且 challenged envelope 独立支持 null 时才可提交 `[]`。不得在提交后重新打开结论，不得读取 expected、历史答案、case 身份或 evaluator。
+两个 exclusion 字段都是 bounded challenge 的粗粒度审计 trace，不是逐 block ledger，且只能落入 `REMOVE_REVIEW ∪ ADD_REVIEW`。它们应与最终省略集合一致，但不具备发布优先级；Harness 会从 trace 中移除 `final_ranges` 已保留的地址，而不会据此删除 final。`final_ranges` 只能包含 Candidate 与批准的 `ADD_REVIEW`。只有不存在任何 `BASE_KEEP`，且整文身份终态门或 bounded 局部审查独立支持 null 时才可提交 `[]`。不得在提交后重新打开结论，不得读取 expected、历史答案、case 身份或 evaluator。
