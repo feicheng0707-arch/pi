@@ -703,6 +703,68 @@ test("accepts the shortest terminal-null complement for absent instantiation", a
 	});
 });
 
+test("publishes a source-proven completed supplier response as a terminal null", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "技术方案" },
+				{ blockId: 1, text: "我方已完成系统设计并承诺按期交付。" },
+				{ blockId: 2, text: "合同条款接受承诺" },
+			],
+			["段落0-段落2"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				source_role: "completed_supplier_response",
+				instantiation: "present",
+				issue_type: "wrong_direction",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason:
+					"The complete source is a submitted supplier technical proposal with no separable buyer-issued requirement region.",
+			},
+			"reviewer-completed-supplier-terminal-null",
+		),
+		tool(
+			"submit_requirement_release",
+			{
+				hard_excluded_ranges: [],
+				outside_carrier_excluded_ranges: ["段落0-段落2"],
+				reason:
+					"Whole-source authorship is a completed supplier response, so its copied duties cannot reopen requirement membership.",
+				final_ranges: [],
+			},
+			"release-completed-supplier-terminal-null",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "e".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.release).toMatchObject({
+		submittedOutsideCarrierExcludedRanges: ["段落0-段落2"],
+		outsideCarrierExcludedRanges: ["段落0-段落2"],
+		finalRanges: [],
+	});
+	expect(scripted.userPrompts[1]).toContain("wholeSourceIdentityVetoContract=");
+	expect(scripted.userPrompts[1]).toContain(
+		"Copied tender clauses, technical detail, future duties, response tables, or commitments cannot reopen membership",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"Mandatory whole_source_identity_veto before every local gate",
+	);
+});
+
 test("normalizes an explicit Reviewer pass with non-canonical annotation fields", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue([{ blockId: 0, text: "采购人要求完成系统安装、调试和验收。" }], ["段落0"]),
@@ -1798,6 +1860,10 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	expect(scripted.userPrompts[1]).toContain("Do not search BASE_KEEP for unrelated false protections");
 	expect(scripted.userPrompts[1]).toContain(
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only",
+	);
+	expect(scripted.userPrompts[1]).toContain("wholeSourceIdentityVetoContract=");
+	expect(scripted.userPrompts[1]).toContain(
+		"Whole-source terminal identities outrank local technical content",
 	);
 	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=5");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=5");
