@@ -9,6 +9,7 @@ import {
 	type AgentToolResult,
 	runAgentLoop,
 	type StreamFn,
+	type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import type {
 	Api,
@@ -33,6 +34,8 @@ const DEFAULT_RELEASE_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4";
 const MAX_PACKET_BYTES = 20 * 1024 * 1024;
 const REVIEWER_MAX_TOKENS = 4_000;
 const RELEASE_MAX_TOKENS = 19_000;
+const REVIEWER_THINKING_LEVEL: ThinkingLevel = "medium";
+const RELEASE_THINKING_LEVEL: ThinkingLevel = "off";
 const REQUEST_TIMEOUT_MS = 300_000;
 const WORKFLOW_TIMEOUT_MS = 600_000;
 const CONTEXT_SAFETY_TOKENS = 8_000;
@@ -51,7 +54,7 @@ const MAX_STRUCTURE_TEXT_PREVIEW_CHARACTERS = 64;
 const MAX_RELEASE_STRUCTURE_FOCUS_NODES = 64;
 const MAX_RELEASE_STRUCTURE_FOCUS_CHARACTERS = 8_000;
 const MAX_RELEASE_PERMISSION_TRANSITIONS = 32;
-const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v108-marker-transition-closure";
+const RUNTIME_CONTRACT_VERSION = "candidate-protected-hybrid-v109-response-wrapper-survival";
 const HARD_CARRIER_VETO_CONTRACT =
 	"hardCarrierVetoContract=Release has one candidate-wide safety authority in addition to the bounded Reviewer patch: any Candidate block may be omitted only when Release independently proves that block is inside an actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root and writes the same omitted block to hard_excluded_ranges. This is a four-carrier root-and-exit sweep, not a general BASE_KEEP cleanup pass. A REMOVE_REVIEW-to-BASE_KEEP or BASE_KEEP-to-REMOVE_REVIEW marker transition is only a permission boundary and can never prove a semantic Owner exit; follow the actual source root across the transition and through any later OUT or marker change until the first different-Owner peer root or EOF. Outside-carrier price, procedure, proof, legal, or other atom-level deletions remain limited to REMOVE_REVIEW. If an omitted BASE_KEEP block is absent from hard_excluded_ranges, the Harness restores it mechanically; final_ranges remains the authoritative final set.";
 const WHOLE_SOURCE_IDENTITY_VETO_CONTRACT =
@@ -488,6 +491,8 @@ export interface RequirementReviewResult {
 		structureMapNodeCount: number;
 		structureMapCharacterCount: number;
 		structureMapCoverage: StructureMap["coverage"];
+		reviewerThinkingLevel: ThinkingLevel;
+		releaseThinkingLevel: ThinkingLevel;
 	};
 	budget: RoleUsage & { roles: RuntimeUsage };
 }
@@ -925,7 +930,8 @@ export async function runRequirementReview(
 			limits: {
 				reviewerMaxTokens: REVIEWER_MAX_TOKENS,
 				releaseMaxTokens: RELEASE_MAX_TOKENS,
-				releaseReasoningEffort: "medium",
+				reviewerThinkingLevel: REVIEWER_THINKING_LEVEL,
+				releaseThinkingLevel: RELEASE_THINKING_LEVEL,
 				requestTimeoutMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
 				workflowTimeoutMs: WORKFLOW_TIMEOUT_MS,
 				maxProviderCalls: MAX_PROVIDER_CALLS,
@@ -987,6 +993,8 @@ export async function runRequirementReview(
 			structureMapNodeCount: structureMap.renderedNodeCount,
 			structureMapCharacterCount: structureMap.renderedCharacterCount,
 			structureMapCoverage: structureMap.coverage,
+			reviewerThinkingLevel: REVIEWER_THINKING_LEVEL,
+			releaseThinkingLevel: RELEASE_THINKING_LEVEL,
 		},
 		budget: { ...totalUsage(usage), roles: usage },
 		...input,
@@ -1274,7 +1282,7 @@ const openAiCompletionsStreamFunction: StreamFn = (model, context, options) => {
 	return stream(model as Model<"openai-completions">, context, {
 		...streamOptions,
 		toolChoice,
-		reasoningEffort: reasoning,
+		reasoningEffort: reasoning === "off" ? undefined : reasoning,
 	});
 };
 
@@ -1736,7 +1744,12 @@ async function structuredCall<TSchemaType extends TSchema, TResult>(
 			model: input.model,
 			temperature: 0,
 			maxTokens: input.maxTokens,
-			reasoning: input.model.reasoning ? "medium" : undefined,
+			reasoning:
+				input.model.reasoning === true
+					? input.role === "reviewer"
+						? REVIEWER_THINKING_LEVEL
+						: RELEASE_THINKING_LEVEL
+					: undefined,
 			apiKey: input.apiKey,
 			headers: input.headers,
 			env: input.env,

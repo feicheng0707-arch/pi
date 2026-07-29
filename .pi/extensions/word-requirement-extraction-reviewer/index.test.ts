@@ -112,18 +112,20 @@ function release(finalRanges: string[], reason: string): Record<string, unknown>
 	return { final_ranges: finalRanges, reason };
 }
 
-function scriptedStream(responses: AssistantMessage[]): {
+function scriptedStream(responses: AssistantMessage[], expectedModel = model): {
 	streamFunction: StreamFn;
 	callCount: () => number;
 	userPrompts: string[];
 	toolParameterKeys: string[][];
+	thinkingLevels: Array<string | undefined>;
 } {
 	let calls = 0;
 	const userPrompts: string[] = [];
 	const toolParameterKeys: string[][] = [];
+	const thinkingLevels: Array<string | undefined> = [];
 	return {
-		streamFunction(selectedModel, context) {
-			expect(selectedModel.id).toBe(model.id);
+		streamFunction(selectedModel, context, options) {
+			expect(selectedModel.id).toBe(expectedModel.id);
 			const response = responses[calls];
 			if (!response) throw new Error(`unexpected provider call ${calls + 1}`);
 			const toolNames = context.tools?.map((candidate) => candidate.name) ?? [];
@@ -131,6 +133,7 @@ function scriptedStream(responses: AssistantMessage[]): {
 				properties?: Record<string, unknown>;
 			} | undefined;
 			toolParameterKeys.push(Object.keys(parameters?.properties ?? {}));
+			thinkingLevels.push(options?.reasoning);
 			for (const content of response.content) {
 				if (content.type === "toolCall") expect(toolNames).toContain(content.name);
 			}
@@ -164,12 +167,61 @@ function scriptedStream(responses: AssistantMessage[]): {
 		callCount: () => calls,
 		userPrompts,
 		toolParameterKeys,
+		thinkingLevels,
 	};
 }
 
-function roleRuntime(streamFunction: StreamFn) {
-	return { model, streamFunction, apiKey: "test-key" };
+function roleRuntime(streamFunction: StreamFn, runtimeModel = model) {
+	return { model: runtimeModel, streamFunction, apiKey: "test-key" };
 }
+
+test("uses medium Reviewer thinking and disables Release thinking", async () => {
+	const reasoningModel: Model<"openai-completions"> = {
+		...model,
+		id: "reasoning-faux",
+		name: "Reasoning Faux",
+		reasoning: true,
+	};
+	const packet = parseRequirementReviewPacket(
+		packetValue([{ blockId: 0, text: "仅包含可安全删除的非需求内容。" }], ["段落0"]),
+	);
+	const scripted = scriptedStream(
+		[
+			tool(
+				"submit_requirement_residual_review",
+				{
+					verdict: "challenge",
+					...buyerIssuedReviewFields,
+					issue_type: "boundary",
+					add_ranges: [],
+					removal: { mode: "exact", remove_ranges: ["段落0"] },
+					reason: "The Candidate contains one independently removable non-requirement block.",
+				},
+				"thinking-reviewer",
+			),
+			tool(
+				"submit_requirement_release",
+				release([], "The challenged block is safely excluded."),
+				"thinking-release",
+			),
+		],
+		reasoningModel,
+	);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "0".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction, reasoningModel),
+		releaseRuntime: roleRuntime(scripted.streamFunction, reasoningModel),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(scripted.thinkingLevels).toEqual(["medium", "off"]);
+	expect(result.context).toMatchObject({
+		reviewerThinkingLevel: "medium",
+		releaseThinkingLevel: "off",
+	});
+});
 
 test("rejects answer-bearing packet fields", () => {
 	const blocks = [{ blockId: 0, text: "采购人要求提供网络安全服务。" }];
