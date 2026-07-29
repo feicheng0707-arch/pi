@@ -279,14 +279,14 @@ test("provides the same answer-free Word structure map to Reviewer and Release",
 		expect(prompt).toContain("S|3|b=3|k=p|m=x|ol=0|pb=1|br=1.000|fs=28|path=0@3");
 	}
 	expect(scripted.userPrompts[1]).toContain(
-		"# Candidate keep-side structural navigation focus (bounded mechanical duplicate)",
+		"# Challenged-side structural navigation focus (bounded mechanical duplicate)",
 	);
-	expect(scripted.userPrompts[1]).toContain("releaseKeepStructureFocusTargetNodeCount=3");
-	expect(scripted.userPrompts[1]).toContain("releaseKeepStructureFocusIncludedNodeCount=3");
-	expect(scripted.userPrompts[1]).toContain("releaseKeepStructureFocusCoverage=complete");
-	expect(scripted.userPrompts[1]).toContain('KEEP_STRUCTURE|S|0|b=0|k=p|m=x|sty="heading 1"');
-	expect(scripted.userPrompts[1]).toContain("KEEP_STRUCTURE|S|2|b=2|k=t|m=x");
-	expect(scripted.userPrompts[1]).not.toContain("KEEP_STRUCTURE|S|3|");
+	expect(scripted.userPrompts[1]).toContain("releaseChallengeStructureFocusTargetNodeCount=2");
+	expect(scripted.userPrompts[1]).toContain("releaseChallengeStructureFocusIncludedNodeCount=2");
+	expect(scripted.userPrompts[1]).toContain("releaseChallengeStructureFocusCoverage=complete");
+	expect(scripted.userPrompts[1]).toContain('CHANGE_STRUCTURE|S|3|b=3|k=p|m=x|ol=0');
+	expect(scripted.userPrompts[1]).toContain("CHANGE_STRUCTURE|S|4|b=4|k=p|m=x");
+	expect(scripted.userPrompts[1]).not.toContain("CHANGE_STRUCTURE|S|0|");
 });
 
 test("bounds a large Word structure map with content-blind sampling", async () => {
@@ -612,6 +612,94 @@ test("allows a non-procurement role to pass an empty candidate", async () => {
 		verdict: "pass",
 		sourceRole: "non_procurement",
 		instantiation: "absent",
+	});
+});
+
+test("fails closed when absent instantiation leaves part of a non-empty Candidate", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "未实例化模板标题。" },
+				{ blockId: 1, text: "空白货物清单。" },
+			],
+			["段落0-段落1"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				source_role: "buyer_issued",
+				instantiation: "absent",
+				issue_type: "false_non_null",
+				add_ranges: [],
+				removal: { mode: "exact", remove_ranges: ["段落0"] },
+				reason: "The source is uninstantiated, but the structural patch leaves one Candidate block.",
+			},
+			"reviewer-partial-terminal-null",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "c".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(scripted.callCount()).toBe(1);
+	expect(result.status).toBe("degraded");
+	expect(result.resolution).toBe("review_incomplete");
+	expect(result.finalRanges).toEqual(["段落0-段落1"]);
+	expect(result.failure?.code).toBe("contract_error");
+	expect(result.failure?.message).toContain("must remove the complete Candidate");
+});
+
+test("accepts the shortest terminal-null complement for absent instantiation", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "未实例化模板标题。" },
+				{ blockId: 1, text: "空白货物清单。" },
+			],
+			["段落0-段落1"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				source_role: "buyer_issued",
+				instantiation: "absent",
+				issue_type: "false_non_null",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason: "The source is an uninstantiated template with no surviving Candidate island.",
+			},
+			"reviewer-complete-terminal-null",
+		),
+		tool(
+			"submit_requirement_release",
+			release([], "The complete challenged Candidate has no qualified instantiated source."),
+			"release-complete-terminal-null",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "d".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.reviewer).toMatchObject({
+		removeMode: "candidate_complement",
+		removeRanges: ["段落0-段落1"],
+		preserveRanges: [],
 	});
 });
 
@@ -978,13 +1066,13 @@ test("mechanically enforces both coarse Release exclusion gates", async () => {
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落0"]);
+	expect(result.finalRanges).toEqual(["段落0-段落1"]);
 	expect(result.release).toMatchObject({
 		submittedHardExcludedRanges: ["段落2-段落3"],
 		hardExcludedRanges: ["段落2-段落3"],
 		submittedOutsideCarrierExcludedRanges: ["段落1"],
-		outsideCarrierExcludedRanges: ["段落1"],
-		finalRanges: ["段落0"],
+		outsideCarrierExcludedRanges: [],
+		finalRanges: ["段落0-段落1"],
 	});
 });
 
@@ -1144,7 +1232,7 @@ test("uses a narrative-blind Release to apply a bounded repair", async () => {
 	expect(scripted.userPrompts[1]).toContain("ADD_REVIEW|段落2：");
 	expect(scripted.userPrompts[1]).toContain("OUT|段落3：");
 	expect(scripted.userPrompts[1]).toContain(
-		"releaseTerminalContract=Run bidirectional carrier_root_exit_attack first",
+		"releaseTerminalContract=Within the exact authorized change envelope",
 	);
 	expect(scripted.userPrompts[1].lastIndexOf("# Final release checklist")).toBeGreaterThan(
 		scripted.userPrompts[1].lastIndexOf("OUT|段落3："),
@@ -1192,8 +1280,8 @@ test("samples an oversized change side with fixed text-blind address priorities"
 
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual([]);
-	expect(scripted.userPrompts[1]).toContain("focusedKeepTargetBlockCount=0");
-	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=omitted");
+	expect(scripted.userPrompts[1]).not.toContain("focusedKeepTargetBlockCount=");
+	expect(scripted.userPrompts[1]).not.toContain("## CANDIDATE_KEEP_SIDE");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=141");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=125");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=partial");
@@ -1205,7 +1293,7 @@ test("samples an oversized change side with fixed text-blind address priorities"
 	expect(scripted.userPrompts[1]).not.toContain("ATOMIC_KEEP_TARGET|");
 });
 
-test("renders both text-blind atomic navigation sides within one fixed budget", async () => {
+test("renders only the challenged side within one fixed text-blind budget", async () => {
 	const blocks = Array.from({ length: 400 }, (_, blockId) => ({
 		blockId,
 		text: `原子段落${blockId}。`,
@@ -1241,21 +1329,19 @@ test("renders both text-blind atomic navigation sides within one fixed budget", 
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(scripted.userPrompts[1]).toContain("focusedKeepTargetBlockCount=336");
-	expect(scripted.userPrompts[1]).toContain("focusedKeepIncludedTargetBlockCount=54");
-	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=partial");
+	expect(scripted.userPrompts[1]).not.toContain("focusedKeepTargetBlockCount=");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=64");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=64");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=complete");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=128");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=69");
 	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
 	expect(scripted.userPrompts[1]).toContain(
-		"the harness exposes both Candidate keep and proposed-change sides",
+		"The harness repeats only REMOVE_REVIEW and ADD_REVIEW addresses",
 	);
-	expect(scripted.userPrompts[1]).toContain("## CANDIDATE_KEEP_SIDE");
+	expect(scripted.userPrompts[1]).not.toContain("## CANDIDATE_KEEP_SIDE");
 	expect(scripted.userPrompts[1]).toContain("## PROPOSED_CHANGE_SIDE");
 	expect(scripted.userPrompts[1]).toContain(
-		"ATOMIC_CONTEXT|KEEP_RECHECK|段落99：",
+		"ATOMIC_CONTEXT|BASE_KEEP|段落99：",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落100：",
@@ -1311,7 +1397,7 @@ test("keeps the start boundary window of a large proposed-removal run visible", 
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=complete");
+	expect(scripted.userPrompts[1]).not.toContain("focusedKeepCoverage=");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=partial");
 	for (const blockId of [184, 198, 199, 200]) {
 		expect(scripted.userPrompts[1]).toContain(
@@ -1618,7 +1704,7 @@ test("mechanically clips Release ranges to the authorized direction envelope", a
 	});
 });
 
-test("mechanically expands a broad Candidate complement from protected technical islands", async () => {
+test("mechanically expands a broad Candidate complement around preserved technical islands", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1689,44 +1775,37 @@ test("mechanically expands a broad Candidate complement from protected technical
 		'challengeRemoveRanges=["段落0","段落3-段落4","段落6-段落7"]',
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		'releaseRemoveEnvelopeRanges=["段落0-段落7"]',
+		'releaseRemoveEnvelopeRanges=["段落0","段落3-段落4","段落6-段落7"]',
 	);
 	expect(scripted.userPrompts[1]).toContain("reviewerPreserveRangesAndRationale=withheld");
 	expect(scripted.userPrompts[1]).toContain(
-		"reviewerMechanicalPatchVisibility=prioritized REMOVE_REVIEW followed by independent KEEP_RECHECK audit across the complete Candidate",
+		"reviewerMechanicalPatchVisibility=exact REMOVE_REVIEW envelope only; all other Candidate blocks are mandatory BASE_KEEP",
 	);
 	expect(scripted.userPrompts[1]).not.toContain("challengePreserveRanges=");
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
-	expect(scripted.userPrompts[1]).toContain("KEEP_RECHECK|段落1：");
+	expect(scripted.userPrompts[1]).toContain("BASE_KEEP|段落1：");
 	expect(scripted.userPrompts[1]).not.toContain("PROPOSED_REMOVE|");
 	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 	expect(scripted.userPrompts[1]).not.toContain("REMOVE_REVIEW|段落1：");
-	expect(scripted.userPrompts[1]).toContain(
-		"Form one neutral atomic partition of the complete Candidate by actual Owner and each block's primary direct effect",
-	);
+	expect(scripted.userPrompts[1]).toContain("Do not search BASE_KEEP for unrelated false protections");
 	expect(scripted.userPrompts[1]).toContain(
 		"challengeEnvelopeMetrics=Permission-and-budget metadata only",
 	);
-	expect(scripted.userPrompts[1]).toContain("focusedKeepTargetBlockCount=3");
-	expect(scripted.userPrompts[1]).toContain("focusedKeepIncludedTargetBlockCount=3");
-	expect(scripted.userPrompts[1]).toContain("focusedKeepCoverage=complete");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=5");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=5");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=complete");
-	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=15");
+	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=8");
 	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
 	expect(scripted.userPrompts[1]).toContain(
-		"# Text-blind dual-side atomic navigation view (bounded mechanical duplicate)",
+		"# Text-blind challenged-side atomic navigation view (bounded mechanical duplicate)",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"focusViewPurpose=Text-blind dual-side atomic navigation only",
+		"focusViewPurpose=Text-blind challenged-side atomic navigation only",
 	);
-	expect(scripted.userPrompts[1].match(/^KEEP_RECHECK\|段落1：/gmu)).toHaveLength(1);
+	expect(scripted.userPrompts[1].match(/^BASE_KEEP\|段落1：/gmu)).toHaveLength(1);
 	expect(scripted.userPrompts[1].match(/^REMOVE_REVIEW\|段落0：/gmu)).toHaveLength(1);
-	expect(scripted.userPrompts[1]).toContain(
-		"ATOMIC_KEEP_TARGET|KEEP_RECHECK|段落1：",
-	);
+	expect(scripted.userPrompts[1]).not.toContain("ATOMIC_KEEP_TARGET|");
 	expect(scripted.userPrompts[1]).toContain(
 		"ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落0：",
 	);
@@ -1737,7 +1816,7 @@ test("mechanically expands a broad Candidate complement from protected technical
 		"a heading such as business, fulfillment, delivery, or after-sales requirements is not a pure-commerce verdict",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"Even when the remove envelope covers 100% of Candidate, omit every independently safe excluded paragraph",
+		"Every BASE_KEEP block is mechanically mandatory",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region",
@@ -1764,10 +1843,10 @@ test("mechanically expands a broad Candidate complement from protected technical
 		"Closure never extends backward across the carrier start",
 	);
 	expect(scripted.userPrompts[0]).toContain(
-		"removal.preserve_ranges is a block-level allowlist and that branch has no remove field",
+		"Use removal.mode=candidate_complement when preserve_ranges is strictly shorter",
 	);
 	expect(scripted.userPrompts[0]).toContain(
-		"candidate_complement is exceptional address compression only when that complete exact deletion would genuinely exceed 64 disjoint ranges",
+		"candidate_complement with preserve_ranges=[] is the shortest valid expression",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"that pointer block must be removed even when the heading is retained for boundary context",
@@ -1782,7 +1861,7 @@ test("mechanically expands a broad Candidate complement from protected technical
 		"A complete source whose parties, agreement language, continuous articles, price/payment, breach, effectiveness, termination, dispute and signature structure jointly form one bilateral contract remains a contract",
 	);
 	expect(scripted.userPrompts[0]).toContain(
-		"every block inside an exact remove range must already be judged safe to delete",
+		"enumerate every safe removal island and split around every kept block",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"Engineering quantities, completion, acceptance or quality-retention language used only as a monetary basis",
@@ -1794,16 +1873,16 @@ test("mechanically expands a broad Candidate complement from protected technical
 		"A qualified requirement sentence that says see an appendix does not make that appendix qualified",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"no uncited tail is absorbed by continuity",
+		"Only a boundary-independent technical appendix under its own qualified Owner can extend final_ranges",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"false_protection_attack=<literal kept ranges to remove or none>",
+		"Do not run a global false-protection sweep over BASE_KEEP",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"A new peer heading starts a new Owner decision",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"outside_carrier_excluded_ranges for every safely separable non-requirement atom",
+		"outside_carrier_excluded_ranges only for challenged outside-carrier atoms",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"Closure never extends backward across the carrier start",
@@ -1830,16 +1909,16 @@ test("mechanically expands a broad Candidate complement from protected technical
 		"chain through consecutive same-Owner peer scopes",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"exclude that root itself plus all same-Owner descendants and peer continuations",
+		"Carry that Owner through all child clauses until the next peer exit",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"adjacent different Owners require separate ranges",
+		"a later carrier never expands backward",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"Then attack every proposed keep island by checking each internal subheading",
+		"Do not search BASE_KEEP for unrelated false protections",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"a deeper attachment/technical child never exits an active carrier",
+		"A structural exit never automatically ends Owner",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"Mandatory mixed_container_root_sweep before the atom gate",
@@ -1857,7 +1936,7 @@ test("mechanically expands a broad Candidate complement from protected technical
 		"Mandatory duty_survival_attack for every proposed outside-carrier removal",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"duty_survival_attack=<literal removed ranges whose direct duty survives",
+		"duty_survival_attack=<challenged removals whose direct duty survives after stripping incidental language or none>",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"A complete bid/response mandatory-requirements section or mandatory response table remains pre-award proof/commitment Owner",
@@ -1865,42 +1944,107 @@ test("mechanically expands a broad Candidate complement from protected technical
 	expect(scripted.userPrompts[1]).toContain(
 		"Stage Owner outranks future-tense wording",
 	);
+	expect(scripted.userPrompts[0]).toContain(
+		"First close personnel Stage Owner at subsection level",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"First close personnel Stage Owner at subsection level",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"Do not carve out one child merely because it also describes future staffing",
+	);
+	expect(scripted.userPrompts[0]).toContain("preAwardStageGateContract=");
+	expect(scripted.userPrompts[1]).toContain("preAwardStageGateContract=");
+	expect(scripted.userPrompts[1]).toContain(
+		"Mandatory pre_award_stage_gate ordering",
+	);
+	expect(scripted.userPrompts[0]).toContain("nonFactShellClosureContract=");
+	expect(scripted.userPrompts[1]).toContain("nonFactShellClosureContract=");
+	expect(scripted.userPrompts[1]).toContain(
+		"Mandatory non_fact_shell_closure",
+	);
+	expect(scripted.userPrompts[0]).toContain("headingMembershipIndependenceContract=");
+	expect(scripted.userPrompts[1]).toContain("headingMembershipIndependenceContract=");
+	expect(scripted.userPrompts[1]).toContain(
+		"Mandatory heading membership independence outside the four carrier gate",
+	);
+	expect(scripted.userPrompts[0]).toContain("performanceTransitionAttackContract=");
+	expect(scripted.userPrompts[1]).toContain("performanceTransitionAttackContract=");
+	expect(scripted.userPrompts[0]).toContain(
+		"receipt, takeover, migration, handover, or return of assets, equipment, materials, data, accounts, sites, or work in progress",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"Delete only when the remainder solely allocates money, valuation, title, or payment and imposes no actual transition action",
+	);
 	expect(scripted.userPrompts[1]).toContain(
 		"Contract-format containment requires an actual source-proven contract agreement",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"A bounded bidder/supplier commitment, response-commitment, no-deviation commitment, or declaration section is a response-format root",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"A bounded bidder/supplier commitment, response-commitment, no-deviation commitment, or declaration section is a response-format root",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"Confidentiality language survives as a direct data-control duty",
 	);
 	expect(scripted.userPrompts[0]).toContain(
+		"Cost language cannot erase a resource-provision duty",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"a direct work duty remains qualified when cost inclusion is merely incidental",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"合同签订后或履约期间的变更控制命令也必须存活",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"成交前未提出异议/偏离即视为完全响应",
+	);
+	expect(scripted.userPrompts[0]).toContain(
 		"A command to execute according to a designated platform survives",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"direct requirement on the successful supplier's post-award staffing, resources, submission, review, approval, filing, records, or data handling is performance content",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"its embedded attachment, technical list, and detailed child rules inherit that carrier",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"project-data lifecycle control, delivery, timed replacement/replenishment",
+		"direct implementation, resources, plans/reports, records, data control, delivery",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"polarity-normalize that antecedent after stripping the consequence",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"polarity-normalizing any specific negative remedy antecedent",
+		"remedyTriggerSeparation=Quality error, misconduct, or false deliverables",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"Mandatory consequence_cluster_attack whenever Candidate IN covers a penalty",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"consequence_cluster_attack=<literal surviving duty islands versus separable pure-consequence islands",
+		"Do not run a global false-protection sweep over BASE_KEEP",
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"Finish with a global pure-legal-wrapper sweep across all Candidate IN",
 	);
+	expect(scripted.userPrompts[0]).toContain(
+		"Terminal Owner consistency check",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"that range must follow the root through its semantic exit",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"Terminal instantiation evidence check",
+	);
+	expect(scripted.userPrompts[0]).toContain(
+		"A procuring organization name, generic batch label, platform rule, bid timetable, template/version number, default clause, blank table, or external pointer cannot establish instantiation alone",
+	);
 	expect(scripted.userPrompts[1]).toContain(
-		"legal-effect wrappers that only make a specification/appendix/deliverable part of the contract",
+		"Pure budget, pre-award proof/procedure, price/payment/settlement/guarantee, pure legal remedy, and bare pointers may be excluded",
 	);
 });
 
-test("mechanically applies complement restores and false-protection removals", async () => {
+test("restores challenged over-deletion and preserves Candidate outside the complement envelope", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1922,7 +2066,7 @@ test("mechanically applies complement restores and false-protection removals", a
 				remove_mode: "candidate_complement",
 				remove_ranges: [],
 				preserve_ranges: ["段落2"],
-				reason: "The proposal intentionally contains one over-deletion and one false protection.",
+				reason: "Only the Candidate complement is submitted for independent release review.",
 			},
 			"reviewer-complement-corrections",
 		),
@@ -1930,7 +2074,7 @@ test("mechanically applies complement restores and false-protection removals", a
 			"submit_requirement_release",
 			release(
 				["段落1"],
-				"Keep the qualified technical block and remove the contract-template false protection.",
+				"Restore the challenged technical block; the unchallenged Candidate remains mandatory.",
 			),
 			"release-complement-corrections",
 		),
@@ -1944,16 +2088,16 @@ test("mechanically applies complement restores and false-protection removals", a
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落1"]);
-	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落0", "段落2"] });
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落0"] });
 	expect(result.release).toMatchObject({
 		verdict: "publish",
 		submittedFinalRanges: ["段落1"],
-		finalRanges: ["段落1"],
+		finalRanges: ["段落1-段落2"],
 	});
 });
 
-test("allows local complement review to remove a self-proving false protection", async () => {
+test("does not let complement Release delete Candidate outside the submitted removal envelope", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -1995,7 +2139,7 @@ test("allows local complement review to remove a self-proving false protection",
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual([]);
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.reviewer).toMatchObject({
 		verdict: "challenge",
 		removeMode: "candidate_complement",
@@ -2005,22 +2149,22 @@ test("allows local complement review to remove a self-proving false protection",
 	expect(result.release).toMatchObject({
 		verdict: "publish",
 		submittedFinalRanges: [],
-		finalRanges: [],
+		finalRanges: ["段落1-段落2"],
 	});
 	expect(scripted.userPrompts[1]).toContain(
 		'challengeRemoveRanges=["段落0","段落3"]',
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		'releaseRemoveEnvelopeRanges=["段落0-段落3"]',
+		'releaseRemoveEnvelopeRanges=["段落0","段落3"]',
 	);
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
-	expect(scripted.userPrompts[1]).toContain("KEEP_RECHECK|段落1：");
+	expect(scripted.userPrompts[1]).toContain("BASE_KEEP|段落1：");
 	expect(scripted.userPrompts[1]).not.toContain("PROPOSED_REMOVE|");
 	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 });
 
-test("allows an independent Release to remove false-protected Candidate blocks after an exact deletion challenge", async () => {
+test("does not let exact Release delete an unchallenged Candidate block", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -2047,7 +2191,7 @@ test("allows an independent Release to remove false-protected Candidate blocks a
 		),
 		tool(
 			"submit_requirement_release",
-			release([], "The complete Candidate recheck independently rejects both blocks."),
+			release([], "Approve the challenged response-format deletion only."),
 			"release-exact-base-keep",
 		),
 	]);
@@ -2060,10 +2204,10 @@ test("allows an independent Release to remove false-protected Candidate blocks a
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual([]);
-	expect(scripted.userPrompts[1]).toContain("KEEP_RECHECK|段落0：");
+	expect(result.finalRanges).toEqual(["段落0"]);
+	expect(scripted.userPrompts[1]).toContain("BASE_KEEP|段落0：");
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落1：");
-	expect(scripted.userPrompts[1]).toContain("releaseAuditMode=candidate_recheck");
+	expect(scripted.userPrompts[1]).toContain("releaseAuditMode=bounded_patch");
 });
 
 test("does not run Release when a complement proposal has no net patch", async () => {
@@ -2246,6 +2390,51 @@ test("fails closed instead of resolving a conflicting legacy exact removal", asy
 	const result = await runRequirementReview({
 		packet,
 		packetSha256: "d".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(scripted.callCount()).toBe(1);
+	expect(result.status).toBe("degraded");
+	expect(result.resolution).toBe("review_incomplete");
+	expect(result.finalRanges).toEqual(["段落0-段落2"]);
+	expect(result.failure?.code).toBe("contract_error");
+	expect(result.reviewer).toBeNull();
+});
+
+test("fails closed when Reviewer removal expresses both exact delete and preserve directions", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "采购对象。" },
+				{ blockId: 1, text: "实施要求。" },
+				{ blockId: 2, text: "响应文件格式。" },
+			],
+			["段落0-段落2"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: {
+					mode: "exact",
+					remove_ranges: ["段落1-段落2"],
+					preserve_ranges: ["段落1"],
+				},
+				reason: "Paragraph 1 is qualified, while the structural removal still crosses it.",
+			},
+			"reviewer-conflicting-removal-directions",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "2".repeat(64),
 		prompts,
 		reviewerRuntime: roleRuntime(scripted.streamFunction),
 		releaseRuntime: roleRuntime(scripted.streamFunction),
