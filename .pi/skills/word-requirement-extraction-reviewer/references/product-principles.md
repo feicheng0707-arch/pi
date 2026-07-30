@@ -14,8 +14,10 @@
 - Reviewer `pass` 后一调用结束；
 - Reviewer 必须先在短 reason 中完成整文关系、Owner、材料性与反事实 final 的单一结论，再最后生成 add/remove/preserve 结构字段；结构字段是 reason 的终态投影，不能在 reason 中发现正确范围后仍保留先前生成的旧 ranges；
 - 只有 contract-valid challenge 才启动 Call 2 Independent Release；Release 固定使用与 Reviewer 不同的模型家族，以减少同模型共模偏差；
-- Reviewer 是 challenge 的主语义判断和第二次调用门。Release 看不到 Reviewer 的 claim、reason、evidence leads 或历史，只看到完整 source 与机械 challenge overlay。Reviewer 明确删除的 Candidate block 标记为 `REMOVE_REVIEW`，挑战新增标记为 `ADD_REVIEW`，其余 Candidate 标记为受保护 `BASE_KEEP`。Release 可恢复误删、拒绝新增，并拥有唯一一条 Candidate 全域安全权限：若它独立证明某个 Candidate block 位于公告/通知、投标人或供应商须知、投标/响应/报价格式、合同条款及格式四类真实 root 内，可把该 block 同时写入 `hard_excluded_ranges` 并从 `final_ranges` 省略。`REMOVE_REVIEW` 与 `BASE_KEEP` 的切换只是权限边界，永远不是语义 Owner exit；Release 必须沿 source 穿过该切换及后续 OUT/marker 变化，直到首个不同 Owner 的 peer root 或 EOF。除此之外不得删除 `BASE_KEEP`，不得加入未挑战的 OUT；
-- Release 的终态是两个粗粒度语义授权字段加一个最终集合：`hard_excluded_ranges` 可投影任意 Candidate 或 `ADD_REVIEW` 中经 Release 独立证明属于四类硬排除载体的 block，是越过 `BASE_KEEP` 的唯一通道；`outside_carrier_excluded_ranges` 仍只能投影 Reviewer 已授权的 `REMOVE_REVIEW` / `ADD_REVIEW` block，表达载体外经 `duty_survival_attack` 后可安全分离的非 requirement atom。`final_ranges` 是唯一权威结构裁决。Harness 只校验：省略的 `BASE_KEEP` 必须同时出现在 `hard_excluded_ranges`，其他省略必须属于 Reviewer envelope，OUT 不得加入；它不解释 reason、不识别载体、不补写语义；
+- Reviewer 是 challenge 的主语义判断和第二次调用门。Release 看不到 Reviewer 的 claim、reason、evidence leads 或历史，只看到完整 source 与机械 challenge overlay。Reviewer 明确删除的 Candidate block 标记为 `REMOVE_REVIEW`，挑战新增标记为 `ADD_REVIEW`，其余 Candidate 标记为受保护 `BASE_KEEP`。Release 可用 `restored_remove_ranges` 显式记录误删保护，通过省略 `accepted_add_ranges` 拒绝新增；通常只有它独立证明并写入 `hard_excluded_ranges` 的公告/通知、投标人或供应商须知、投标/响应/报价格式、合同条款及格式 block 可以越过 `BASE_KEEP`，且所有获批的四类载体删除都必须使用该字段。Harness 只机械减去明确授权的删除；任何未进入删除字段的 `REMOVE_REVIEW` block 自动恢复。`REMOVE_REVIEW` 与 `BASE_KEEP` 的切换只是权限边界，永远不是语义 Owner exit；Release 必须沿 source 穿过该切换及后续 OUT/marker 变化，直到首个不同 Owner 的 peer root 或 EOF。不得加入未挑战的 OUT；
+- 若 Reviewer 同时提交 `source_role=buyer_issued`、`instantiation=present`，却以普通 removal 覆盖全部 Candidate，Harness 将其视为灾难性误删形状而不是语义结论：在 Release 前撤销完整普通 remove envelope，使全部 Candidate 初始为 `BASE_KEEP`，但保留 `ADD_REVIEW` 与 Candidate 全域四类 hard-carrier sweep。只有当 Release 自己提交的 `hard_excluded_ranges` 恰好占满某个连续 Candidate interval 的完整前缀或完整后缀时，Harness 才仅依据地址集合与区间拓扑，把同一 interval 另一侧非空 residual 暴露为一次 bounded outside-carrier precision 权限；没有完整 hard boundary、其他 Candidate interval、四类载体内部或 OUT 均无此权限。代码不读取正文、不决定 residual 中任何 block 的语义，Release 仍须把每个准备删除的 atom 明确写入 `outside_carrier_excluded_ranges`；
+- Release 必须先写 `hard_carrier_reason`，完成整文与每个连续 Candidate interval 的四类载体 Owner/peer-root 假设；再写 `residual_reason`，在任何 range 字段之前对该假设执行反向边界攻击，纠正向前吞并合格章节、越过不同 Owner peer exit 或遗漏后续 qualified peer root 的判断，并关闭载体外 challenged atom。两个 reason 都完成后才投影四个 typed delta：`restored_remove_ranges` 是可选的显式保护 trace；`hard_excluded_ranges` 可投影任意 Candidate 或 `ADD_REVIEW` 中经 Release 独立证明属于四类硬排除载体的 block；`outside_carrier_excluded_ranges` 通常只能投影 Reviewer 已授权的 `REMOVE_REVIEW` / `ADD_REVIEW` block，在上述 full-removal safety mode 下还可投影由同次 hard delta 机械派生的单侧 Candidate residual，表达载体外经 `duty_survival_attack` 后可安全分离的非 requirement atom；`accepted_add_ranges` 只能批准 `ADD_REVIEW`。Harness 只删除两个 exclusion 字段明确授权的 block，并把其余 `REMOVE_REVIEW` 机械恢复；若模型提交 exclusion 与显式 restoration 重叠，Harness 以 restoration 优先并裁剪冲突 exclusion。Harness 固定派生 `final = Candidate - authorized hard exclusions - authorized outside-carrier exclusions + accepted challenged additions`。若 accepted add 与 exclusion 重叠，accepted add 优先，冲突 exclusion trace 被机械裁剪。Release 不提交完整 `final_ranges`，Harness 不解释两个 reason、不识别载体、不补写语义；
+- Release 在压缩任一多 block 的载体外删除区间前，必须执行一次 `counterexample_first_duty_attack`：把每个 canonical 段落/表格 block 视为可独立寻址，即使它们共用价格、付款、结算、保证金或法律标题；先寻找剥离价格、付款、结算、审计、证明与救济包装后仍存活的最强成交后工作义务。只要存在，就恢复该 block 所属的完整 source-fidelity island、在其前后拆分删除，并只对剩余子区间继续寻找反例，直到没有存活 duty；不得只提交代表性样本地址。显式 `restored_remove_ranges` 可省略，因为 Harness 对未明确删除的 `REMOVE_REVIEW` 自动恢复。该攻击只在 reason 中报告紧凑 survivor islands 或 none，不生成逐 block ledger，不增加调用；
 - packet 可选携带从同一原始 DOCX 机械抽取并与 canonical block 高置信对齐的结构证据：Word body 顺序、段落/表格类型、样式、outline、编号、字号、粗体、对齐、分页、表格规模和 outline ancestry。Reviewer 与 Release 看到同一份 answer-free 结构图；它只用于恢复物理层级和真实同级边界，不携带 Owner、membership、keep/drop、历史结果或评测标签。低置信或未匹配 block 必须省略，省略不构成负面证据；
 - 任一失败、降级或越界都静态保留 candidate。
 
@@ -45,7 +47,7 @@
 
 边界完整的“投标方/供应商承诺”“响应承诺”“无偏离承诺”或声明章节，若实际功能是在成交前要求投标/响应主体就未来履约作声明、确认、保证或承诺，属于第三类投标/响应格式 Owner；即使没有空格、签章位或“格式/模板”字样，且子项复述质保、质量、服务、人员、交付等真实履约义务，也从 root 到 peer exit 整体排除。不能从孤立的“承诺/保证”词建立该载体；四类载体外采购人直接命令中标后执行的义务仍按履约事实保留。
 
-四类载体之外，孤立的成交前提交/承诺/确认/声明包装也不能自动删除同一不可分 block。执行一次 `response_wrapper_survival_attack`：先剥离“在响应文件中填写、提交、自行承诺、确认或声明”等包装，只检查余下内容是否仍直接要求成交供应商实施、配置、保障安全或质量、交付、验收、服务或达到具体结果；若 duty 存活，整个不可分 block 必须保留。只有 source 已建立边界完整的响应/承诺载体，或包装与履约义务可安全分离且剩余 atom 只要求成交前证明、表态、无偏离或材料提交时，才可排除。单个 block 含有“响应文件”或“承诺”不足以触发 subsection-level `pre_award_stage_gate`；该 gate 仍要求明确 root、peer exit、多个共同定义准入的证明子项及成交前后果。
+四类载体之外，孤立的成交前提交/承诺/确认/声明包装也不能自动删除同一不可分 block。执行一次 `response_wrapper_survival_attack`：只剥离“在响应文件中填写、提交、自行承诺、确认或声明”等行为包装和称谓，再把余下内容还原为关于采购工作本身的命题。若余下命题直接规定所提供的工作、服务、产品、质量、安全、验收、质保或其他成果本身必须满足、符合或至少达到采购技术要求/结果基线，duty 即存活；即使没有另一个实施动词、同段没有项目参数、该 block 夹在付款与报价等商务 block 之间，也必须形成独立 keep island 并保留整个不可分 block。若剥离后只剩“投标人作出一般响应、无偏离、接受或遵守承诺”这一表态对象，没有独立断言所提供工作具有什么属性、动作或结果，则它仍是可安全分离的成交前 proof atom。只有 source 已建立边界完整的响应/承诺载体，或包装与履约义务可安全分离且剩余 atom 只要求成交前证明、表态、无偏离或材料提交时，才可排除。单个 block 含有“响应文件”或“承诺”不足以触发 subsection-level `pre_award_stage_gate`；该 gate 仍要求明确 root、peer exit、多个共同定义准入的证明子项及成交前后果。
 
 合格来源包括当前项目的采购需求、用户需求书、技术标准和要求、项目专用技术条款、技术规范、设计说明、图纸说明、设备材料技术要求、技术清单、有效技术附件、采购范围，以及其他明确承载采购标的技术义务的章节。章节名称不是唯一依据；必须按载体在当前上下文中的实际功能和 Owner 判断。
 
@@ -71,11 +73,17 @@ Candidate 已选中一个处罚、扣款或救济 cluster 时，必须在同一�
 
 每个争议边界都必须在同一次语义调用内完成一次紧凑、双向的 `carrier_root_exit_attack`：对拟排除区间，向前确认实际四类载体 root、向后确认第一个 source-proven peer exit 或 EOF；对拟保留岛，逐内部子标题检查是否新开始公告/通知、须知、响应/报价格式或合同条款载体。没有实际 root 时不能创建载体；发现平级 Owner 时必须在其前停止；保留岛内部出现局部 root 时必须从该 root 切开并排除到其 exit。若有结构证据，争议边界必须与 `sc/path` 对账：更深层附件、技术标题、普通段落或表格仍是 active carrier 子节点，第一个同级或更高层级候选才可能是 exit。物理采购文件、邀请容器、Candidate 连续区间、后续合同章节或相邻另一类硬排除载体都不能替代 root/exit 证明。相邻的公告、须知、合同和响应格式即使地址连续，也必须分别拥有自己的 root 与 exit，不能被拼成覆盖中间独立技术来源的外层载体。该攻击只要求 reason 给出决定性的粗粒度边界，不要求新增 schema 字段、逐 block ledger、角色或调用。
 
+每个连续 Candidate / IN / REMOVE_REVIEW interval 还必须执行一次 `peer_root_fracture_attack`：在每个 source-proven peer chapter、subsection、appendix、table root 或等价功能边界重新判断 Owner。合格 requirement 岛遇到新的四类硬排除 peer root 时，从该 root 到 semantic exit 排除；后续新的合格 peer root 可以重新获得 membership。地址连续、编号、格式、关键词、Candidate 宽度和 permission marker 都不能单独建立 root 或延续 Owner。该攻击只复用同一次调用和现有地址字段，不增加 ledger、角色或调用。
+
 这里的 exit 是语义 Owner exit，不等于结构图记录的任意 `sc/vc` exit。结构 peer 若经 source 判断仍延续同一 Owner，只结束当前物理 scope，不结束载体；必须沿连续的同 Owner peer 继续传递，直到首个不同 Owner 的 peer root 或 EOF。反向地，一旦局部四类 root 成立，排除必须 root-closed：从 root 自身开始，覆盖其全部子条款、表格、内嵌附件以及后续同 Owner peer continuation，直到语义 Owner exit；禁止在该区间内部再启动主要直接效力或 `duty_survival_attack` 来保留服务期、地点、质量、验收、参数等技术后代。结构候选只能帮助定位待读边界，不能自动证明 Owner 已退出。
 
 同时聚合“技术、服务、合同、商务”或其他多类内容的父章只是 mixed container，不给全部子项授予统一 Owner。进入原子效力判断前，模型必须做一次紧凑的 `mixed_container_root_sweep`：读取父章下各 child heading candidate，识别其中 source-proven 的局部四类 root，并先按 root-closed exclusion 关闭这些区间。若暂定结果在同一局部 root 下删除付款、保证金、违约或其他商务/法律子项，却重新保留其后的服务期、地点、质量、验收、人员或技术子项，这种挖洞式选择证明 atom gate 启动过早；必须从 source 否定该 root，或把 root 到语义 exit 的完整区间排除。该 sweep 是一次粗粒度 Owner/边界判断，不是逐 block ledger，也不增加模型角色或调用次数。
 
+四类载体门与 `pre_award_stage_gate` 关闭后，必须执行一次 `outside_carrier_precision_closure`：检查 Candidate 已选混合合格章节中的可分离价格/报价构成、付款、结算、保证金和纯法律后果 atom，防止它们仅因父章合格或相邻 duty 而继承 membership。只有 exact 可寻址、通过 `duty_survival_attack`、`response_wrapper_survival_attack` 与 source-fidelity 检查的 atom 才可删除；不可分 block 仍有直接工作义务时必须保留。该闭合不是关键词扫描、逐 block ledger 或额外调用。
+
 公告 Owner 不以出现“招标公告”“采购公告”等明示总标题为前提。若一个自包含区域按对外通知功能连续组织项目概况、参与资格、文件获取、投标/响应递交、发布媒介和联系方式，项目概况只是该通知序列中的公告性摘要，即使它承载当前项目唯一或最具体的范围、规模、工期和质量事实，也仍随公告 Owner 排除。只有 source 已明确结束该通知序列并进入边界独立的技术来源，才能重新判断 requirement membership；完整邀请文件中的其他并列载体仍按各自 Owner 判断。
+
+孤立的委托代理、公开招标、欢迎投标或邀请参与前言，不会把其所在的招标书、需求书、技术规范或其他多载体采购文件整体转成公告 Owner。若其后出现 source-proven 的平级采购内容、采购对象、范围、地点、工期、质量、技术要求、图纸或清单 root，应从该 peer root 重新开启 Owner；无需等待显式“公告结束”。只有同一 root 下资格、文件获取、递交截止、发布媒介或联系方式等通知功能仍连续展开时，公告 Owner 才能继续跨过该 peer。
 
 整文角色必须在局部 Owner 分区之前检验，但不能先验冻结。只有实际公告/通知 root 开始后，标题/称谓、开篇邀请报价或响应、内部连续编号、报价资料要求、递交与联系方式、落款及随附报价格式共同形成首尾连续、功能同质的单一沟通，并且直到真实结尾都不存在平级异质 root，整段沟通载体才属于公告/通知摘要 Owner。接受整文公告假设前必须做 `whole_container_disconfirmation`：若 source 出现平级、边界独立的资格、评审、合同、响应格式、需求书、技术规范、图纸、清单或有效技术附件 root，物理文件就是多载体采购容器。封面含“邀请/询价”、首段邀请动作、所有章节共同服务同一次采购，或结尾仍有递交/联系方式，都不能把这些平级 Owner 合并为一个公告；外层采购文件或邀请容器不是第五类硬排除载体。
 
@@ -150,7 +158,7 @@ Owner 判断优先于局部技术词。若一个普通采购要求段落先独�
 
 闭合只向合格载体内部延伸，不得反向吞并前一个 Owner 的尾部。独立技术附件、清单或图纸从其自身标题、名称或首个明确内容 block 开始；位于该边界之前的签署主体、日期、签章、落款、页眉页脚和版式图片仍属于前一载体。相反，进入合格载体之后的图片占位、分页和短续段不能被误当作结束边界。
 
-同一 challenge 中的每个新增和删除都必须独立通过对应 Owner、边界和材料性门槛。发现一个真实遗漏，不会降低相邻 Candidate 内容的删除门槛；四类排除载体和评分 Owner 只有在自身范围同质且可安全拆分时才可同时提交，普通页数、否决或程序噪声不得搭载清理。Release 必须在唯一 `final_ranges` 中逐原子表达各方向的必要子集，而不是因为 challenge 总体有价值就整包接受。
+同一 challenge 中的每个新增和删除都必须独立通过对应 Owner、边界和材料性门槛。发现一个真实遗漏，不会降低相邻 Candidate 内容的删除门槛；四类排除载体和评分 Owner 只有在自身范围同质且可安全拆分时才可同时提交，普通页数、否决或程序噪声不得搭载清理。Release 必须在 typed delta 中逐原子表达每个准备执行的删除或新增，而不是因为 challenge 总体有价值就整包接受；未被明确授权删除的 `REMOVE_REVIEW` 自动恢复，不要求模型另做覆盖 ledger。
 
 “一个 challenge”限制的是一个 case-level 材料性问题，不是一个连续物理区间。同一个 Owner/membership 违约若分散在多个可独立寻址的范围中，Reviewer 必须在一次 challenge 内提交关闭该问题所需的全部不连续 add/remove ranges；不能只修最显眼、最大或最先发现的一处，却让同类材料性错误继续留在反事实 final 中。提交前必须在一次调用内机械想象 `final = Candidate + add - remove`，重新攻击该 final 是否仍存在同一问题；这不是逐 block ledger，也不增加调用。
 
@@ -160,17 +168,17 @@ Reviewer 的结构输出只需要一份互斥删除表达。`exact` 分支必须
 
 `source_role=non_procurement` 或 `instantiation=absent` 是 Reviewer 已作出的整文语义结论，不是 Harness 从关键词推断的结论。Harness 只做终态一致性校验：该结论不能与非空 Candidate final 或新增 block 同时成立；若结构字段没有覆盖完整 Candidate，必须 contract-fail 并原样保留 Candidate，不能由代码补删。
 
-Reviewer 的 reason、证据线索和原始 `preserve_ranges` 始终对 Release 隐藏。`removal.mode` 只决定 Reviewer 如何在 64 个 range 的地址容量内表达删除提案；机械归一化后的 `effective removal` 标记为 `REMOVE_REVIEW`，challenged add 标记为 `ADD_REVIEW`，其余 Candidate 标记为受保护 `BASE_KEEP`。Release 可以恢复 `REMOVE_REVIEW` 中的误删、拒绝 `ADD_REVIEW`，并对完整 Candidate 执行一次四类硬排除载体 root→semantic-exit 覆盖检查。只有 Release 明确写入 `hard_excluded_ranges` 的 Candidate block 才可越过 `BASE_KEEP`；载体外普通 false protection 仍不得越界，未挑战 OUT 仍不可加入。它不是完整 Candidate 重提取。
+Reviewer 的 reason、证据线索和原始 `preserve_ranges` 始终对 Release 隐藏。`removal.mode` 只决定 Reviewer 如何在 64 个 range 的地址容量内表达删除提案；机械归一化后的 `effective removal` 标记为 `REMOVE_REVIEW`，challenged add 标记为 `ADD_REVIEW`，其余 Candidate 标记为受保护 `BASE_KEEP`。Release 只需显式投影准备执行的 `hard_excluded_ranges`、`outside_carrier_excluded_ranges` 与 `accepted_add_ranges`；`restored_remove_ranges` 只是可选保护 trace，所有未被 exclusion 明确授权的 `REMOVE_REVIEW` 都由 Harness 自动恢复。它同时对完整 Candidate 执行一次四类硬排除载体 root→semantic-exit 覆盖检查。通常只有 Release 明确写入 `hard_excluded_ranges` 的 Candidate block 才可越过 `BASE_KEEP`；若 `buyer_issued + present` 的完整普通 removal 已被 Harness 撤销，则同次 hard delta 形成完整 Candidate interval 前缀/后缀时，另一侧 residual 还可获得机械、单侧、仅本 interval 的 outside-carrier 权限。未挑战 OUT 仍不可加入。它不是完整 Candidate 重提取。
 
 Harness 可在固定 128 block / 20k 字符预算内，只为 `REMOVE_REVIEW ∪ ADD_REVIEW` 生成 text-blind challenged-side 原子导航，并附加确定性的即时边界上下文；超大 change side 只按连续 run 的固定首尾窗口、递归分层地址和邻居采样，按地址倒序渲染。Harness 还可只依据地址集合列出有界的 `REMOVE_REVIEW ↔ BASE_KEEP` 连续 run 转换，不复制完整 Candidate、不读取正文，也不把 marker 转换解释成章节出口。若存在 answer-free Word 结构图，Harness 只把与 challenged side 相交的现有结构行在固定 64 节点 / 8k 字符预算内重列为 `CHANGE_STRUCTURE` focus。代码不得读取标题、关键词或正文内容。这些视图只辅助定位，不增加证据、语义标签、权限或答案；完整 source 始终是唯一事实来源。
 
 删除 schema 必须在生成阶段消除方向冲突：`exact` 分支只存在 `remove_ranges`，`candidate_complement` 分支只存在 `preserve_ranges`。同一提交若仍以旧字段或非法结构同时表达 remove 与 preserve，属于 contract failure，Harness 必须 fail-closed 保留 Candidate；不得再由代码执行 `remove - preserve`、猜测模型真正意图或选择更接近评测答案的集合。
 
-remove envelope 的 block 数、字符数、覆盖比例和是否恰好等于完整 Candidate 都只是权限与预算元数据，不是 Reviewer 的删除票数或目标删除比例。Release 必须逐原子裁决全部 `REMOVE_REVIEW` 与 `ADD_REVIEW`：恢复被过度删除的合格事实，只批准 source-grounded 的安全删除或新增。`REMOVE_REVIEW` 不是删除票，`BASE_KEEP` 也不是语义真值；两者之间的 marker 转换也不是 Owner exit。它们只是载体外普通删除不可越过的机械权限边界，只有模型明确提交到 `hard_excluded_ranges` 的四类硬排除载体 block 可按唯一例外越过。
+remove envelope 的 block 数、字符数、覆盖比例和是否恰好等于完整 Candidate 都只是权限与预算元数据，不是 Reviewer 的删除票数或目标删除比例。Release 必须逐原子裁决 `REMOVE_REVIEW` 与 `ADD_REVIEW`，但只需显式提交 source-grounded 的安全删除或新增；过删保护可写入 `restored_remove_ranges`，未提交到 exclusion 的 challenged block 也自动恢复。`REMOVE_REVIEW` 不是删除票，`BASE_KEEP` 也不是语义真值；两者之间的 marker 转换也不是 Owner exit。完整 removal 只触发地址形状安全降级，不证明任何内容应保留或删除；full-removal mode 下的 residual 权限也只能由同次完整 hard prefix/suffix 机械产生，最终 outside-carrier 删除仍完全由 Release 明确提交。
 
 Release 的对抗性检查必须是有界反例问题，不是第二份整文答案或逐 block ledger：`over_deletion_attack` 只攻击 `REMOVE_REVIEW` 内的真实范围、实施、资源、工期、质量、安全、质保、验收、服务及同一合格 Owner 的标题—正文闭合；对 `ADD_REVIEW` 则攻击错误 Owner、错误项目/包、排除载体和无事实负载。对每个 challenged outside-carrier removal 必须执行一次紧凑的 `duty_survival_attack`，检查被审批、合同、保密、证明、违约、费用或结算语言包围的 block 在剥离附带后果后是否仍有直接工作义务。不得扩张成对 `BASE_KEEP` 的全局 false-protection sweep。
 
-Release 提交的 `final_ranges` 是唯一权威完整集合。Harness 先把它机械裁剪为 Candidate 与 challenged add；对 `BASE_KEEP`，只有同时出现在模型提交的 `hard_excluded_ranges` 且被 `final_ranges` 省略的 block 才允许删除，其余全部恢复。`outside_carrier_excluded_ranges` 仍裁剪到 `REMOVE_REVIEW ∪ ADD_REVIEW`；两个 exclusion 字段都会移除最终已保留的地址并消除重叠。Harness 只执行这些集合约束，不读取 reason，不推断 Owner、membership 或安全删除语义。
+Release 不提交完整最终集合，只提交可选 `restored_remove_ranges`、`hard_excluded_ranges`、`outside_carrier_excluded_ranges` 与 `accepted_add_ranges`。Harness 将 restoration 裁剪到 `REMOVE_REVIEW`，将 hard exclusion 裁剪到 Candidate 或 `ADD_REVIEW`，将 outside-carrier exclusion 裁剪到 `REMOVE_REVIEW ∪ ADD_REVIEW`，并在 full-removal safety mode 下额外允许落入由同次 hard delta 机械派生的单侧 Candidate residual；accepted add 仍只裁剪到 `ADD_REVIEW`。随后只减去两个 exclusion 字段明确授权的 block，并把其余 `REMOVE_REVIEW` 机械归入 restoration。显式 restoration 对重叠 exclusion 优先，accepted add 对其余重叠 exclusion 优先；冲突 exclusion trace 随之去除最终保留地址并消除重叠，再按固定公式派生 final。Harness 只执行这些集合约束，不读取 reason，不推断 Owner、membership 或安全删除语义。
 
 任何使反事实 final 变成裸 `null` 的 challenge 都承担完整外部召回义务。Reviewer 必须先检查四类硬排除载体之外的全部顶层区域、载体边界过渡和不连续 OUT 岛，确认不存在独立采购需求、技术标准和要求、项目专用技术条款、图纸/设计说明、清单或有效技术附件。合格来源可能只有数段并夹在很长的合同、格式或程序载体之间；长度短、Candidate 未选或相邻载体很大都不能成为跳过理由。
 
@@ -211,6 +219,7 @@ Pi Agent 底座负责模型循环、消息上下文、工具调用、provider、
 - schema、上下文预检、调用/Token/超时预算；
 - Reviewer/Release 上下文隔离、失败分类和 trace；
 - 同源 Word 结构证据的 hash 绑定、schema 校验、高置信 block 对齐校验、内容盲压缩和有界呈现；
+- 仅按 Candidate/remove/hard 地址集合检测完整 removal、撤销普通 envelope，并从完整 hard prefix/suffix 机械派生单侧 residual 权限；
 - 将模型明确批准的增删机械应用到 candidate。
 
 代码不得依据关键词、标题文本、表格内容、章节位置、source hash、case ID、历史错误类型或任何弱信号判断 keep/drop、文件角色、评分、资格、价格、供应商成稿、material loss 或最终范围。代码允许仅依据地址集合和 Word 的非语义格式字段，确定性选择候选边界邻居、outline、段落/表格、粗体、居中和分页节点形成有界结构导航；不得把这些节点转换成公告、合同、响应格式、采购需求等语义标签。代码也不得生成语义 challenge、修改模型方向、补齐遗漏或选择更接近已知答案的结果。
