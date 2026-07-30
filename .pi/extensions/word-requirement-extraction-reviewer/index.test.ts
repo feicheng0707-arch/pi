@@ -1525,6 +1525,176 @@ test("allows precision deletion only on a residual exposed by a boundary-complet
 	});
 });
 
+test("allows precision deletion on the unique residual between complete hard boundaries", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "第一章 招标公告。" },
+				{ blockId: 1, text: "公告联系方式。" },
+				{ blockId: 2, text: "采购需求标题。" },
+				{ blockId: 3, text: "详见未随本文件提供的采购清单。" },
+				{ blockId: 4, text: "第五章 采购合同。" },
+				{ blockId: 5, text: "合同附件范本。" },
+			],
+			["段落0-段落5"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason: "The Reviewer proposes ordinary removal of every Candidate block.",
+			},
+			"reviewer-middle-boundary-residual",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardExcludedRanges: ["段落0-段落1", "段落4-段落5"],
+					outsideCarrierExcludedRanges: ["段落2-段落3"],
+				},
+				"The hard boundary roots expose one continuous middle residual containing only a non-fact shell.",
+			),
+			"release-middle-boundary-residual",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "0".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.release).toMatchObject({
+		hardExcludedRanges: ["段落0-段落1", "段落4-段落5"],
+		hardBoundaryResidualAuthorityRanges: ["段落2-段落3"],
+		outsideCarrierExcludedRanges: ["段落2-段落3"],
+	});
+});
+
+test("allows precision deletion on the sole surviving Candidate interval", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "第一章 招标公告。" },
+				{ blockId: 1, text: "公告联系方式。" },
+				{ blockId: 2, text: "非 Candidate 分隔段。" },
+				{ blockId: 3, text: "采购需求标题。" },
+				{ blockId: 4, text: "详见未随本文件提供的采购清单。" },
+				{ blockId: 5, text: "另一非 Candidate 分隔段。" },
+				{ blockId: 6, text: "第五章 采购合同。" },
+				{ blockId: 7, text: "合同附件范本。" },
+			],
+			["段落0-段落1", "段落3-段落4", "段落6-段落7"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason: "The Reviewer proposes ordinary removal of every Candidate block.",
+			},
+			"reviewer-independent-residual",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardExcludedRanges: ["段落0-段落1", "段落6-段落7"],
+					outsideCarrierExcludedRanges: ["段落3-段落4"],
+				},
+				"Every other Candidate interval is hard-excluded, leaving one continuous residual.",
+			),
+			"release-independent-residual",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "1".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.release).toMatchObject({
+		hardExcludedRanges: ["段落0-段落1", "段落6-段落7"],
+		hardBoundaryResidualAuthorityRanges: ["段落3-段落4"],
+		outsideCarrierExcludedRanges: ["段落3-段落4"],
+	});
+});
+
+test("does not open residual precision when two Candidate address runs remain", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "第一章 招标公告。" },
+				{ blockId: 1, text: "公告联系方式。" },
+				{ blockId: 2, text: "非 Candidate 分隔段。" },
+				{ blockId: 3, text: "第一个残留 Candidate 岛。" },
+				{ blockId: 4, text: "另一非 Candidate 分隔段。" },
+				{ blockId: 5, text: "第二个残留 Candidate 岛。" },
+			],
+			["段落0-段落1", "段落3", "段落5"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason: "The Reviewer proposes ordinary removal of every Candidate block.",
+			},
+			"reviewer-two-residual-runs",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardExcludedRanges: ["段落0-段落1"],
+					outsideCarrierExcludedRanges: ["段落3", "段落5"],
+				},
+				"Two discontinuous Candidate runs remain after the hard delta.",
+			),
+			"release-two-residual-runs",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "2".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落3", "段落5"]);
+	expect(result.release).toMatchObject({
+		hardExcludedRanges: ["段落0-段落1"],
+		hardBoundaryResidualAuthorityRanges: [],
+		outsideCarrierExcludedRanges: [],
+	});
+});
+
 test("does not open residual precision when a hard exclusion is internal to a Candidate run", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
@@ -1673,7 +1843,7 @@ test("requires every approved four-carrier deletion to use the hard field", asyn
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual([]);
 	expect(scripted.userPrompts[1]).toContain(
-		"Every selected four-carrier block approved for deletion uses hard_excluded_ranges regardless of marker",
+		"Every four-carrier deletion uses hard_excluded_ranges regardless of marker",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"outside_carrier_excluded_ranges is never an alternative encoding for a hard carrier",
@@ -2632,6 +2802,12 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	expect(scripted.userPrompts[1]).toContain(
 		"Every BASE_KEEP block is mechanically retained unless hard_excluded_ranges authorizes its four-carrier subtraction",
 	);
+	expect(scripted.userPrompts[1]).toContain(
+		"A corrected root with a partial hard delta is an invalid holey projection",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"To omit a descendant, first correct the root or exit in residual_reason",
+	);
 	expect(scripted.userPrompts[0]).toContain(
 		"This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region",
 	);
@@ -2901,6 +3077,12 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	);
 	expect(scripted.userPrompts[0]).toContain(
 		"A procuring organization name, generic batch label, platform rule, bid timetable, template/version number, default clause, blank table, or external pointer cannot establish instantiation alone",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"generic supply/quotation rules, drafting instructions, default duties, blank schedules/tables",
+	);
+	expect(scripted.userPrompts[1]).toContain(
+		"cannot reopen membership through primary-effect, normative-incorporation, or duty_survival_attack",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"Pure budget, pre-award proof/procedure, price/payment/settlement/guarantee, pure legal remedy, and bare pointers may be excluded",
