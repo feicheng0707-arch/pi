@@ -61,7 +61,7 @@ const WITNESS_RESPONSE_FORMAT = "json_object";
 const FINALIZER_REVIEW_PACKET_TOKEN_RESERVE = 120_000;
 const WITNESS_STATIC_TOKEN_RESERVE = 32_000;
 const PI_NATIVE_RUNTIME_VERSION =
-	"pi-native-finalizer-witness-v29-json-object-symmetric-fixed-point";
+	"pi-native-finalizer-witness-v31-uniform-selected-focus";
 
 type RunKind = "AUDIT_ISLAND" | "AUDIT_UNIVERSE";
 type HardCarrierType =
@@ -1582,6 +1582,20 @@ function splitContiguousBlockIds(blockIds: readonly number[]): number[][] {
 	return islands;
 }
 
+function breadthFirstMidpointOrder(blockIds: readonly number[]): number[] {
+	const pending: Array<{ start: number; end: number }> =
+		blockIds.length === 0 ? [] : [{ start: 0, end: blockIds.length - 1 }];
+	const ordered: number[] = [];
+	for (let cursor = 0; cursor < pending.length; cursor += 1) {
+		const range = pending[cursor]!;
+		const midpoint = Math.floor((range.start + range.end) / 2);
+		ordered.push(blockIds[midpoint]!);
+		if (range.start < midpoint) pending.push({ start: range.start, end: midpoint - 1 });
+		if (midpoint < range.end) pending.push({ start: midpoint + 1, end: range.end });
+	}
+	return ordered;
+}
+
 function groupWitnessFocusSource(blocks: readonly WitnessFocusBlock[]): WitnessFocusSource {
 	const groupsForState = (
 		state: WitnessFocusBlock["provisional_state"],
@@ -1825,6 +1839,7 @@ async function runSemanticWitness(
 			for (const blockId of run.blockIds) addWitnessFocusBlock(blockId);
 		}
 	}
+	const selectedIslands: number[][] = [];
 	for (const run of prepared.runs) {
 		let selectedIsland: number[] = [];
 		for (let index = 0; index <= run.blockIds.length; index += 1) {
@@ -1839,6 +1854,7 @@ async function runSemanticWitness(
 				continue;
 			}
 			if (selectedIsland.length > 0) {
+				selectedIslands.push(selectedIsland);
 				const firstSelectedBlockId = selectedIsland[0];
 				const lastSelectedBlockId = selectedIsland.at(-1)!;
 				addWitnessFocusBlock(firstSelectedBlockId);
@@ -1847,12 +1863,20 @@ async function runSemanticWitness(
 					addWitnessFocusBlock(firstSelectedBlockId - offset);
 					addWitnessFocusBlock(lastSelectedBlockId + offset);
 				}
-				if (selectedIsland.length <= 64) {
-					for (const selectedBlockId of selectedIsland) addWitnessFocusBlock(selectedBlockId);
-				}
 			}
 			selectedIsland = blockId !== undefined && provisionalBlockIds.has(blockId) ? [blockId] : [];
 		}
+	}
+	const selectedIslandFocusOrders = selectedIslands.map(breadthFirstMidpointOrder);
+	for (let focusIndex = 0; ; focusIndex += 1) {
+		let foundBlock = false;
+		for (const focusOrder of selectedIslandFocusOrders) {
+			const selectedBlockId = focusOrder[focusIndex];
+			if (selectedBlockId === undefined) continue;
+			foundBlock = true;
+			addWitnessFocusBlock(selectedBlockId);
+		}
+		if (!foundBlock || witnessFocusBlockById.size >= MAX_WITNESS_FOCUS_BLOCKS) break;
 	}
 	for (const partialRun of partialRuns) {
 		const run = prepared.runs[partialRun.run_index];

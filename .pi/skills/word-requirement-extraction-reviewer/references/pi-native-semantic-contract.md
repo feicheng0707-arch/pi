@@ -23,7 +23,9 @@
 
 “功能异质”必须按 source 明示模块判断，不得被统一改写成“都在通知投标人”。同级或等价功能边界分别建立的投标/响应文件编制、合同条款及格式、详细评审办法，与独立项目范围、执行期质量安全或技术附件，本身就是不同 Owner 的肯定证据；一个真实同质公告区域可以含简要项目摘要、参与资格、获取、递交、媒介和联系方式，但不能吞并一整套响应文件目录、合同范本、详细评分章和项目执行章。`投标人须`、`供应商应` 等受众措辞也不是公告证据，采购需求本来就常直接约束未来供应商。完整采购书结构成立后，邀请前言后的第一个顶层不同功能模块必须重新开启 Owner 判断。
 
-announcement positive gate 与 hard-carrier non-nesting invariant：物理封面、整包文种标题或邀请前言本身不能证明覆盖整份采购包的公告 root。公告 root 必须由一个边界连续、主要功能为告知或召集参与的通知区域肯定成立，并在第一个顶层不同功能 module 前结束；不要求该 peer 另写“采购需求”或先成为 selected。若 source 已把后续响应文件编制、合同条款及格式、评审办法、须知或其他 categorical carrier 识别为边界独立的 root，则它们必然是前一公告 Owner 的 peer exit，不能又被描述为公告内部 descendants。两个边界独立的 hard roots 不允许相互嵌套；同一编号体系、共同服务一次采购、统一装订或没有单独结束语都不能改变。邀请前言之后直接出现的顶层项目范围、执行期质量安全、技术规范、图纸或清单 module，也按自身 communicative function 重新判断，不因位于整包标题之下而自动继承公告 Owner。真实连续公告区域中的简要项目摘要仍保持排除。
+announcement positive gate 与 document-container partition：必须先区分“整份邀请/谈判/采购文件的文种或封面标题”和“source-bounded 的局部公告/通知 module”，再允许建立 announcement claim。物理封面、整包文种标题或邀请前言本身不能成为覆盖完整采购结构的公告 root；只有一个边界连续、主要功能为告知或召集参与的局部通知区域才能成立，并在 preamble 之后第一个顶层不同功能 sibling module 前结束。真实局部公告内部的简要项目摘要仍排除；但若完整 source 已由边界独立的资格、响应文件编制、合同条款及格式、评审、须知、项目范围、执行期质量安全、技术规范、图纸、清单或其他功能 module 证明为多载体容器，则这些 module 必须先按自身 communicative function 分区，不能被统一改写成“都在通知投标人”。第一个 sibling 不要求另写“采购需求”，也不要求先成为 selected。
+
+hard-carrier non-nesting 与 claim self-proof prohibition：若 source 已把后续 module 识别为边界独立的 root 或顶层功能 sibling，它必然是前一 announcement Owner 的 peer exit，不能同时又被描述为其 descendant。两个边界独立的 hard roots 不允许相互嵌套；同一编号体系、共同服务一次采购、统一装订、没有单独结束语或受众仍是投标人都不能改变。被 Witness 挑战的 announcement claim 也不能作为“目标仍在公告内部”的证明；必须脱离该 claim，重新用 root 与 target 之间的 source 功能连续性肯定证明两者属于同一局部通知 module。提交前对每个 announcement root→exit span 做一次 non-nesting checksum：只要内部已经承认任一边界独立 root 或顶层异质 sibling，就必须把 exit 收窄到最早 sibling，或撤回该 claim并重扫受影响地址。
 
 mixed parent 不会保护其内部 hard root。即使父章同时命名“技术、服务、合同内容条款及其他商务要求”，child heading 一旦实际开始公告/通知、须知、投标/响应格式或合同条款及格式，就从该 child 建立局部 hard root，直到同级不同功能 child/peer；不能因父章整体属于采购需求而保留该局部 root 的服务期、地点、质量、验收等 descendants。判断 mixed container 与 local root 时看标题的主功能：并列命名技术、服务、合同等多个同级域的聚合章可以只是 container；但以合同主要条款、合同内容条款、合同协议或其他 hard-carrier 功能为主标题、仅附加“其他要求/其他事项/商务要求”等兜底后缀的较窄 child，仍建立该 categorical root，兜底后缀不能把其 descendants 改写成独立需求。
 
@@ -37,7 +39,7 @@ Root 与 exit 由模型根据完整 source 的实际 communicative function 判�
 
 同一不可分 block 剥离程序、价格、证明或救济包装后仍有当前项目对象、范围、数量、动作、资源、技术基线或结果义务时，完整保留。不可分性只存在于单个 canonical block 内。
 
-不同 `block_id` 永远是 Harness 已授权的可分离输出原子。地址相邻、语法承接、同属一句阅读逻辑、共同服务 cross-reference、标题—正文 closure 或阅读更顺畅，都不能把两个 block 声称为不可分。后一独立 pointer、meta、程序或 wrapper block 必须单独裁决。
+不同 `block_id` 永远是 Harness 已授权的可分离输出原子。“同一不可分 block”只允许指恰好一个 canonical block object / 一个 `block_id`；任何覆盖两个或更多 block 的 heading、subsection、sibling group 或 compact range 都不得援引 block atomicity。地址相邻、语法承接、同属一句阅读逻辑、共同服务 cross-reference、标题—正文 closure 或阅读更顺畅，都不能把两个 block 声称为不可分。后一独立 pointer、meta、程序或 wrapper block 必须用自身 stripped remainder 单独裁决，其他 sibling 的 survivor 不能借给它。
 
 一个 canonical table block 内的 row、cell 或文本片段不是独立输出地址。Owner gate 已关闭且该 block 位于四类 carrier 外时，只要同一 table block 任一 row/片段仍有合格对象、参数、人员、工期、质量、服务或结果事实，付款、价格、合同指针或其他 excluded row 不能授权删除整个 block；只有剥离全部非目标包装后整块 surviving remainder 为零，才可排除该 block。模型可以在内部逐 row 理解语义，但不能输出 row-level patch、把 row-level exclusion rationale 投影为整块删除，或生成逐 row ledger。该规则不允许 hard-carrier descendant 穿透 Owner gate。
 
@@ -45,7 +47,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 必须用“执行关系 / 查找关系”二分测试区分规范性纳入与裸外部指针。四类 carrier 外，只要 block 自身要求供应商按、按照、依照、遵守、符合、达到或执行某项制度、标准、规范、图纸或附件，就已声明当前项目的 operative baseline；同一 block 后续“详见/参见/另附”只定位被纳入内容，不能抹掉前面的执行关系。边界独立的技术章节 heading 和完整 source 可以补足省略的当前项目主语，不要求重复项目名称、数字参数、标准编号或外部全文。只有 block 没有任何遵守/符合/执行关系，只告诉读者去查找未提供材料时，才是 bare pointer。
 
-版本适用规则必须按实际效力判断。在已经成立的合格 requirement Owner 内，若 block 决定当前工作、材料、施工、服务或成果所适用的规范集合、过期版本替代关系或标准优先顺序，它就是 operative baseline；完整章节可以补足省略的当前项目主语，不要求同一 block 再出现显式“供应商应遵守”。只有剥离版本说明后只剩采购文件、采购活动或文档法律/编制有效性，而没有任何当前履约对象的规范适用关系时，才是 document-governance meta。
+版本适用规则必须按实际效力和 block 内全部独立命题判断。在已经成立的合格 requirement Owner 内，若一个命题决定当前工作、材料、施工、服务或成果所适用的规范集合、过期/废止/错误引用时的替代规范，或标准之间的优先顺序，该命题本身就是 operative applicability；完整章节可以补足省略的当前项目主语，不要求同一 block 再出现显式“供应商应遵守”。不得先把这种适用、替代或优先关系当作“版本说明”剥离。若同一 block 另含采购文件、采购活动或文档法律/编制有效性的 meta tail，必须先覆盖全部独立命题；只要任一 operative applicability 命题存活，按 block atomicity 保留整块。只有整块完全不存在当前履约对象的规范适用、替代或优先关系时，才可整体判为 document-governance meta。
 
 ## 强制反例攻击
 
@@ -81,7 +83,9 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 `hard_root_claims` 是 Finalizer 自己提交的 Owner 断言，不是第二套答案。最终 selected 地址不得仍落在任何 final claim 投影内。Finalizer 不得为了保留 descendant，把已经 source-proven 的 hard-root exit 收窄到 root 内部低层 subsection；若 selected 地址位于已承认的 root→first peer exit span，必须取消 selection，除非 source 证明该地址之前已出现真实同级或更高层级、功能不同的 peer，此时才可据此纠正 exit 或撤回错误 claim。Witness 不产生 override，Harness 不做语义选择。
 
-最终 ranges 只由每个 `RUN_REGISTRY` 的正向 `final_selected_ranges` 机械并集得到。提交前必须执行 `symmetric_partition_fixed_point`：每个准备 selected 的 compact range 都是“其中每个 canonical block 均有 membership”的全称命题，必须主动寻找 target-own 肯定 exclusion 反例并拆出所有 hole；每个准备 excluded 的 gap 都是“其中每个 canonical block 均无 membership”的全称命题，必须主动寻找 target-own survivor 或真实 heading/body/table closure 反例并恢复。宽 range、组标签、端点或相邻正例都不能替内部 block 证明。反复执行双向攻击直到两侧都无新反例，最后且仅最后压缩；提交前重新展开 compact ranges，确认没有把任何已确认 hole 带回或再次漏掉 survivor。该固定点只在模型内部完成，不输出 ledger。
+最终 ranges 只由每个 `RUN_REGISTRY` 的正向 `final_selected_ranges` 机械并集得到。提交前必须执行 `symmetric_partition_fixed_point`：每个准备 selected 的 compact range 都是“其中每个 canonical block 均有 membership”的全称命题，必须主动寻找 target-own 肯定 exclusion 反例并拆出所有 hole；每个准备 excluded 的 gap 都是“其中每个 canonical block 均无 membership”的全称命题，必须主动寻找 target-own survivor 或真实 heading/body/table closure 反例并恢复。宽 range、组标签、端点、相邻正例或同 subsection 的其他 survivor 都不能替内部 block 证明。
+
+固定点结束后必须执行 `semantic_projection_checksum`，而不是直接复用 Candidate、provisional 或上一版 compact range：先冻结最终 block-ID set `S`，再且仅再由 `S ∩ run` 生成 typed ranges。令 `E` 为内部终态判断或 reason 中已明确判定为 hole/excluded 的 block，`K` 为已明确判定为 survivor/heading closure 的 block，`F` 为展开全部 typed `final_selected_ranges` 后的 block；提交前必须满足 `E ∩ F = ∅` 且 `K ⊆ F`。run 内部出现一个 hole 就必须把 typed range 拆成左右 survivor islands；不得为了更少 ranges、终态摘要更整齐或保持 provisional 形状而跨过 hole。checksum 失败时只能修改 typed ranges 或重新完成语义判断，不能删除/改写 reason 来掩盖冲突。reason 只记录决定性 predicates、holes、survivors 与 Witness reconciliation，不再复述一份“最终 compact ranges”；typed fields 是唯一集合投影。该检查只在模型内部完成，不输出 ledger。
 
 ## 通用性与禁止作弊
 

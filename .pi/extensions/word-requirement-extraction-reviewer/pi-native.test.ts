@@ -1448,7 +1448,7 @@ test("rejects Witness evidence outside its bounded source focus", async () => {
 	expect(result.witness?.error).toContain("unavailable block 9");
 });
 
-test("abstains only the Witness lane whose target is outside bounded source focus", async () => {
+test("authorizes a Witness target when the bounded focus can include the full selected island", async () => {
 	const blocks = Array.from({ length: 100 }, (_, blockId) => ({
 		blockId,
 		text: `Source block ${blockId}.`,
@@ -1494,40 +1494,106 @@ test("abstains only the Witness lane whose target is outside bounded source focu
 	);
 
 	expect(scripted.observed[1].userPrompt).toContain('"block_id":0');
-	expect(scripted.observed[1].userPrompt).not.toContain('"block_id":50');
+	expect(scripted.observed[1].userPrompt).toContain('"block_id":50');
 	expect(result.status).toBe("preserved");
 	expect(result.witness).toMatchObject({
 		status: "accepted",
-		coverage: "partial",
-		challenges: [],
+		coverage: "full",
+		challenges: [
+			{
+				cardSlot: "exclude",
+				cardIndex: 0,
+				direction: "exclude",
+				ranges: ["段落50"],
+				supportingBlockIds: [0],
+			},
+		],
 		laneCoverage: {
-			exclude: { status: "rejected_source_focus", forwarded: false },
+			exclude: { status: "valid_challenge", forwarded: true },
 			select: { status: "valid_none", forwarded: false },
 		},
-		trace: {
-			rejectedCards: [
-				{
-					lane: "exclude",
-					cardIndex: 0,
-					forwarded: false,
-					reason: {
-						code: "source_focus_authorization",
-						unseenTargetBlockIds: [50],
-						outOfGroupTargetBlockIds: [50],
-						wrongStateTargetBlockIds: [],
-						unseenSupportingBlockIds: [],
-					},
-				},
-			],
-		},
+		trace: { rejectedCards: [] },
 	});
 	expect(result.failure).toBeNull();
 	expect(scripted.callCount()).toBe(3);
-	expect(witnessReviewPacket(scripted.observed[2])).toEqual({
-		coverage: "partial",
-		lane_status: { exclude: "rejected_source_focus", select: "valid_none" },
-		challenges: [],
+	expect(witnessReviewPacket(scripted.observed[2])).toMatchObject({
+		coverage: "full",
+		lane_status: { exclude: "valid_challenge", select: "valid_none" },
+		challenges: [
+			{ card_slot: "exclude", card_index: 0, direction: "exclude", ranges: ["段落50"] },
+		],
 	});
+});
+
+test("samples oversized selected islands uniformly with deterministic midpoint round-robin", async () => {
+	const blocks = Array.from({ length: 800 }, (_, blockId) => ({
+		blockId,
+		text: `Source block ${blockId}.`,
+	}));
+	const sourcePacket = parseRequirementReviewPacket({
+		schemaVersion: "xique.word-requirement-review.packet.v1",
+		reviewMode: "candidate_protected_residual",
+		version: "docx-paragraphs-v1",
+		outputField: "完整采购需求编号范围",
+		sourceName: "oversized-selected-islands.docx",
+		sourceSha256: sha256(
+			blocks.map((block) => `段落${block.blockId}：${block.text}`).join("\n"),
+		),
+		blockCount: blocks.length,
+		candidateId: "requirement_candidate_v120",
+		candidatePromptSha256: "7".repeat(64),
+		initialRanges: ["段落0-段落299", "段落500-段落799"],
+		blocks,
+	});
+	const decision = {
+		owner_reason: "The source Owner boundaries were inspected.",
+		residual_reason: "Both source islands remain selected.",
+		hard_root_claims: [],
+		run_selections: [
+			{ run_index: 0, final_selected_ranges: ["段落0-段落299"] },
+			{ run_index: 1, final_selected_ranges: ["段落500-段落799"] },
+		],
+	};
+	const run = async () =>
+		runScenario(
+			[
+				{ role: "finalizer", response: toolSelection(decision, "provisional") },
+				{ role: "witness", response: toolWitness(witnessSubmission([])) },
+				{ role: "finalizer", response: toolSelection(decision, "final") },
+			],
+			undefined,
+			undefined,
+			"0".repeat(64),
+			sourcePacket,
+		);
+	const first = await run();
+	const second = await run();
+	const focusBlockIds = (observed: { userPrompt: string }): number[] => {
+		const focus = JSON.parse(observed.userPrompt.split("REVIEW_FOCUS_SOURCE=")[1] ?? "null") as {
+			exclude_scan_selected_islands: Array<{ blocks: Array<{ block_id: number }> }>;
+			select_scan_excluded_islands: Array<{ blocks: Array<{ block_id: number }> }>;
+		};
+		return [
+			...focus.exclude_scan_selected_islands,
+			...focus.select_scan_excluded_islands,
+		]
+			.flatMap((group) => group.blocks.map((block) => block.block_id))
+			.sort((left, right) => left - right);
+	};
+	const firstFocusBlockIds = focusBlockIds(first.scripted.observed[1]);
+	const secondFocusBlockIds = focusBlockIds(second.scripted.observed[1]);
+	const firstSelectedCount = firstFocusBlockIds.filter((blockId) => blockId <= 299).length;
+	const secondSelectedCount = firstFocusBlockIds.filter((blockId) => blockId >= 500).length;
+
+	expect(first.result.status).toBe("preserved");
+	expect(first.result.witness?.trace.focusBlockCount).toBe(256);
+	expect(firstFocusBlockIds).toEqual(secondFocusBlockIds);
+	expect(firstSelectedCount).toBeGreaterThan(100);
+	expect(secondSelectedCount).toBeGreaterThan(100);
+	expect(Math.abs(firstSelectedCount - secondSelectedCount)).toBeLessThanOrEqual(1);
+	expect(firstFocusBlockIds).toEqual(
+		expect.arrayContaining([0, 74, 149, 224, 299, 500, 574, 649, 724, 799]),
+	);
 });
 
 test("rejects a visible Witness target outside the audit universe", async () => {

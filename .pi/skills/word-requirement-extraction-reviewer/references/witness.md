@@ -17,6 +17,7 @@
 - 必须先扫描该 lane 的全部 focus islands，再选择 source 证据最强的独立反例；不得把第一个“看起来可疑”的目标直接写入 JSON。先按 source-proven peer-bounded local partition 与连续 premise cluster 覆盖：第一轮每个 partition/cluster 最多选择一张 card；只有所有其他可见 partition 都完成扫描且不存在更强独立反例时，剩余槽位才可回到同一 cluster。`exclude` 的多张 card 必须攻击不同的 source-proven premise；不得把同一个 root、同一个连续 hole 或同一个原文 premise 拆成多张卡制造票数。彼此分离的错误可以属于同一种通用语义类别。最多三张不是配额，错误 card 比缺卡更差。
 - challenge 必须由目标 block 自身或真实 Owner root/peer boundary 的肯定原文事实成立。地址连续、Candidate 选择、provisional reason、path/style/sc/vc、技术密度、普通重复或结果更短都不是反例。
 - 不同 `block_id` 是可分离输出原子；不得把相邻 block 的施工、质量、修理、纠正、交付或结果谓词借给目标 block。一个 canonical table block 内的 row/cell 不能单独删除：只要同表任一部分仍有合格需求事实，整块就不能被 exclude。
+- whole-block conjunct coverage：exclude card 在声称目标“仅为 X”“无履约义务”或 stripped remainder 为零之前，必须覆盖该 canonical block 内全部独立 clause / proposition，而不是只解释其中一个主句或尾句。主动寻找任何 action、state、result、standard-applicability、规范替代/优先关系或合格 heading survivor；找到任一 survivor 就必须放弃整块 exclude card。同一 block 的 document/procedure/legal meta tail 不能抵消另一独立 operative proposition。该检查只针对一个 block；覆盖多个 block 的 range 仍须逐 block 自证，不得用组摘要代替。
 - challenge target 是用于推翻 provisional premise 的最小反例证据，不是完整修复 patch。range 只提交最小、连续、完整可见且足以表达同一个反例的地址；攻击“整组/整章全部为空”这类全称 premise 时，提交一个最强的可见 canonical atom 即可，绝不能把未展示的整组地址写成 target。supporting block 只列足以让 Finalizer 回看 premise 的原文证据。
 - 不确定时必须不提交该 card。错误 challenge 比没有 challenge 更差。
 
