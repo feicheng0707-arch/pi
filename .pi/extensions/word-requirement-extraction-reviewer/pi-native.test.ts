@@ -13,7 +13,9 @@ import { expect, test, vi } from "vitest";
 import { loadRequirementReviewPrompts, parseRequirementReviewPacket } from "./index.ts";
 import {
 	buildDoubaoWitnessPayload,
+	PiNativeFinalDeltaSubmissionSchema,
 	piNativeFinalizerStreamFunction,
+	PiNativeProvisionalSubmissionSchema,
 	PiNativeSemanticWitnessSchema,
 	piNativeWitnessStreamFunction,
 	runPiNativeRequirementReview,
@@ -210,6 +212,8 @@ function scriptedScenario(
 		reasoning: string | undefined;
 		maxTokens: number | undefined;
 		toolNames: string[];
+		toolDescriptions: string[];
+		toolParameters: unknown[];
 		systemPrompt: string;
 		userPrompt: string;
 		serializedContext: string;
@@ -223,6 +227,8 @@ function scriptedScenario(
 			const expectedModel = role === "finalizer" ? finalizerModel : witnessModel;
 			expect(selectedModel.id).toBe(expectedModel.id);
 			const toolNames = context.tools?.map((tool) => tool.name) ?? [];
+			const toolDescriptions = context.tools?.map((tool) => tool.description) ?? [];
+			const toolParameters = context.tools?.map((tool) => tool.parameters) ?? [];
 			for (const content of step.response.content) {
 				if (role === "finalizer" && content.type === "toolCall") {
 					expect(toolNames).toContain(content.name);
@@ -234,6 +240,8 @@ function scriptedScenario(
 				reasoning: options?.reasoning,
 				maxTokens: options?.maxTokens,
 				toolNames,
+				toolDescriptions,
+				toolParameters,
 				systemPrompt: context.systemPrompt ?? "",
 				userPrompt: context.messages
 					.filter((message) => message.role === "user")
@@ -333,7 +341,7 @@ function witnessProvisionalRationale(observed: { userPrompt: string }) {
 	};
 }
 
-test("loads the v42 role-sliced adversarial typed-delta contracts", () => {
+test("loads the v43 phase-specific adversarial typed-delta contracts", () => {
 	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
 	expect(prompts.finalizer).toContain("exact target-own predicate");
 	expect(prompts.finalizer).toContain(
@@ -584,6 +592,25 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[0].toolNames).toEqual(["submit_final_selection"]);
 	expect(scripted.observed[1].toolNames).toEqual([]);
 	expect(scripted.observed[2].toolNames).toEqual(["submit_final_selection"]);
+	expect(scripted.observed[0].toolParameters).toEqual([
+		PiNativeProvisionalSubmissionSchema,
+	]);
+	expect(scripted.observed[2].toolParameters).toEqual([
+		PiNativeFinalDeltaSubmissionSchema,
+	]);
+	expect(scripted.observed[0].toolDescriptions[0]).toContain("provisional_selection");
+	expect(scripted.observed[2].toolDescriptions[0]).toContain("final_delta");
+	expect(scripted.observed[0].userPrompt).not.toContain(
+		"\nACTIVE_FINALIZER_PHASE=final_delta\n",
+	);
+	expect(scripted.observed[2].userPrompt).toContain(
+		"ACTIVE_FINALIZER_PHASE=final_delta",
+	);
+	expect(scripted.observed[2].userPrompt).toContain("THIS_IS_FINAL_PROVIDER_CALL=1");
+	expect(scripted.observed[2].userPrompt).toContain("HARNESS_PHASE_CONTROL=");
+	expect(scripted.observed[2].userPrompt.indexOf("ACTIVE_FINALIZER_PHASE=")).toBeLessThan(
+		scripted.observed[2].userPrompt.indexOf("REPLAY_TRUST_BOUNDARY="),
+	);
 	expect(scripted.observed[2].serializedContext).toContain("REPLAY_TRUST_BOUNDARY");
 	expect(scripted.observed[2].serializedContext).toContain(
 		"UNTRUSTED_PROVISIONAL_SUBMISSION",
@@ -785,19 +812,43 @@ test("applies the sparse typed final delta mechanically against the frozen provi
 	expect(result.trace.normalizedSubmissions[1]).toEqual(submittedDelta);
 });
 
+test("fails closed after exactly three calls when final phase resubmits a provisional selection", async () => {
+	const { result, scripted } = await runScenario([
+		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
+		{ role: "witness", response: toolWitness(witnessSubmission([])) },
+		{
+			role: "finalizer",
+			response: toolSelection(selection(["段落0"]), "invalid-final-provisional"),
+		},
+	]);
+
+	expect(scripted.callCount()).toBe(3);
+	expect(result.budget.providerCalls).toBe(3);
+	expect(result.budget.roles.finalizer.providerCalls).toBe(2);
+	expect(result.budget.roles.witness.providerCalls).toBe(1);
+	expect(scripted.observed.map(({ role }) => role)).toEqual([
+		"finalizer",
+		"witness",
+		"finalizer",
+	]);
+	expect(scripted.observed[2].toolParameters).toEqual([
+		PiNativeFinalDeltaSubmissionSchema,
+	]);
+	expect(result.provisionalDecision).not.toBeNull();
+	expect(result.decision).toBeNull();
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
+	expect(result.trace.validatorFailure).toContain("/submission_kind");
+});
+
 test.each([
-	{
-		name: "legacy full selection",
-		finalSubmission: selection(["段落0"]),
-		expectedFailure: "second Finalizer submission must use final_delta",
-	},
 	{
 		name: "non-empty final run_selections",
 		finalSubmission: {
 			...finalDelta(),
 			run_selections: [{ run_index: 0, final_selected_ranges: ["段落0"] }],
 		},
-		expectedFailure: "final_delta must submit run_selections=[]",
+		expectedFailure: "/run_selections",
 	},
 	{
 		name: "empty run delta",
@@ -2802,9 +2853,11 @@ test("stops after invalid provisional schema, thinking, or extra tool calls", as
 		],
 		{ stopReason: "toolUse" },
 	);
+	const wrongPhase = toolSelection(finalDelta(), "wrong-phase-provisional");
 
 	for (const [response, expectedFailure] of [
 		[malformed, "required"],
+		[wrongPhase, "/submission_kind"],
 		[thinking, "thinking content"],
 		[extraTool, "exactly one tool call"],
 	] as const) {
