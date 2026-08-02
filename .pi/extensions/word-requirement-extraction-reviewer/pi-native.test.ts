@@ -133,29 +133,14 @@ function witnessChallenge(
 }
 
 type WitnessChallengeFixture = ReturnType<typeof witnessChallenge>;
-
-type WitnessLaneFixture = {
-	kind: "none" | "owner_boundary" | "atom_membership";
-	ranges: string[];
-	attacked_premise: string;
-	supporting_block_ids: number[];
-};
-
-function emptyWitnessLane(): WitnessLaneFixture {
-	return { kind: "none", ranges: [], attacked_premise: "", supporting_block_ids: [] };
-}
+type WitnessCardFixture = Omit<WitnessChallengeFixture, "direction">;
 
 function witnessSubmission(challenges: WitnessChallengeFixture[] = []) {
-	let exclude = emptyWitnessLane();
-	let select = emptyWitnessLane();
+	const exclude: WitnessCardFixture[] = [];
+	const select: WitnessCardFixture[] = [];
 	for (const { direction, ...challenge } of challenges) {
-		if (direction === "exclude") {
-			if (exclude.kind !== "none") throw new Error("duplicate exclude Witness fixture");
-			exclude = challenge;
-		} else {
-			if (select.kind !== "none") throw new Error("duplicate select Witness fixture");
-			select = challenge;
-		}
+		if (direction === "exclude") exclude.push(challenge);
+		else select.push(challenge);
 	}
 	return { exclude, select };
 }
@@ -306,6 +291,7 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	]);
 
 	expect(result.status).toBe("preserved");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v2");
 	expect(result.reviewDegraded).toBe(false);
 	expect(result.budget.providerCalls).toBe(3);
 	expect(result.budget.roles.finalizer.providerCalls).toBe(2);
@@ -348,20 +334,21 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[0].systemPrompt).toContain("submit_final_selection");
 	expect(scripted.observed[0].systemPrompt).not.toContain("submit_requirement_release");
 	expect(scripted.observed[0].systemPrompt).toContain(
-		"非空 Witness lane 的唯一 target range 展开后的每个 block",
+		"每张 Witness card 的唯一 target range 展开后的每个 block",
 	);
+	expect(scripted.observed[0].systemPrompt).toContain("`owner_reason` 最多 1200 个字符");
 	expect(scripted.observed[1].systemPrompt).toContain("独立、窄职责对抗证人");
 	expect(scripted.observed[1].systemPrompt).toContain(
 		"select lane 有对称证据硬门",
 	);
 	expect(scripted.observed[1].systemPrompt).toContain(
-		"非空 lane 的唯一 `ranges[0]` 展开后的全部 target block",
+		"每张 card 的唯一 `ranges[0]` 展开后的全部 target block",
 	);
 	expect(scripted.observed[1].systemPrompt).toContain(
-		"对每个 selected heading 首先按其自身 communicative function 与 stripped remainder 独立裁决",
+		"在查看任何普通 body atom 前，先枚举全部 selected headings",
 	);
 	expect(scripted.observed[1].systemPrompt).toContain(
-		"只攻击该最小可见同-group wrapper block",
+		"只攻击该最小可见同-group heading block",
 	);
 	expect(scripted.observed[1].systemPrompt).not.toContain("Pi-native Word 采购需求语义合同");
 	expect(scripted.observed[1].systemPrompt).not.toContain("Pi-native Runtime Contract");
@@ -467,21 +454,25 @@ test("attributes nested Witness elapsed time exactly once", async () => {
 	expect(result.budget.elapsedMs).toBe(100);
 });
 
-test("exposes exactly two required non-null Witness lanes without direction fields", () => {
+test("exposes two required bounded Witness card arrays without direction fields", () => {
 	expect(PiNativeSemanticWitnessSchema).toMatchObject({
 		required: ["exclude", "select"],
 		properties: {
 			exclude: {
-				required: ["kind", "ranges", "attacked_premise", "supporting_block_ids"],
-				properties: {
-					ranges: { maxItems: 1 },
-					supporting_block_ids: { maxItems: 8 },
+				type: "array",
+				maxItems: 3,
+				items: {
+					required: ["kind", "ranges", "attacked_premise", "supporting_block_ids"],
+					properties: {
+						ranges: { minItems: 1, maxItems: 1 },
+						supporting_block_ids: { minItems: 1, maxItems: 8 },
+					},
 				},
 			},
-			select: expect.any(Object),
+			select: { type: "array", maxItems: 1 },
 		},
 	});
-	expect(PiNativeSemanticWitnessSchema.properties.exclude.properties).not.toHaveProperty(
+	expect(PiNativeSemanticWitnessSchema.properties.exclude.items.properties).not.toHaveProperty(
 		"direction",
 	);
 	expect(PiNativeSemanticWitnessSchema.properties).not.toHaveProperty("challenges");
@@ -769,6 +760,7 @@ test("partitions mixed Witness ranges and does not grant an override", async () 
 	expect(result.witness?.challenges).toMatchObject([
 		{
 			cardSlot: "exclude",
+			cardIndex: 0,
 			kind: "atom_membership",
 			direction: "exclude",
 			ranges: ["段落1"],
@@ -776,12 +768,16 @@ test("partitions mixed Witness ranges and does not grant an override", async () 
 		},
 		{
 			cardSlot: "exclude",
+			cardIndex: 0,
 			kind: "atom_membership",
 			direction: "exclude",
 			ranges: ["段落2"],
 			overlapsProvisionalHardClaim: false,
 		},
 	]);
+	expect(result.witness?.summary).toBe(
+		"1 bounded counterexample card; 2 canonical partitions",
+	);
 	expect(scripted.observed[2].userPrompt).toContain(
 		'"selection_intersects_hard_claim_ranges":["段落1"]',
 	);
@@ -791,7 +787,7 @@ test("partitions mixed Witness ranges and does not grant an override", async () 
 	expect(result.trace.finalClaimSelectionConflicts).toEqual([]);
 });
 
-test("rejects the entire select lane when its target mixes provisional states", async () => {
+test("rejects a select card when its target mixes provisional states", async () => {
 	const rejectedPremise = "REJECTED_SELECT_MIXED_STATE_PREMISE_MUST_NOT_BE_FORWARDED";
 	const { result, scripted } = await runScenario([
 		{
@@ -836,9 +832,10 @@ test("rejects the entire select lane when its target mixes provisional states", 
 			select: { status: "rejected_source_focus", forwarded: false },
 		},
 		trace: {
-			rejectedLanes: [
+			rejectedCards: [
 				{
 					lane: "select",
+					cardIndex: 0,
 					forwarded: false,
 					reason: {
 						code: "source_focus_authorization",
@@ -963,6 +960,55 @@ test("normalizes terminalBlockId plus one to an EOF hard-root exit", async () =>
 	expect(result.decision?.hardRootClaims).toEqual(result.provisionalDecision?.hardRootClaims);
 });
 
+test("fails closed when Finalizer reasons exceed their schema budgets", async () => {
+	const longOwnerReason = "O".repeat(2_000);
+	const longResidualReason = "R".repeat(3_000);
+	const longSelection = {
+		...selection(["段落0-段落2"]),
+		owner_reason: longOwnerReason,
+		residual_reason: longResidualReason,
+	};
+	const { result, scripted } = await runScenario([
+		{ role: "finalizer", response: toolSelection(longSelection, "bounded-provisional") },
+	]);
+
+	expect(scripted.callCount()).toBe(1);
+	expect(result.status).toBe("degraded");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v2");
+	expect(result.trace.rawSubmissions).toEqual([longSelection]);
+	expect(result.trace.normalizedSubmissions).toEqual([longSelection]);
+	expect(result.provisionalDecision).toBeNull();
+	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
+	expect(result.failure?.message).toContain("1200");
+	expect(scripted.observed[0].serializedContext).toContain('"maxLength":1200');
+	expect(scripted.observed[0].serializedContext).toContain('"maxLength":2400');
+});
+
+test("fails closed when final-turn reasons exceed their schema budgets", async () => {
+	const validProvisional = selection(["段落0-段落2"]);
+	const overlongFinal = {
+		...selection(["段落0-段落2"]),
+		owner_reason: "O".repeat(2_000),
+		residual_reason: "R".repeat(3_000),
+	};
+	const { result, scripted } = await runScenario([
+		{ role: "finalizer", response: toolSelection(validProvisional, "valid-provisional") },
+		{ role: "witness", response: toolWitness(witnessSubmission()) },
+		{ role: "finalizer", response: toolSelection(overlongFinal, "overlong-final") },
+	]);
+
+	expect(scripted.callCount()).toBe(3);
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落0-段落2"]);
+	expect(result.provisionalDecision).not.toBeNull();
+	expect(result.decision).toBeNull();
+	expect(result.witness?.status).toBe("accepted");
+	expect(result.trace.rawSubmissions).toEqual([validProvisional, overlongFinal]);
+	expect(result.trace.normalizedSubmissions).toEqual([validProvisional, overlongFinal]);
+	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
+	expect(result.failure?.message).toContain("1200");
+});
+
 test("fails closed when final selection still intersects its hard-root claim", async () => {
 	const { result } = await runScenario([
 		{
@@ -1041,30 +1087,89 @@ test("accepts one Witness challenge in each direction", async () => {
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.witness?.challenges).toMatchObject([
-		{ cardSlot: "exclude", direction: "exclude", ranges: ["段落0"] },
-		{ cardSlot: "select", direction: "select", ranges: ["段落1"] },
+		{ cardSlot: "exclude", cardIndex: 0, direction: "exclude", ranges: ["段落0"] },
+		{ cardSlot: "select", cardIndex: 0, direction: "select", ranges: ["段落1"] },
 	]);
 });
 
-test("rejects arrays in a fixed Witness lane", async () => {
-	const selectChallenge = witnessChallenge("atom_membership", "select", ["段落1"], [1]);
-	const { result, scripted } = await runScenario([
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
-		{
-			role: "witness",
-			response: toolWitness({
-				exclude: emptyWitnessLane(),
-				select: [selectChallenge, selectChallenge],
-			}),
-		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+test("accepts three exclude cards and one select card in one Witness call", async () => {
+	const blocks = Array.from({ length: 5 }, (_, blockId) => ({
+		blockId,
+		text: `Source block ${blockId}.`,
+	}));
+	const sourcePacket = parseRequirementReviewPacket({
+		schemaVersion: "xique.word-requirement-review.packet.v1",
+		reviewMode: "candidate_protected_residual",
+		version: "docx-paragraphs-v1",
+		outputField: "完整采购需求编号范围",
+		sourceName: "multi-card-witness.docx",
+		sourceSha256: sha256(
+			blocks.map((block) => `段落${block.blockId}：${block.text}`).join("\n"),
+		),
+		blockCount: blocks.length,
+		candidateId: "requirement_candidate_v120",
+		candidatePromptSha256: "7".repeat(64),
+		initialRanges: ["段落0-段落4"],
+		blocks,
+	});
+	const submission = witnessSubmission([
+		witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
+		witnessChallenge("atom_membership", "exclude", ["段落1"], [1]),
+		witnessChallenge("atom_membership", "exclude", ["段落2"], [2]),
+		witnessChallenge("atom_membership", "select", ["段落3"], [3]),
 	]);
+	const { result, scripted } = await runScenario(
+		[
+			{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
+			{ role: "witness", response: toolWitness(submission) },
+			{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "final") },
+		],
+		undefined,
+		undefined,
+		"0".repeat(64),
+		sourcePacket,
+	);
 
 	expect(scripted.callCount()).toBe(3);
-	expect(result.status).toBe("degraded");
-	expect(result.finalRanges).toEqual(["段落0-段落2"]);
-	expect(result.witness).toMatchObject({ status: "contract_failure" });
-	expect(result.witness?.error).toContain("/select: must be object");
+	expect(result.witness).toMatchObject({ status: "accepted", coverage: "full" });
+	expect(result.witness?.challenges).toMatchObject([
+		{ cardSlot: "exclude", cardIndex: 0, ranges: ["段落0"] },
+		{ cardSlot: "exclude", cardIndex: 1, ranges: ["段落1"] },
+		{ cardSlot: "exclude", cardIndex: 2, ranges: ["段落2"] },
+		{ cardSlot: "select", cardIndex: 0, ranges: ["段落3"] },
+	]);
+	expect(witnessReviewPacket(scripted.observed[2]).challenges).toMatchObject([
+		{ card_slot: "exclude", card_index: 0 },
+		{ card_slot: "exclude", card_index: 1 },
+		{ card_slot: "exclude", card_index: 2 },
+		{ card_slot: "select", card_index: 0 },
+	]);
+});
+
+test("rejects more than three exclude cards or one select card", async () => {
+	const invalidSubmissions = [
+		witnessSubmission(
+			Array.from({ length: 4 }, () =>
+				witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
+			),
+		),
+		witnessSubmission([
+			witnessChallenge("atom_membership", "select", ["段落1"], [1]),
+			witnessChallenge("atom_membership", "select", ["段落1"], [1]),
+		]),
+	];
+	for (const invalidSubmission of invalidSubmissions) {
+		const { result, scripted } = await runScenario([
+			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
+			{ role: "witness", response: toolWitness(invalidSubmission) },
+			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		]);
+
+		expect(scripted.callCount()).toBe(3);
+		expect(result.status).toBe("degraded");
+		expect(result.witness).toMatchObject({ status: "contract_failure" });
+		expect(result.witness?.error).toContain("items");
+	}
 });
 
 test("preserves a complete long Witness premise without contract failure", async () => {
@@ -1119,7 +1224,7 @@ test("rejects a whitespace-only Witness premise", async () => {
 	expect(result.witness?.error).toContain("non-blank");
 });
 
-test("rejects a legacy verdict field inside a fixed Witness lane", async () => {
+test("rejects a legacy verdict field inside a Witness card", async () => {
 	const valid = witnessSubmission([
 		witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
 	]);
@@ -1129,7 +1234,7 @@ test("rejects a legacy verdict field inside a fixed Witness lane", async () => {
 			role: "witness",
 			response: toolWitness({
 				...valid,
-				exclude: { ...valid.exclude, verdict: "exclude" },
+				exclude: [{ ...valid.exclude[0], verdict: "exclude" }],
 			}),
 		},
 		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
@@ -1146,7 +1251,7 @@ test("rejects a missing Witness lane", async () => {
 		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
 		{
 			role: "witness",
-			response: toolWitness({ exclude: emptyWitnessLane() }),
+			response: toolWitness({ exclude: [] }),
 		},
 		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
 	]);
@@ -1162,12 +1267,19 @@ test("rejects null, string null, empty objects, old slots, and direction fields"
 		witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
 	]);
 	for (const invalidWitness of [
-		{ exclude: null, select: emptyWitnessLane() },
-		{ exclude: "null", select: emptyWitnessLane() },
-		{ exclude: {}, select: emptyWitnessLane() },
+		{ exclude: null, select: [] },
+		{ exclude: "null", select: [] },
+		{ exclude: {}, select: [] },
+		{ exclude: [{}], select: [] },
 		{ primary_challenge: null, secondary_challenge: null },
 		{ exclude_challenge: null, select_challenge: null },
-		{ ...valid, exclude: { ...valid.exclude, direction: "exclude" } },
+		{ ...valid, exclude: [{ ...valid.exclude[0], direction: "exclude" }] },
+		{
+			exclude: [
+				{ kind: "none", ranges: [], attacked_premise: "", supporting_block_ids: [] },
+			],
+			select: [],
+		},
 	]) {
 		const { result } = await runScenario([
 			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
@@ -1184,24 +1296,29 @@ test("rejects null, string null, empty objects, old slots, and direction fields"
 	}
 });
 
-test("enforces every fixed Witness lane field and none/non-none invariants", async () => {
+test("enforces every Witness card field invariant", async () => {
 	const validChallenge = witnessSubmission([
 		witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
 	]);
+	const validCard = validChallenge.exclude[0]!;
 	const invalidWitnesses: unknown[] = [
-		{ ...witnessSubmission(), exclude: { ...emptyWitnessLane(), ranges: ["段落0"] } },
-		{ ...witnessSubmission(), exclude: { ...emptyWitnessLane(), attacked_premise: "x" } },
-		{ ...witnessSubmission(), exclude: { ...emptyWitnessLane(), supporting_block_ids: [0] } },
-		{ ...validChallenge, exclude: { ...validChallenge.exclude, ranges: [] } },
-		{ ...validChallenge, exclude: { ...validChallenge.exclude, attacked_premise: "" } },
-		{ ...validChallenge, exclude: { ...validChallenge.exclude, supporting_block_ids: [] } },
+		{ ...validChallenge, exclude: [{ ...validCard, ranges: [] }] },
+		{ ...validChallenge, exclude: [{ ...validCard, ranges: ["段落0", "段落1"] }] },
+		{ ...validChallenge, exclude: [{ ...validCard, attacked_premise: "" }] },
+		{ ...validChallenge, exclude: [{ ...validCard, supporting_block_ids: [] }] },
 		{
 			...validChallenge,
-			exclude: {
-				kind: validChallenge.exclude.kind,
-				ranges: validChallenge.exclude.ranges,
-				supporting_block_ids: validChallenge.exclude.supporting_block_ids,
-			},
+			exclude: [{ ...validCard, supporting_block_ids: [0, 1, 2, 3, 4, 5, 6, 7, 8] }],
+		},
+		{
+			...validChallenge,
+			exclude: [
+				{
+					kind: validCard.kind,
+					ranges: validCard.ranges,
+					supporting_block_ids: validCard.supporting_block_ids,
+				},
+			],
 		},
 	];
 	for (const invalidWitness of invalidWitnesses) {
@@ -1344,9 +1461,10 @@ test("abstains only the Witness lane whose target is outside bounded source focu
 			select: { status: "valid_none", forwarded: false },
 		},
 		trace: {
-			rejectedLanes: [
+			rejectedCards: [
 				{
 					lane: "exclude",
+					cardIndex: 0,
 					forwarded: false,
 					reason: {
 						code: "source_focus_authorization",
@@ -1365,6 +1483,46 @@ test("abstains only the Witness lane whose target is outside bounded source focu
 		coverage: "partial",
 		lane_status: { exclude: "rejected_source_focus", select: "valid_none" },
 		challenges: [],
+	});
+});
+
+test("rejects a visible Witness target outside the audit universe", async () => {
+	const { result, scripted } = await runScenario(
+		[
+			{ role: "finalizer", response: toolSelection(selection(["段落1"]), "provisional") },
+			{
+				role: "witness",
+				response: toolWitness(
+					witnessSubmission([
+						witnessChallenge("atom_membership", "select", ["段落0"], [0]),
+					]),
+				),
+			},
+			{ role: "finalizer", response: toolSelection(selection(["段落1"]), "final") },
+		],
+		["段落1"],
+	);
+
+	expect(scripted.observed[1].userPrompt).toContain('"block_id":0');
+	expect(result.status).toBe("preserved");
+	expect(result.witness).toMatchObject({
+		status: "accepted",
+		coverage: "partial",
+		challenges: [],
+		laneCoverage: {
+			exclude: { status: "valid_none", forwarded: false },
+			select: { status: "rejected_source_focus", forwarded: false },
+		},
+		trace: {
+			rejectedCards: [
+				{
+					lane: "select",
+					cardIndex: 0,
+					reason: { outOfAuditUniverseTargetBlockIds: [0] },
+					forwarded: false,
+				},
+			],
+		},
 	});
 });
 
@@ -1420,10 +1578,11 @@ test("abstains one lane when supporting source exists but was not visible in foc
 			select: { status: "valid_none", forwarded: false },
 		},
 		trace: {
-			rejectedLanes: [
+			rejectedCards: [
 				{
 					lane: "exclude",
-					rawLane: { supporting_block_ids: [50] },
+					cardIndex: 0,
+					rawCard: { supporting_block_ids: [50] },
 					forwarded: false,
 					reason: {
 						unseenSupportingBlockIds: [50],
@@ -1477,6 +1636,7 @@ test("forwards one valid lane while the other lane mechanically abstains", async
 		challenges: [
 			{
 				cardSlot: "select",
+				cardIndex: 0,
 				direction: "select",
 				ranges: ["段落1"],
 			},
@@ -1490,7 +1650,56 @@ test("forwards one valid lane while the other lane mechanically abstains", async
 		select: "valid_challenge",
 	});
 	expect(review.challenges).toMatchObject([
-		{ card_slot: "select", direction: "select", ranges: ["段落1"] },
+		{ card_slot: "select", card_index: 0, direction: "select", ranges: ["段落1"] },
+	]);
+	expect(JSON.stringify(review)).not.toContain(rejectedPremise);
+});
+
+test("forwards valid cards when another card in the same lane is rejected", async () => {
+	const rejectedPremise = "REJECTED_SAME_LANE_CARD_MUST_NOT_BE_FORWARDED";
+	const { result, scripted } = await runScenario([
+		{
+			role: "finalizer",
+			response: toolSelection(selection(["段落0", "段落2"]), "provisional"),
+		},
+		{
+			role: "witness",
+			response: toolWitness(
+				witnessSubmission([
+					{
+						...witnessChallenge("atom_membership", "exclude", ["段落1"], [1]),
+						attacked_premise: rejectedPremise,
+					},
+					witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
+				]),
+			),
+		},
+		{ role: "finalizer", response: toolSelection(selection(["段落2"]), "final") },
+	]);
+
+	expect(result.status).toBe("repaired");
+	expect(result.witness).toMatchObject({
+		status: "accepted",
+		coverage: "partial",
+		laneCoverage: {
+			exclude: { status: "valid_challenge", forwarded: true },
+			select: { status: "valid_none", forwarded: false },
+		},
+		challenges: [
+			{ cardSlot: "exclude", cardIndex: 1, direction: "exclude", ranges: ["段落0"] },
+		],
+		trace: {
+			rejectedCards: [{ lane: "exclude", cardIndex: 0, forwarded: false }],
+		},
+	});
+	const review = witnessReviewPacket(scripted.observed[2]);
+	expect(review.coverage).toBe("partial");
+	expect(review.lane_status).toEqual({
+		exclude: "valid_challenge",
+		select: "valid_none",
+	});
+	expect(review.challenges).toMatchObject([
+		{ card_slot: "exclude", card_index: 1, ranges: ["段落0"] },
 	]);
 	expect(JSON.stringify(review)).not.toContain(rejectedPremise);
 });
@@ -1530,9 +1739,9 @@ test("fails closed only when both source-focus lanes mechanically abstain", asyn
 		},
 		error: "both Witness lanes failed source-focus authorization",
 		trace: {
-			rejectedLanes: [
-				{ lane: "exclude", forwarded: false },
-				{ lane: "select", forwarded: false },
+			rejectedCards: [
+				{ lane: "exclude", cardIndex: 0, forwarded: false },
+				{ lane: "select", cardIndex: 0, forwarded: false },
 			],
 		},
 	});
@@ -1577,10 +1786,11 @@ test("records target state and group violations without trimming the rejected ca
 		coverage: "partial",
 		challenges: [],
 		trace: {
-			rejectedLanes: [
+			rejectedCards: [
 				{
 					lane: "exclude",
-					rawLane: { ranges: ["段落0-段落2"] },
+					cardIndex: 0,
+					rawCard: { ranges: ["段落0-段落2"] },
 					forwarded: false,
 					reason: {
 						wrongStateTargetBlockIds: [1],
@@ -1614,9 +1824,11 @@ test("applies global source validation before either lane can abstain", async ()
 		status: "contract_failure",
 		coverage: null,
 		laneCoverage: null,
-		trace: { rejectedLanes: [] },
+		trace: { rejectedCards: [] },
 	});
-	expect(result.witness?.error).toContain("select.ranges references unavailable block 99");
+	expect(result.witness?.error).toContain(
+		"select[0].ranges references unavailable block 99",
+	);
 });
 
 test("rejects every non-pure Witness JSON response shape without retrying", async () => {

@@ -50,11 +50,16 @@ const MAX_WITNESS_SOURCE_QUOTE_CHARACTERS = 32_000;
 const MAX_WITNESS_FOCUS_BLOCKS = 256;
 const MAX_WITNESS_FOCUS_BLOCK_CHARACTERS = 4_000;
 const MAX_WITNESS_FOCUS_CHARACTERS = 180_000;
-const MAX_WITNESS_CHALLENGES = 2;
+const MAX_WITNESS_EXCLUDE_CARDS = 3;
+const MAX_WITNESS_SELECT_CARDS = 1;
+const MAX_CANONICAL_WITNESS_CHALLENGES =
+	(MAX_WITNESS_EXCLUDE_CARDS + MAX_WITNESS_SELECT_CARDS) * 2;
+const MAX_FINALIZER_OWNER_REASON_CHARACTERS = 1_200;
+const MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS = 2_400;
 const FINALIZER_REVIEW_PACKET_TOKEN_RESERVE = 120_000;
 const WITNESS_STATIC_TOKEN_RESERVE = 32_000;
 const PI_NATIVE_RUNTIME_VERSION =
-	"pi-native-finalizer-witness-v27-single-lane-mechanical-abstention";
+	"pi-native-finalizer-witness-v28-bounded-cards-reason-budgets";
 
 type RunKind = "AUDIT_ISLAND" | "AUDIT_UNIVERSE";
 type HardCarrierType =
@@ -80,12 +85,14 @@ interface WitnessSourceFocusRejectionReason {
 	unseenTargetBlockIds: number[];
 	outOfGroupTargetBlockIds: number[];
 	wrongStateTargetBlockIds: number[];
+	outOfAuditUniverseTargetBlockIds: number[];
 	unseenSupportingBlockIds: number[];
 }
 
-interface RejectedWitnessLaneTrace {
+interface RejectedWitnessCardTrace {
 	lane: WitnessLaneName;
-	rawLane: Static<typeof WitnessLaneSchema>;
+	cardIndex: number;
+	rawCard: Static<typeof WitnessCardSchema>;
 	reason: WitnessSourceFocusRejectionReason;
 	forwarded: false;
 }
@@ -184,6 +191,7 @@ export interface CanonicalPiNativeDecision {
 
 export interface CanonicalPiNativeWitnessChallenge {
 	cardSlot: "exclude" | "select";
+	cardIndex: number;
 	kind: "owner_boundary" | "atom_membership";
 	direction: "select" | "exclude";
 	ranges: string[];
@@ -214,7 +222,7 @@ export interface PiNativeWitnessResult {
 		providerCalls: number;
 		rawArguments: unknown[];
 		normalizedArguments: unknown[];
-		rejectedLanes: RejectedWitnessLaneTrace[];
+		rejectedCards: RejectedWitnessCardTrace[];
 		usage: RoleUsage;
 		stopReason: string | null;
 		elapsedMs: number;
@@ -256,7 +264,7 @@ export interface RunPiNativeRequirementReviewOptions {
 }
 
 export interface PiNativeRequirementReviewResult {
-	schemaVersion: "xique.word-requirement-review.pi-native-result.v1";
+	schemaVersion: "xique.word-requirement-review.pi-native-result.v2";
 	architecture: "pi_native_finalizer_witness";
 	status: "preserved" | "repaired" | "degraded";
 	resolution: "pi_native_preserved" | "pi_native_applied_repair" | "review_incomplete";
@@ -345,42 +353,45 @@ const RunSelectionSchema = Type.Object(
 	},
 	{ additionalProperties: false },
 );
-const WitnessLaneSchema = Type.Object(
+const WitnessCardSchema = Type.Object(
 	{
-		kind: Type.Union([
-			Type.Literal("none"),
-			Type.Literal("owner_boundary"),
-			Type.Literal("atom_membership"),
-		], {
-			description: "Final lane conclusion. Use none when no source-proven counterexample exists.",
-		}),
+		kind: Type.Union([Type.Literal("owner_boundary"), Type.Literal("atom_membership")]),
 		ranges: Type.Array(RangeSchema, {
+			minItems: 1,
 			maxItems: 1,
-			description: "Always present. Empty only for kind=none; otherwise exactly one range.",
+			description: "Exactly one continuous target range for this independent counterexample.",
 		}),
 		attacked_premise: Type.String({
+			minLength: 1,
 			description:
-				"Always present. One final conclusion sentence only; never analysis, self-questioning, or draft revisions.",
+				"One final conclusion sentence only; never analysis, self-questioning, or draft revisions.",
 		}),
 		supporting_block_ids: Type.Array(Type.Integer({ minimum: 0 }), {
+			minItems: 1,
 			maxItems: 8,
 			description:
-				"Always present. Empty only for kind=none; otherwise copy 1-8 top-level block_id values from focus block objects. Never copy addresses embedded in layout, path, sc, vc, root, or parent metadata.",
+				"Copy 1-8 top-level block_id values from focus block objects. Never copy addresses embedded in layout, path, sc, vc, root, or parent metadata.",
 		}),
 	},
 	{ additionalProperties: false },
 );
 export const PiNativeSemanticWitnessSchema = Type.Object(
 	{
-		exclude: WitnessLaneSchema,
-		select: WitnessLaneSchema,
+		exclude: Type.Array(WitnessCardSchema, { maxItems: MAX_WITNESS_EXCLUDE_CARDS }),
+		select: Type.Array(WitnessCardSchema, { maxItems: MAX_WITNESS_SELECT_CARDS }),
 	},
 	{ additionalProperties: false },
 );
 export const PiNativeFinalSelectionSchema = Type.Object(
 	{
-		owner_reason: Type.String({ minLength: 1 }),
-		residual_reason: Type.String({ minLength: 1 }),
+		owner_reason: Type.String({
+			minLength: 1,
+			maxLength: MAX_FINALIZER_OWNER_REASON_CHARACTERS,
+		}),
+		residual_reason: Type.String({
+			minLength: 1,
+			maxLength: MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS,
+		}),
 		hard_root_claims: Type.Array(HardRootClaimSchema, { maxItems: 64 }),
 		run_selections: Type.Array(RunSelectionSchema, { maxItems: 128 }),
 	},
@@ -587,7 +598,12 @@ export async function runPiNativeRequirementReview(
 				maxWitnessFocusBlocks: MAX_WITNESS_FOCUS_BLOCKS,
 				maxWitnessFocusBlockCharacters: MAX_WITNESS_FOCUS_BLOCK_CHARACTERS,
 				maxWitnessFocusCharacters: MAX_WITNESS_FOCUS_CHARACTERS,
-				maxWitnessChallenges: MAX_WITNESS_CHALLENGES,
+				maxWitnessExcludeCards: MAX_WITNESS_EXCLUDE_CARDS,
+				maxWitnessSelectCards: MAX_WITNESS_SELECT_CARDS,
+				maxCanonicalWitnessChallenges: MAX_CANONICAL_WITNESS_CHALLENGES,
+				maxFinalizerOwnerReasonCharacters: MAX_FINALIZER_OWNER_REASON_CHARACTERS,
+				maxFinalizerResidualReasonCharacters:
+					MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS,
 			},
 		}),
 	);
@@ -636,7 +652,7 @@ export async function runPiNativeRequirementReview(
 				| "failure"
 			>,
 		): PiNativeRequirementReviewResult => ({
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v1",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v2",
 			architecture: "pi_native_finalizer_witness",
 			packetSha256: options.packetSha256,
 			capabilitySha256,
@@ -977,7 +993,7 @@ export async function runPiNativeRequirementReview(
 			options.packet.blocks,
 		);
 		return {
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v1",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v2",
 			architecture: "pi_native_finalizer_witness",
 			status: "degraded",
 			resolution: "review_incomplete",
@@ -1270,28 +1286,14 @@ function validateFinalDecisionConsistency(decision: CanonicalPiNativeDecision): 
 }
 
 function semanticWitnessCrossFieldError(raw: RawSemanticWitness): string | null {
-	for (const [laneName, lane] of [
+	for (const [laneName, cards] of [
 		["exclude", raw.exclude],
 		["select", raw.select],
 	] as const) {
-		if (lane.kind === "none") {
-			if (
-				lane.ranges.length !== 0 ||
-				lane.attacked_premise !== "" ||
-				lane.supporting_block_ids.length !== 0
-			) {
-				return `semantic witness ${laneName} lane with kind=none must have empty ranges, attacked_premise, and supporting_block_ids`;
+		for (const [cardIndex, card] of cards.entries()) {
+			if (card.attacked_premise.trim().length === 0) {
+				return `semantic witness ${laneName}[${cardIndex}] must contain a non-blank attacked_premise`;
 			}
-			continue;
-		}
-		if (lane.ranges.length !== 1) {
-			return `semantic witness ${laneName} lane with kind=${lane.kind} must contain exactly one range`;
-		}
-		if (lane.attacked_premise.trim().length === 0) {
-			return `semantic witness ${laneName} lane with kind=${lane.kind} must contain a non-blank attacked_premise`;
-		}
-		if (lane.supporting_block_ids.length < 1 || lane.supporting_block_ids.length > 8) {
-			return `semantic witness ${laneName} lane with kind=${lane.kind} must contain 1-8 supporting_block_ids`;
 		}
 	}
 	return null;
@@ -1307,47 +1309,49 @@ function validateSemanticWitness(
 	challenges: CanonicalPiNativeWitnessChallenge[];
 	coverage: WitnessCoverage;
 	laneCoverage: { exclude: WitnessLaneCoverage; select: WitnessLaneCoverage };
-	rejectedLanes: RejectedWitnessLaneTrace[];
+	rejectedCards: RejectedWitnessCardTrace[];
 } {
-	const rawLanes: Array<{
+	const rawCards: Array<{
 		lane: WitnessLaneName;
 		direction: WitnessLaneName;
-		rawLane: Static<typeof WitnessLaneSchema>;
+		cardIndex: number;
+		rawCard: Static<typeof WitnessCardSchema>;
 	}> = [
-		{
-			lane: "exclude",
-			direction: "exclude",
-			rawLane: raw.exclude,
-		},
-		{
-			lane: "select",
-			direction: "select",
-			rawLane: raw.select,
-		},
+		...raw.exclude.map((rawCard, cardIndex) => ({
+			lane: "exclude" as const,
+			direction: "exclude" as const,
+			cardIndex,
+			rawCard,
+		})),
+		...raw.select.map((rawCard, cardIndex) => ({
+			lane: "select" as const,
+			direction: "select" as const,
+			cardIndex,
+			rawCard,
+		})),
 	];
-	const expandedLanes = rawLanes.map(({ lane, direction, rawLane }) => {
-		for (const supportingBlockId of rawLane.supporting_block_ids) {
+	const expandedCards = rawCards.map(({ lane, direction, cardIndex, rawCard }) => {
+		for (const supportingBlockId of rawCard.supporting_block_ids) {
 			if (!prepared.availableBlockIds.has(supportingBlockId)) {
 				throw new Error(
-					`semantic witness ${lane}.supporting_block_ids references unavailable block ${supportingBlockId}`,
+					`semantic witness ${lane}[${cardIndex}].supporting_block_ids references unavailable block ${supportingBlockId}`,
 				);
 			}
 		}
 		return {
 			lane,
 			direction,
-			rawLane,
-			targetBlockIds:
-				rawLane.kind === "none"
-					? []
-					: expandRanges(
-							rawLane.ranges,
-							prepared.availableBlockIds,
-							`semantic witness ${lane}.ranges`,
-						),
+			cardIndex,
+			rawCard,
+			targetBlockIds: expandRanges(
+				rawCard.ranges,
+				prepared.availableBlockIds,
+				`semantic witness ${lane}[${cardIndex}].ranges`,
+			),
 		};
 	});
 	const provisionalBlockIds = new Set(provisionalDecision.finalBlockIds);
+	const auditUniverse = new Set(prepared.runs.flatMap((run) => run.blockIds));
 	const groupsByLane: Record<WitnessLaneName, WitnessFocusGroup[]> = {
 		exclude: witnessFocusSource.exclude_scan_selected_islands,
 		select: witnessFocusSource.select_scan_excluded_islands,
@@ -1368,18 +1372,13 @@ function validateSemanticWitness(
 			}
 		}
 	}
-	const laneCoverage: { exclude: WitnessLaneCoverage; select: WitnessLaneCoverage } = {
-		exclude: { status: "valid_none", forwarded: false },
-		select: { status: "valid_none", forwarded: false },
-	};
-	const rejectedLanes: RejectedWitnessLaneTrace[] = [];
-	const authorizedLanes: typeof expandedLanes = [];
-	for (const expandedLane of expandedLanes) {
-		const { lane, rawLane, targetBlockIds } = expandedLane;
-		if (rawLane.kind === "none") continue;
+	const rejectedCards: RejectedWitnessCardTrace[] = [];
+	const authorizedCards: typeof expandedCards = [];
+	for (const expandedCard of expandedCards) {
+		const { lane, cardIndex, rawCard, targetBlockIds } = expandedCard;
 		const unseenSupportingBlockIds = [
 			...new Set(
-				rawLane.supporting_block_ids.filter(
+				rawCard.supporting_block_ids.filter(
 					(supportingBlockId) => !allFocusBlockIds.has(supportingBlockId),
 				),
 			),
@@ -1391,6 +1390,9 @@ function validateSemanticWitness(
 			lane === "exclude"
 				? !provisionalBlockIds.has(blockId)
 				: provisionalBlockIds.has(blockId),
+		);
+		const outOfAuditUniverseTargetBlockIds = targetBlockIds.filter(
+			(blockId) => !auditUniverse.has(blockId),
 		);
 		const laneGroupIndex = groupIndexByLane[lane];
 		const anchorGroupIndex = targetBlockIds
@@ -1406,27 +1408,43 @@ function validateSemanticWitness(
 			unseenTargetBlockIds.length > 0 ||
 			outOfGroupTargetBlockIds.length > 0 ||
 			wrongStateTargetBlockIds.length > 0 ||
+			outOfAuditUniverseTargetBlockIds.length > 0 ||
 			unseenSupportingBlockIds.length > 0
 		) {
-			laneCoverage[lane] = { status: "rejected_source_focus", forwarded: false };
-			rejectedLanes.push({
+			rejectedCards.push({
 				lane,
-				rawLane,
+				cardIndex,
+				rawCard,
 				reason: {
 					code: "source_focus_authorization",
 					unseenTargetBlockIds,
 					outOfGroupTargetBlockIds,
 					wrongStateTargetBlockIds,
+					outOfAuditUniverseTargetBlockIds,
 					unseenSupportingBlockIds,
 				},
 				forwarded: false,
 			});
 			continue;
 		}
-		laneCoverage[lane] = { status: "valid_challenge", forwarded: true };
-		authorizedLanes.push(expandedLane);
+		authorizedCards.push(expandedCard);
 	}
-	const auditUniverse = new Set(prepared.runs.flatMap((run) => run.blockIds));
+	const laneCoverage = Object.fromEntries(
+		(["exclude", "select"] as const).map((lane) => {
+			const submittedCards = lane === "exclude" ? raw.exclude : raw.select;
+			const forwarded = authorizedCards.some((card) => card.lane === lane);
+			const rejected = rejectedCards.some((card) => card.lane === lane);
+			const coverage: WitnessLaneCoverage =
+				submittedCards.length === 0
+					? { status: "valid_none", forwarded: false }
+					: forwarded
+						? { status: "valid_challenge", forwarded: true }
+						: rejected
+							? { status: "rejected_source_focus", forwarded: false }
+							: { status: "valid_none", forwarded: false };
+			return [lane, coverage];
+		}),
+	) as { exclude: WitnessLaneCoverage; select: WitnessLaneCoverage };
 	const provisionalClaimedBlockIds = new Set(
 		provisionalDecision.hardRootClaims.flatMap((claim) =>
 			expandRanges(
@@ -1440,13 +1458,12 @@ function validateSemanticWitness(
 		prepared.packet.blocks.map((block) => [block.blockId, block.text]),
 	);
 	let sourceQuoteCharacters = 0;
-	const challenges = authorizedLanes.flatMap(
-		({ lane, direction, rawLane: challenge, targetBlockIds: blockIds }) => {
-		const addressedBlockIds = blockIds.filter((blockId) => auditUniverse.has(blockId));
-		const claimedAddressedBlockIds = addressedBlockIds.filter((blockId) =>
+	const challenges = authorizedCards.flatMap(
+		({ lane, direction, cardIndex, rawCard: challenge, targetBlockIds: blockIds }) => {
+		const claimedAddressedBlockIds = blockIds.filter((blockId) =>
 			provisionalClaimedBlockIds.has(blockId),
 		);
-		const unclaimedAddressedBlockIds = addressedBlockIds.filter(
+		const unclaimedAddressedBlockIds = blockIds.filter(
 			(blockId) => !provisionalClaimedBlockIds.has(blockId),
 		);
 		const partitions: Array<{
@@ -1512,6 +1529,7 @@ function validateSemanticWitness(
 			return [
 				{
 					cardSlot: lane,
+					cardIndex,
 					kind: challenge.kind,
 					direction,
 					ranges: compactRanges(conflictBlockIds),
@@ -1526,14 +1544,25 @@ function validateSemanticWitness(
 		});
 		},
 	);
+	if (challenges.length > MAX_CANONICAL_WITNESS_CHALLENGES) {
+		throw new Error("semantic witness canonical challenge limit exceeded");
+	}
 	const coverage: WitnessCoverage =
-		rejectedLanes.length === 0 ? "full" : rejectedLanes.length === 1 ? "partial" : "none";
+		laneCoverage.exclude.status === "rejected_source_focus" &&
+		laneCoverage.select.status === "rejected_source_focus"
+			? "none"
+			: rejectedCards.length > 0
+				? "partial"
+				: "full";
+	const authorizedCardCount = new Set(
+		authorizedCards.map((card) => `${card.lane}:${card.cardIndex}`),
+	).size;
 	return {
-		summary: `${challenges.length} bounded counterexample${challenges.length === 1 ? "" : "s"}`,
+		summary: `${authorizedCardCount} bounded counterexample card${authorizedCardCount === 1 ? "" : "s"}; ${challenges.length} canonical partition${challenges.length === 1 ? "" : "s"}`,
 		challenges,
 		coverage,
 		laneCoverage,
-		rejectedLanes,
+		rejectedCards,
 	};
 }
 
@@ -1952,7 +1981,7 @@ REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}`;
 				providerCalls,
 				rawArguments,
 				normalizedArguments,
-				rejectedLanes: decision?.rejectedLanes ?? [],
+				rejectedCards: decision?.rejectedCards ?? [],
 				usage: witnessUsage,
 				stopReason: last?.stopReason ?? null,
 				elapsedMs: Date.now() - startedAt,
@@ -2016,7 +2045,7 @@ REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}`;
 				providerCalls,
 				rawArguments,
 				normalizedArguments,
-				rejectedLanes: decision.rejectedLanes,
+				rejectedCards: decision.rejectedCards,
 				usage: witnessUsage,
 				stopReason: last.stopReason,
 				elapsedMs: Date.now() - startedAt,
@@ -2047,7 +2076,7 @@ REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}`;
 				providerCalls,
 				rawArguments,
 				normalizedArguments,
-				rejectedLanes: [],
+				rejectedCards: [],
 				usage: witnessUsage,
 				stopReason: last?.stopReason ?? null,
 				elapsedMs: Date.now() - startedAt,
@@ -2223,6 +2252,7 @@ function buildReviewPacket(
 						},
 				challenges: witness.challenges.map((challenge) => ({
 					card_slot: challenge.cardSlot,
+					card_index: challenge.cardIndex,
 					kind: challenge.kind,
 					direction: challenge.direction,
 					ranges: challenge.ranges,
@@ -2249,11 +2279,11 @@ function normalizeFinalSelection(value: unknown, terminalBlockId: number | null)
 		...value,
 		owner_reason:
 			typeof value.owner_reason === "string"
-				? value.owner_reason.trim().slice(0, 6_000)
+				? value.owner_reason.trim()
 				: value.owner_reason,
 		residual_reason:
 			typeof value.residual_reason === "string"
-				? value.residual_reason.trim().slice(0, 8_000)
+				? value.residual_reason.trim()
 				: value.residual_reason,
 		hard_root_claims: Array.isArray(value.hard_root_claims)
 			? value.hard_root_claims.map((rawClaim) => {
