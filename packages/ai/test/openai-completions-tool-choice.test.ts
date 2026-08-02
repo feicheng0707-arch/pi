@@ -150,6 +150,45 @@ describe("openai-completions tool_choice", () => {
 		expect(params.tools?.length ?? 0).toBeGreaterThan(0);
 	});
 
+	it("forwards parallelToolCalls to payload", async () => {
+		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
+		const model = { ...baseModel, api: "openai-completions" } as const;
+		const tools: Tool[] = [
+			{
+				name: "ping",
+				description: "Ping tool",
+				parameters: Type.Object({
+					ok: Type.Boolean(),
+				}),
+			},
+		];
+		let payload: unknown;
+
+		await stream(
+			model,
+			{
+				messages: [
+					{
+						role: "user",
+						content: "Call ping with ok=true",
+						timestamp: Date.now(),
+					},
+				],
+				tools,
+			},
+			{
+				apiKey: "test",
+				parallelToolCalls: false,
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			},
+		).result();
+
+		const params = (payload ?? mockState.lastParams) as { parallel_tool_calls?: boolean };
+		expect(params.parallel_tool_calls).toBe(false);
+	});
+
 	it("omits strict when compat disables strict mode", async () => {
 		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
 		const model = {

@@ -130,6 +130,7 @@ function isEncryptedReasoningDetail(detail: unknown): detail is OpenAIEncryptedR
 
 export interface OpenAICompletionsOptions extends StreamOptions {
 	toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
+	parallelToolCalls?: boolean;
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 }
 
@@ -634,6 +635,9 @@ function buildParams(
 
 	if (options?.toolChoice) {
 		params.tool_choice = options.toolChoice;
+	}
+	if (options?.parallelToolCalls !== undefined) {
+		params.parallel_tool_calls = options.parallelToolCalls;
 	}
 
 	if (compat.thinkingFormat === "zai" && model.reasoning) {
