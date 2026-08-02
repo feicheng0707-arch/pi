@@ -24,6 +24,8 @@
 
 完整扫描 `exclude_scan_selected_islands` 后按以下顺序生成和淘汰候选：
 
+categorical Owner pre-pass 优先于下面所有 atom 排序。先检查每个 selected island 及其可见前界是否出现实际开始公告/须知/投标响应格式/合同条款及格式的局部 hard-root heading。只要 source 已建立该 root，而 provisional 仍选择其 descendant，最强反例必须是 `owner_boundary`：target 只取同一 focus group 内最早的 selected descendant，root block 仅放入 `supporting_block_ids` 作为边界证据；不得因 root 自身当前 excluded 而把 root 放进 exclude target，也不得改去攻击别处较小的 consequence、meta 或 wrapper atom。只有不存在这种 categorical 冲突时，才按下列顺序比较 atom challenge。
+
 1. 对每个 selected heading 首先按其自身 communicative function 与 stripped remainder 独立裁决；descendants 的内容价值不能替 heading 改写功能或提供 membership。若 heading 的实际功能只是文档、清单、报价、计价文件或响应材料的 authoring / compilation / filling / submission / instruction wrapper，即使同一 group 下层可见 block 存在合格项目事实、范围、清单项或 body，该 wrapper 仍是 exclude 候选；只攻击该最小可见同-group wrapper block，不得把下层自身合格的主题 heading/body/table 一并纳入 range。真实命名同一合格采购主题的 heading 仍按 heading/body closure 保护。
 2. 对每个 selected block 自身做 surviving-predicate test。剥离价格、付款、证明、承诺、责任、费用、扣款、赔偿和其他后果包装后，只要仍有当前项目对象、范围、数量、施工/服务动作、资源人员、技术基线、质量安全、交付验收或可核验结果，该 block 就不允许进入 exclude lane。
 3. 单 block、肯定、剥离后没有任何 surviving operative predicate 的 pure-consequence hole，优先于依赖跨 block Owner 推断的争议性挑战。若主谓词只有承担责任、费用、损失、扣款、赔偿或处罚，触发条件只泛称质量问题、工期延误、交付损失或第三方影响，且没有履行、修理、更换、纠正、恢复、交付或达标谓词，这是最强 atom-membership 反例。
@@ -42,6 +44,7 @@
 - 被价格、付款、费用或法律 children 夹住的 exact sibling，只要自身剥离包装后仍有直接施工、服务、资源配置、交付或结果义务，可以成为 select 反例。
 - 目标若仍位于已由 source 建立的公告/须知/响应格式/合同 hard root 到 first semantic peer exit 之间，内部技术内容不能穿透 Owner gate。只有目标之前出现真实同级或更高层级、功能不同的 peer，才可用 `owner_boundary` 挑战过宽 claim。
 - 规范性句做“执行关系 / 查找关系”二分：正文要求材料、施工、服务、质量、安全或验收遵守/符合/达到现行规范，是执行基线；只说另见/详见/参见未提供材料且没有当前义务，才是裸 pointer。
+- consequence 条件也要做极性归一。若目标自身用处罚、扣款或责任的触发条件明确规定可控制、可核验的行为禁止、保护配置、作业程序、检查整改或现场结果，该条件已经声明 operative baseline，不得只因主句是后果而放弃 select；仅泛称违约、事故、质量问题、延误或损失且没有具体可执行条件时，才是 pure consequence。
 
 若目标自身没有肯定 duty/result，且不是合格 heading，`select` 必须为完整 `none`。地址 gap、粗体、标题样式、少一层标题或“统领后续 selected 内容”都不能单独恢复。
 
@@ -50,6 +53,16 @@
 四类 categorical hard carrier 是：公告及公告性摘要；投标人/供应商/响应人须知与通用参与程序；投标/响应/报价格式模板；合同条款及格式、合同协议和合同附件范本。真实 root 成立后，其 descendants 一直排除到第一个 source-proven 同级或更高层级、功能不同的 peer exit。内部低层 subsection 即使含进场、人员、质量、交付等 post-award 文字，也不是内容例外或 peer exit。
 
 Root/exit 必须按完整 source 的实际 communicative function 判断。Word outline、style、编号、分页、EOF 和 Candidate 边界只是线索。明确的新章、合同签署后的不同功能模块、独立清单/技术规范/需求章/评审模块可以成为 peer exit；附件编号重启和技术密度增加本身不够。来自已独立成立的需求 source 的明确 pointer，加上 later 固定、已填充、非投标人填写且对象/功能对应的 module，可以证明 later peer fracture；来自 hard carrier 内部的 pointer 不能救回附件。pointer 可作为边界证据，但若自身只剩“另附/详见”，仍不获得 membership。
+
+若 provisional 把 announcement claim 延伸到多个功能异质的章节或 EOF，`select` 必须先做 `whole_container_disconfirmation`，而不是用“目标内容很有技术价值”去请求 hard-carrier 内容例外。采购文件、谈判邀请书、询价邀请书、投标邀请书等物理标题可能只是多载体容器，不是第五类 hard carrier；完整 source 中并列的资格、响应格式、评审、合同、采购范围、执行期质量安全、技术规范、图纸、清单或技术附件，可以证明实际功能已发生 peer fracture。若 focus 中存在第一个这样的边界，优先提交 `kind=owner_boundary`，target 取该边界后的最小可见 excluded requirement block，并用 supporting blocks 同时指向物理标题/原 root 与实际 peer。反之，一个连续同质的真实公告区域内部即使项目摘要很具体，也不得仅凭内容价值挑战 Owner。
+
+不得把 source 明示的响应文件编制、合同条款及格式、详细评审办法和独立项目执行/技术模块统一概括为“都在通知投标人”；这些并列模块本身就是不同功能。`投标人须`、`供应商应` 也不是 announcement 证据。完整采购书结构存在时，若 provisional 仍用邀请封面覆盖全部编号章节，最强 `select` 反例应攻击 Owner boundary，不应提交会被 categorical gate 拒绝的“内容很有用” atom challenge。
+
+对 `exclude`，先检查 selected target 前是否存在可见的局部 hard-root heading。mixed parent 即使整体属于采购需求，child heading 若实际开始合同条款及格式、投标/响应格式、须知或公告，就建立新的局部 hard root；其后的服务期、地点、质量、验收等技术后代不能作为内容例外。若 provisional 选中了该 root 后代，优先以 `kind=owner_boundary` 攻击最早可见 selected descendant，并用 supporting blocks 指向 local root 与 target。
+
+对 `select`，跨引用 Owner recovery 优先于裸 pointer membership。若更早的独立合格需求 block 明确引用某清单、图纸、制度或技术附件，而 later excluded module 固定已填充、非投标人填写且对象/功能对应，应以 `kind=owner_boundary` 攻击 later module 的过宽 hard claim；supporting blocks 同时引用 earlier pointer 与 later module。earlier pointer 自身可以继续 excluded，不能因此忽略它对 later peer fracture 的边界证据。来自 hard carrier 内部的 pointer 则不得救回附件。
+
+跨引用 module 很长、没有在一个 focus group 中完整展示时，绝不能把未展示的整段地址写进 range。target 应取同一连续 group 内最早、最小且完整可见的 module boundary/执行性 intro 或 exact operative rule；supporting blocks 可同时引用可见的 earlier pointer 与 later boundary。该小 target 只负责证明 provisional 的 Owner premise 可被反驳，不代表请求 Finalizer 只恢复这一小段；Finalizer 会在完整 source 与整个 run 内重新裁决 module closure。若开头 group 已显示固定制度 heading 与“应遵守/严格执行”intro，优先攻击该最小开头 range，不要跨到另一个尾部 group。
 
 ## Focus 使用顺序
 

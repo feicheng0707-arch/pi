@@ -19,7 +19,17 @@
 
 真实 root 一旦成立，其 descendants 到首个 source-proven 同级或更高层级、功能不同的 peer exit 之前全部排除。内部低层 subsection 即使写有进场、人员、质量、交付或其他 post-award 措辞，也不能成为内容例外或内部 peer exit；Stage Owner、stripped-remainder、direct-duty 与 atom membership 只能在 Owner gate 已关闭且位于四类 carrier span 之外时运行。内部项目范围、数量、工期、地点、质量、人员、技术表或履约义务不能因有用而穿透 Owner gate。多载体物理文件只否定“整文同一 Owner”，不能取消局部 hard root。
 
+在把公告或邀请 root 外推到整个物理文件前，必须先做 `whole_container_disconfirmation`。采购文件、谈判邀请书、询价邀请书、投标邀请书或类似封面文种可能只是并列承载邀请前言、资格、响应格式、评审、合同、采购需求、技术规范、图纸和清单的多载体容器；物理文件或“邀请书正文”不是第五类 hard carrier。若完整 source 出现多个边界独立、功能异质的 peer module，公告 Owner 只能覆盖真实连续的通知区域，并在第一个不同功能 peer 前结束；不能因为所有章节服务同一次采购、编号连续、结尾仍有递交或联系方式，就把全部章节并成公告。反之，真实公告/通知 root 若在一个连续同质区域内组织项目摘要、参与资格、文件获取、递交、发布媒介和联系方式，内部项目概况或技术摘要仍是公告 descendant；不得只凭局部内容价值把真实公告切开。
+
+“功能异质”必须按 source 明示模块判断，不得被统一改写成“都在通知投标人”。同级或等价功能边界分别建立的投标/响应文件编制、合同条款及格式、详细评审办法，与独立项目范围、执行期质量安全或技术附件，本身就是不同 Owner 的肯定证据；一个真实同质公告区域可以含简要项目摘要、参与资格、获取、递交、媒介和联系方式，但不能吞并一整套响应文件目录、合同范本、详细评分章和项目执行章。`投标人须`、`供应商应` 等受众措辞也不是公告证据，采购需求本来就常直接约束未来供应商。完整采购书结构成立后，邀请前言后的第一个顶层不同功能模块必须重新开启 Owner 判断。
+
+announcement positive gate 与 hard-carrier non-nesting invariant：物理封面、整包文种标题或邀请前言本身不能证明覆盖整份采购包的公告 root。公告 root 必须由一个边界连续、主要功能为告知或召集参与的通知区域肯定成立，并在第一个顶层不同功能 module 前结束；不要求该 peer 另写“采购需求”或先成为 selected。若 source 已把后续响应文件编制、合同条款及格式、评审办法、须知或其他 categorical carrier 识别为边界独立的 root，则它们必然是前一公告 Owner 的 peer exit，不能又被描述为公告内部 descendants。两个边界独立的 hard roots 不允许相互嵌套；同一编号体系、共同服务一次采购、统一装订或没有单独结束语都不能改变。邀请前言之后直接出现的顶层项目范围、执行期质量安全、技术规范、图纸或清单 module，也按自身 communicative function 重新判断，不因位于整包标题之下而自动继承公告 Owner。真实连续公告区域中的简要项目摘要仍保持排除。
+
+mixed parent 不会保护其内部 hard root。即使父章同时命名“技术、服务、合同内容条款及其他商务要求”，child heading 一旦实际开始公告/通知、须知、投标/响应格式或合同条款及格式，就从该 child 建立局部 hard root，直到同级不同功能 child/peer；不能因父章整体属于采购需求而保留该局部 root 的服务期、地点、质量、验收等 descendants。
+
 Root 与 exit 由模型根据完整 source 的实际 communicative function 判断。Word outline、style、编号、粗体、分页、Candidate 边界、地址连续、关键词和 EOF 只是证据，不是 Owner 真值。显式新章、合同签署后的不同功能模块、独立清单/技术规范/采购需求/评分模块，即使 layout 未匹配，也可能是 peer exit；内部附件编号重启和技术密度增加不是 exit。
+
+在把 later Candidate island 继承为响应格式、合同或其他 hard carrier descendant 前，必须先做 `cross_reference_recovery_sweep`：从完整 source 寻找更早、已独立成立的合格需求 source 是否明确引用该清单、图纸、制度或技术附件；later module 是否固定已填充、不是投标人填写模板；对象与功能是否实际对应。三项都成立时，later module 自身就是 boundary-independent functional peer，hard root 必须在其起点前结束，即使附件编号、物理位置或 Word outline 仍继承前一 carrier。earlier pointer 自身若只剩“详见附件”仍可排除，但其边界证据资格不能因此丢失。来自 hard carrier 内部的 pointer 仍不能救回附件。
 
 ## 载体外原子判断
 
@@ -46,6 +56,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 - selected boundary-gap attack：对同一 run 内 selected island 前最多两个 excluded block，以及两个 selected islands 之间最多两个 excluded block，必须判断它是真实 hole 还是遗漏的 heading/body/table closure。地址位置不能自动带回；真实统领 selected body 的合格 heading 必须进入 selection，meta、价格、程序、资格、法律、hard-carrier wrapper 和裸 pointer 仍保持 excluded。
 - removable-tail 对每个 selected island 的末 block 独立执行；前文已自足时，纯报价/填报包装、外部指针、空壳或 meta tail 必须留在范围外。
 - consequence、legal-event、payment、settlement 和 remedy cluster 必须对其中每个可独立寻址的 canonical sibling 分别寻找剥离后仍存活的实施、资源、质量、安全、交付、恢复、应急或结果义务；不得用组标题或连续编号把整组概括为“质量责任”或“工期与质量”后批量保留。该 sweep 覆盖 selected island 的内部 block，不只是首 block、末 block 或 singleton。仅在因果或损害触发条件中出现“工期延误、质量问题、交付损失、第三方影响”等泛化结果名词，不等于存在 result duty：删除违约/事故事件、责任承担、费用、扣款、赔偿和损失分配后，若只剩该泛化标签且无独立履行、修理、更换、纠正、恢复、交付或达标谓词，必须排除。反之，否定式条件若自身已经明确一个供应商可控制且可独立核验的交付状态、完整性、阈值、合规标准或验收基线，例如“资料不完整”“未达到明确标准/指标”，应做极性归一并把它识别为“资料应完整”“结果应达到该标准/指标”的 surviving result duty；附带不计价、扣款、责任或费用后果不能抹掉该同 block 基线。
+- condition-encoded conduct baseline 采用同一极性归一：若处罚、扣款或责任条款的触发条件自身明确规定供应商可控制、可核验的行为禁止、保护配置、作业程序、检查整改或现场结果，则该条件已经声明“不得发生该行为”或“必须满足该配置/程序/结果”的 operative baseline；后果谓词不能抹掉它。只有触发条件仅泛称违约、事故、质量问题、延误或损失，未写出可执行行为、配置、程序、阈值或状态时，才是 pure consequence。不得因为一个固定制度的大多数条目都附处罚，就把整份制度概括为纯救济；仍须按 canonical block 识别其中的明确基线，并保持合格 heading/body closure。
 - current-project declarative sentence 若仍明确采购/建设/实施对象、工作包、包段数量、地点、期限、质量或技术事实，具有正向 membership；纯标题、封面标识和名称标签才是 identity shell。
 
 ## 整文终态身份
