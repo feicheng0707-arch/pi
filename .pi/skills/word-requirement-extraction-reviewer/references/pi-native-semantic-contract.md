@@ -25,11 +25,11 @@
 
 announcement positive gate 与 hard-carrier non-nesting invariant：物理封面、整包文种标题或邀请前言本身不能证明覆盖整份采购包的公告 root。公告 root 必须由一个边界连续、主要功能为告知或召集参与的通知区域肯定成立，并在第一个顶层不同功能 module 前结束；不要求该 peer 另写“采购需求”或先成为 selected。若 source 已把后续响应文件编制、合同条款及格式、评审办法、须知或其他 categorical carrier 识别为边界独立的 root，则它们必然是前一公告 Owner 的 peer exit，不能又被描述为公告内部 descendants。两个边界独立的 hard roots 不允许相互嵌套；同一编号体系、共同服务一次采购、统一装订或没有单独结束语都不能改变。邀请前言之后直接出现的顶层项目范围、执行期质量安全、技术规范、图纸或清单 module，也按自身 communicative function 重新判断，不因位于整包标题之下而自动继承公告 Owner。真实连续公告区域中的简要项目摘要仍保持排除。
 
-mixed parent 不会保护其内部 hard root。即使父章同时命名“技术、服务、合同内容条款及其他商务要求”，child heading 一旦实际开始公告/通知、须知、投标/响应格式或合同条款及格式，就从该 child 建立局部 hard root，直到同级不同功能 child/peer；不能因父章整体属于采购需求而保留该局部 root 的服务期、地点、质量、验收等 descendants。
+mixed parent 不会保护其内部 hard root。即使父章同时命名“技术、服务、合同内容条款及其他商务要求”，child heading 一旦实际开始公告/通知、须知、投标/响应格式或合同条款及格式，就从该 child 建立局部 hard root，直到同级不同功能 child/peer；不能因父章整体属于采购需求而保留该局部 root 的服务期、地点、质量、验收等 descendants。判断 mixed container 与 local root 时看标题的主功能：并列命名技术、服务、合同等多个同级域的聚合章可以只是 container；但以合同主要条款、合同内容条款、合同协议或其他 hard-carrier 功能为主标题、仅附加“其他要求/其他事项/商务要求”等兜底后缀的较窄 child，仍建立该 categorical root，兜底后缀不能把其 descendants 改写成独立需求。
 
 Root 与 exit 由模型根据完整 source 的实际 communicative function 判断。Word outline、style、编号、粗体、分页、Candidate 边界、地址连续、关键词和 EOF 只是证据，不是 Owner 真值。显式新章、合同签署后的不同功能模块、独立清单/技术规范/采购需求/评分模块，即使 layout 未匹配，也可能是 peer exit；内部附件编号重启和技术密度增加不是 exit。
 
-在把 later Candidate island 继承为响应格式、合同或其他 hard carrier descendant 前，必须先做 `cross_reference_recovery_sweep`：从完整 source 寻找更早、已独立成立的合格需求 source 是否明确引用该清单、图纸、制度或技术附件；later module 是否固定已填充、不是投标人填写模板；对象与功能是否实际对应。三项都成立时，later module 自身就是 boundary-independent functional peer，hard root 必须在其起点前结束，即使附件编号、物理位置或 Word outline 仍继承前一 carrier。earlier pointer 自身若只剩“详见附件”仍可排除，但其边界证据资格不能因此丢失。来自 hard carrier 内部的 pointer 仍不能救回附件。
+在把 later Candidate island 继承为响应格式、合同或其他 hard carrier descendant 前，必须先做 `cross_reference_recovery_sweep`：从完整 source 寻找更早、已独立成立的合格需求 source 是否明确引用该清单、图纸、制度或技术附件；later module 是否固定已填充、不是投标人填写模板；对象与功能是否实际对应。三项都成立时，later module 自身就是 boundary-independent functional peer，hard root 必须在其起点前结束，即使附件编号、物理位置或 Word outline 仍继承前一 carrier。对象/功能对应不要求 later module 重复项目名称、数字参数或 earlier 需求全文；earlier source 明确点名该附件/制度，later heading 与名称吻合且 intro 把固定内容约束到本项目现场、供应商或实施活动，已可形成肯定对应。earlier pointer 自身若只剩“详见附件”仍可排除，但其边界证据资格不能因此丢失。来自 hard carrier 内部的 pointer 仍不能救回附件。
 
 ## 载体外原子判断
 
@@ -41,22 +41,26 @@ Root 与 exit 由模型根据完整 source 的实际 communicative function 判�
 
 一个 canonical table block 内的 row、cell 或文本片段不是独立输出地址。Owner gate 已关闭且该 block 位于四类 carrier 外时，只要同一 table block 任一 row/片段仍有合格对象、参数、人员、工期、质量、服务或结果事实，付款、价格、合同指针或其他 excluded row 不能授权删除整个 block；只有剥离全部非目标包装后整块 surviving remainder 为零，才可排除该 block。模型可以在内部逐 row 理解语义，但不能输出 row-level patch、把 row-level exclusion rationale 投影为整块删除，或生成逐 row ledger。该规则不允许 hard-carrier descendant 穿透 Owner gate。
 
-Heading/body closure 是 relational membership。每个准备 selected 的 heading 必须先按自身 communicative function 和 stripped remainder 独立判断其是否具备合格主题关系资格；descendants 的内容价值不能替 heading 改写功能或提供 membership。真实合格主题 heading 即使自身只剩主题标签，也可随其实际统领的合格 body/table 保留，连续父主题 heading→子主题 heading→合格正文可共同闭合。若 heading 的实际功能只是命名对某份文档、清单、报价、计价文件或响应材料进行编制、填写、提交或说明的 authoring wrapper，即使下层存在合格项目事实、范围、清单项或 body，该 wrapper 仍排除；只保留下层自身通过 Owner 与 atom gate 的合格主题 heading/body/table。其他被排除 child 也不能反向救回价格、程序、资格、法律或 hard-carrier wrapper。必须判断 heading 后续、peer-bounded descendants 是否存在 selected body/table；只要存在且 heading 直接命名同一合格主题，就必须闭合 heading，正文脱离标题后仍可读不是删除理由。不存在合格 descendants 时，heading 只有在自身 stripped remainder 仍明确工期、范围、数量、参数、动作或结果义务时才按独立 atom 保留；否则纯主题标签排除。Heading scope 不能向前依附于上一组 selected sibling。普通 body、元说明、过渡句和 pointer 永远不能伪装成 heading。
+Heading/body closure 是 relational membership。每个准备 selected 的 heading 必须先按自身 communicative function 和 stripped remainder 独立判断其是否具备合格主题关系资格；descendants 的内容价值不能替 heading 改写功能或提供 membership。真实合格主题 heading 即使自身只剩主题标签，也可随其实际统领的合格 body/table 保留，连续父主题 heading→子主题 heading→合格正文可共同闭合。若 heading 的实际功能只是命名对某份文档、清单、报价、计价文件或响应材料进行编制、填写、提交或说明的 authoring wrapper，即使下层存在合格项目事实、范围、清单项或 body，该 wrapper 仍排除；只保留下层自身通过 Owner 与 atom gate 的合格主题 heading/body/table。其他被排除 child 也不能反向救回价格、程序、资格、法律或 hard-carrier wrapper。必须判断 heading 后续、peer-bounded descendants 是否存在 selected body/table；只要存在且 heading 直接命名同一合格主题，就必须闭合 heading，正文脱离标题后仍可读不是删除理由。peer-bounded 明确止于下一个同级或更高层级、功能不同的 heading；一个空主题 heading 不能跨过后续资金、资格、付款或其他 peer heading 去绑定更远的合格 sibling。不存在合格 descendants 时，heading 只有在自身 stripped remainder 仍明确工期、范围、数量、参数、动作或结果义务时才按独立 atom 保留；否则纯主题标签排除。Heading scope 不能向前依附于上一组 selected sibling。普通 body、元说明、过渡句和 pointer 永远不能伪装成 heading。
 
-必须用“执行关系 / 查找关系”二分测试区分规范性纳入与裸外部指针。四类 carrier 外、边界独立的技术标准/规范章节中，只要正文自身用“按、按照、依照、遵守、符合、达到”等关系断言材料、设备、施工、服务、质量、安全、环保或验收应执行现行规范、标准或要求，就已经声明可执行基线；独立章节 heading 和完整 source 可以为该正文补足省略的当前项目主语，不要求同一 block 重复项目名称。篇幅短、措辞通用、没有数字参数、没有列出具体标准编号、未复制外部标准全文或主语由 heading 补足，都不能把这种执行关系降格为 pointer。只有正文没有任何遵守/符合/执行关系，只告诉读者去“另见、详见、参见、另附”未提供材料，才是查找关系和裸外部指针。未知具体标准内容不等于没有执行关系。
+必须用“执行关系 / 查找关系”二分测试区分规范性纳入与裸外部指针。四类 carrier 外，只要 block 自身要求供应商按、按照、依照、遵守、符合、达到或执行某项制度、标准、规范、图纸或附件，就已声明当前项目的 operative baseline；同一 block 后续“详见/参见/另附”只定位被纳入内容，不能抹掉前面的执行关系。边界独立的技术章节 heading 和完整 source 可以补足省略的当前项目主语，不要求重复项目名称、数字参数、标准编号或外部全文。只有 block 没有任何遵守/符合/执行关系，只告诉读者去查找未提供材料时，才是 bare pointer。
+
+只说明已引用政策/标准过期时采用最新版本、纠正引用或维持采购文件/采购活动有效性的版本治理注释，不等于要求供应商、材料、施工、服务或成果执行该标准；没有实际“遵守/符合/达到/按其实施”关系时，它是 document-governance meta，应排除。
 
 ## 强制反例攻击
 
 - mixed scope/form heading 下每个 sibling 独立判断；采购范围 child 可以保留，独立采购/评审方式 child 仍排除。
 - pricing-basis 与 price-wrapper 必须逐 child 剥离。技术名词若只用于计算、编制、填写、比较、校验或分配价格，不形成成交后义务。
 - 多 block 的报价、计价、结算或费用 subsection 不是 categorical carrier。禁止先把整个范围概括为 pricing 再只恢复代表性例外；必须逐 canonical sibling 寻找被价格 children 夹住的直接施工、服务、临时设施、现场资源取得或自理、人员设备配置、交付和结果义务，并把所有 survivor islands 纳入 selection。
-- pre-award stage Owner gate 只在四类 carrier 外运行，且必须在任何 stripped-remainder 之前建立；它不能把已成立 hard carrier 内部的低层 subsection 重新解释成独立 Owner。边界完整的资格、强制响应、人员准入或最低配置 subsection/table 若通过岗位、证书、人数、承诺、证明、进场信息或无效响应后果共同定义成交前准入/响应比较，其 root、表头和全部 children 整体属于 pre-award Owner；不能剥掉 subsection Owner 后把未来岗位、人数、进场或配置 child 挖成履约岛。只有 source 先证明该模块位于四类 carrier 之外、且主要治理成交后实际投入，资格/证明只是可安全分离的局部注释时，才进入履约 atom 判断。
+- pre-award stage Owner gate 只在四类 carrier 外运行，且必须在任何 stripped-remainder 之前建立；它不能把已成立 hard carrier 内部的低层 subsection 重新解释成独立 Owner。顶层或边界完整、主功能明确为投标人/供应商应具备资格、资格审查、强制响应、人员准入或最低配置的 module，从该 root 延续到下一个同级或更高层级、功能不同的 peer；其内部人员组织、业绩、信用、质保、承诺或其他低层 subsection 都不是 exit。若该 module 通过岗位、证书、人数、承诺、证明、进场信息或无效响应后果共同定义成交前准入/响应比较，其 root、表头和全部 children 整体属于 pre-award Owner；不能剥掉 Owner 后把未来岗位、人数、进场、人员稳定、质保或其他看似 post-award 的 child 挖成履约岛。只有 source 先证明目标位于该 module 的真实 peer exit 之后，或一个边界独立 module 主要治理成交后实际投入且资格/证明只是局部注释时，才进入履约 atom 判断。
 - document-authoring meta 剥离后没有当前项目事实时排除；它位于真实需求章或标题与正文之间也不能被 closure 带回。
 - bare pointer 可以证明 later module 的 Owner 或边界，但 pointer 自身的 membership 必须重新做 stripped-remainder；只剩“另附/详见”时排除。
 - selected boundary-gap attack：对同一 run 内 selected island 前最多两个 excluded block，以及两个 selected islands 之间最多两个 excluded block，必须判断它是真实 hole 还是遗漏的 heading/body/table closure。地址位置不能自动带回；真实统领 selected body 的合格 heading 必须进入 selection，meta、价格、程序、资格、法律、hard-carrier wrapper 和裸 pointer 仍保持 excluded。
 - removable-tail 对每个 selected island 的末 block 独立执行；前文已自足时，纯报价/填报包装、外部指针、空壳或 meta tail 必须留在范围外。
 - consequence、legal-event、payment、settlement 和 remedy cluster 必须对其中每个可独立寻址的 canonical sibling 分别寻找剥离后仍存活的实施、资源、质量、安全、交付、恢复、应急或结果义务；不得用组标题或连续编号把整组概括为“质量责任”或“工期与质量”后批量保留。该 sweep 覆盖 selected island 的内部 block，不只是首 block、末 block 或 singleton。仅在因果或损害触发条件中出现“工期延误、质量问题、交付损失、第三方影响”等泛化结果名词，不等于存在 result duty：删除违约/事故事件、责任承担、费用、扣款、赔偿和损失分配后，若只剩该泛化标签且无独立履行、修理、更换、纠正、恢复、交付或达标谓词，必须排除。反之，否定式条件若自身已经明确一个供应商可控制且可独立核验的交付状态、完整性、阈值、合规标准或验收基线，例如“资料不完整”“未达到明确标准/指标”，应做极性归一并把它识别为“资料应完整”“结果应达到该标准/指标”的 surviving result duty；附带不计价、扣款、责任或费用后果不能抹掉该同 block 基线。
-- condition-encoded conduct baseline 采用同一极性归一：若处罚、扣款或责任条款的触发条件自身明确规定供应商可控制、可核验的行为禁止、保护配置、作业程序、检查整改或现场结果，则该条件已经声明“不得发生该行为”或“必须满足该配置/程序/结果”的 operative baseline；后果谓词不能抹掉它。只有触发条件仅泛称违约、事故、质量问题、延误或损失，未写出可执行行为、配置、程序、阈值或状态时，才是 pure consequence。不得因为一个固定制度的大多数条目都附处罚，就把整份制度概括为纯救济；仍须按 canonical block 识别其中的明确基线，并保持合格 heading/body closure。
+- condition-encoded conduct baseline 必须执行 `remove_consequence_then_normalize_condition`：逐 canonical block 只删除罚款、扣款、赔偿、责任承担等后果，保留并归一触发条件。归一后若仍有供应商可控制、可核验的具体行为禁止、保护配置、作业程序、记录、期限、检查整改或现场结果，就是 surviving operative baseline，不要求另有独立祈使主句；只有仅余违约、事故、质量问题、延误或损失等泛化事件标签时才是 pure consequence。“主句是处罚”或“各条都以处罚结尾”不能建立 module-level zero remainder；一个具体 survivor 即推翻整章全空前提，必须重扫全部 siblings、保留所有 survivors 与真实 heading/body closure，并继续排除可分离的纯后果或 meta blocks。内部完成该重扫，不输出 ledger。
+- explicit threshold invariant：触发条件中明确的数值误差、时限、完整率、合格状态或其他可测边界，不是“质量问题/违约”等泛化事件标签。即使只写“超过/低于/未达到 X 时扣款或担责”，也必须归一为“结果不得超过/低于 X”或“必须达到 X”的 surviving baseline；不能因没有单独祈使句而排除。
+- open-ended enforcement meta：只说明制度并不穷尽、未列情形可参照处罚尺度、由管理方酌情处罚或解释的兜底句，治理的是处罚权限与适用范围；若自身没有具体行为禁止、配置、程序、阈值或结果基线，必须排除，不能因位于有效制度末尾被 closure 带回。
 - current-project declarative sentence 若仍明确采购/建设/实施对象、工作包、包段数量、地点、期限、质量或技术事实，具有正向 membership；纯标题、封面标识和名称标签才是 identity shell。
 
 ## 整文终态身份
@@ -77,7 +81,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 `hard_root_claims` 是 Finalizer 自己提交的 Owner 断言，不是第二套答案。最终 selected 地址不得仍落在任何 final claim 投影内。Finalizer 不得为了保留 descendant，把已经 source-proven 的 hard-root exit 收窄到 root 内部低层 subsection；若 selected 地址位于已承认的 root→first peer exit span，必须取消 selection，除非 source 证明该地址之前已出现真实同级或更高层级、功能不同的 peer，此时才可据此纠正 exit 或撤回错误 claim。Witness 不产生 override，Harness 不做语义选择。
 
-最终 ranges 只由每个 `RUN_REGISTRY` 的正向 `final_selected_ranges` 机械并集得到。压缩前必须从 selected 集合减去 reason 已确认的所有 hole；宽 range 不得跨过程序、价格、证明、法律、hard carrier、meta、pointer、shell 或其他已判非 requirement child。
+最终 ranges 只由每个 `RUN_REGISTRY` 的正向 `final_selected_ranges` 机械并集得到。先冻结 selected block-ID 集合，逐 ID 减去 reason 已确认的所有 hole，并阻止独立程序、价格、付款、证明、法律、hard carrier、meta、pointer、shell 或其他 wrapper heading 借用相邻 survivor；最后才压缩。提交前必须重新展开 compact ranges，确认没有把任何已确认 hole 带回。
 
 ## 通用性与禁止作弊
 
