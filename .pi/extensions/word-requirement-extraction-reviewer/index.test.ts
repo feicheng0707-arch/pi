@@ -131,12 +131,16 @@ function scriptedStream(responses: AssistantMessage[], expectedModel = model): {
 	streamFunction: StreamFn;
 	callCount: () => number;
 	userPrompts: string[];
+	systemPrompts: string[];
 	toolParameterKeys: string[][];
+	toolParameterDescriptions: Array<Record<string, string | undefined>>;
 	thinkingLevels: Array<string | undefined>;
 } {
 	let calls = 0;
 	const userPrompts: string[] = [];
+	const systemPrompts: string[] = [];
 	const toolParameterKeys: string[][] = [];
+	const toolParameterDescriptions: Array<Record<string, string | undefined>> = [];
 	const thinkingLevels: Array<string | undefined> = [];
 	return {
 		streamFunction(selectedModel, context, options) {
@@ -145,10 +149,17 @@ function scriptedStream(responses: AssistantMessage[], expectedModel = model): {
 			if (!response) throw new Error(`unexpected provider call ${calls + 1}`);
 			const toolNames = context.tools?.map((candidate) => candidate.name) ?? [];
 			const parameters = context.tools?.[0]?.parameters as {
-				properties?: Record<string, unknown>;
+				properties?: Record<string, { description?: string }>;
 			} | undefined;
-			toolParameterKeys.push(Object.keys(parameters?.properties ?? {}));
+			const properties = parameters?.properties ?? {};
+			toolParameterKeys.push(Object.keys(properties));
+			toolParameterDescriptions.push(
+				Object.fromEntries(
+					Object.entries(properties).map(([key, property]) => [key, property.description]),
+				),
+			);
 			thinkingLevels.push(options?.reasoning);
+			systemPrompts.push(context.systemPrompt);
 			for (const content of response.content) {
 				if (content.type === "toolCall") expect(toolNames).toContain(content.name);
 			}
@@ -181,7 +192,9 @@ function scriptedStream(responses: AssistantMessage[], expectedModel = model): {
 		},
 		callCount: () => calls,
 		userPrompts,
+		systemPrompts,
 		toolParameterKeys,
+		toolParameterDescriptions,
 		thinkingLevels,
 	};
 }
@@ -190,7 +203,7 @@ function roleRuntime(streamFunction: StreamFn, runtimeModel = model) {
 	return { model: runtimeModel, streamFunction, apiKey: "test-key" };
 }
 
-test("uses medium Reviewer thinking and low Release thinking", async () => {
+test("uses medium Reviewer thinking and disables Release reasoning", async () => {
 	const reasoningModel: Model<"openai-completions"> = {
 		...model,
 		id: "reasoning-faux",
@@ -234,16 +247,35 @@ test("uses medium Reviewer thinking and low Release thinking", async () => {
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(scripted.thinkingLevels).toEqual(["medium", "low"]);
+	expect(scripted.thinkingLevels).toEqual(["medium", "off"]);
 	expect(scripted.userPrompts[0]).toMatch(
 		/# Terminal task card[\s\S]*6\. TERMINAL_ACTION: Call submit_requirement_residual_review exactly once[\s\S]*end immediately after the call\.$/u,
 	);
+	expect(scripted.userPrompts[0]).toContain("concise_root_grouping");
+	expect(scripted.userPrompts[0]).toContain(
+		"Consecutively numbered contract attachments remain in that root",
+	);
+	expect(scripted.userPrompts[0]).toContain("final_payload_closure");
 	expect(scripted.userPrompts[1]).toMatch(
-		/13\. TERMINAL_ACTION: Rewrite every draft into one complete five-field decision[\s\S]*end immediately after the call\.$/u,
+		/# Compact Release task card[\s\S]*5\. TERMINAL_ACTION: Call submit_requirement_release exactly once[\s\S]*then end\.$/u,
+	);
+	expect(scripted.userPrompts[1]).toContain("concise_root_grouping");
+	expect(scripted.userPrompts[1]).toContain(
+		"Consecutively numbered contract attachments continue",
+	);
+	expect(scripted.userPrompts[1]).toContain("final_payload_closure");
+	expect(scripted.toolParameterDescriptions[1].hard_carrier_reason).toContain(
+		"concise_root_grouping",
+	);
+	expect(scripted.toolParameterDescriptions[1].hard_carrier_reason).toContain(
+		"Consecutively numbered contract attachments remain",
+	);
+	expect(scripted.toolParameterDescriptions[1].residual_reason).toContain(
+		"final_payload_closure",
 	);
 	expect(result.context).toMatchObject({
 		reviewerThinkingLevel: "medium",
-		releaseThinkingLevel: "low",
+		releaseThinkingLevel: "off",
 	});
 });
 
@@ -358,7 +390,7 @@ test("provides the same answer-free Word structure map to Reviewer and Release",
 		expect(prompt).toContain("S|3|b=3|k=p|m=x|ol=0|pb=1|br=1.000|fs=28|path=0@3");
 	}
 	expect(scripted.userPrompts[1]).toContain(
-		"# Challenged-side structural navigation focus (bounded mechanical duplicate)",
+		"# Challenged-side structural navigation focus",
 	);
 	expect(scripted.userPrompts[1]).toContain("releaseChallengeStructureFocusTargetNodeCount=2");
 	expect(scripted.userPrompts[1]).toContain("releaseChallengeStructureFocusIncludedNodeCount=2");
@@ -497,13 +529,17 @@ test("derives content-blind visual peer navigation for non-outline headings", as
 	for (const prompt of scripted.userPrompts) {
 		expect(prompt).toContain("vc=1@0~3");
 		expect(prompt).toContain("vc=3@0~6");
-		expect(prompt).toContain("visualNavigationContract=");
-		expect(prompt).toContain("vc=node@parent~exit");
 	}
+	expect(scripted.userPrompts[0]).toContain("vc=node@parent~exit");
+	expect(scripted.userPrompts[1]).toContain(
+		"vc=non-outline visual heading candidate@mechanical parent~next equal-or-larger visual peer",
+	);
 	expect(scripted.userPrompts[0]).toContain(
 		"vc never proves that node is a heading or assigns Owner",
 	);
-	expect(scripted.userPrompts[1]).toContain("vc is not a semantic heading or Owner label");
+	expect(scripted.userPrompts[1]).toContain(
+		"Markers, metrics, formatting, and missing rows are not semantic evidence",
+	);
 });
 
 test("preserves the candidate after one contract-valid Reviewer pass", async () => {
@@ -679,6 +715,7 @@ test("audits a non-empty Reviewer no-change decision with terminal-or-hard veto 
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual([]);
 	expect(result.context.reviewerNoChangeHardCarrierAudit).toBe(true);
+	expect(result.context.hardBoundaryResidualPrecisionMode).toBe("reviewer_no_change_hard");
 	expect(result.context.releaseBoundaryReviewRanges).toEqual([]);
 	expect(result.release).toMatchObject({
 		hardExcludedRanges: ["段落0-段落1"],
@@ -693,9 +730,75 @@ test("audits a non-empty Reviewer no-change decision with terminal-or-hard veto 
 	expect(scripted.userPrompts[1]).toContain("releaseRemoveEnvelopeRanges=[]");
 	expect(scripted.userPrompts[1]).toContain("boundaryReviewRanges=[]");
 	expect(scripted.userPrompts[1]).toContain(
-		"It is not a second extraction or an ordinary precision pass.",
+		"permissionSummary=Every Candidate block is BASE_KEEP",
 	);
-	expect(scripted.userPrompts[1]).toContain("Do not invent an ordinary cleanup to force a change.");
+	expect(scripted.userPrompts[1]).not.toContain("wholeSourceIdentityVetoContract=");
+	expect(scripted.userPrompts[1]).not.toContain("outsideCarrierPrecisionClosureContract=");
+	expect(scripted.userPrompts[1]).not.toContain("projectFactAttackClosureContract=");
+	expect(scripted.systemPrompts[1]).toContain(
+		"reviewer_no_change_terminal_or_hard_veto",
+	);
+	expect(scripted.systemPrompts[1]).toContain("cover_navigation_shell");
+	expect(scripted.systemPrompts[1]).toContain("hard-boundary residual");
+	expect(scripted.userPrompts[1]).toContain(
+		"5. TERMINAL_ACTION: Call submit_requirement_release exactly once",
+	);
+});
+
+test("allows a bounded minority residual after a Reviewer no-change hard projection", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			Array.from({ length: 21 }, (_, blockId) => ({
+				blockId,
+				text: `Candidate 段落${blockId}。`,
+			})),
+			["段落0-段落20"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "pass",
+				...buyerIssuedReviewFields,
+				issue_type: "none",
+				add_ranges: [],
+				removal: { mode: "exact", remove_ranges: [] },
+				reason: "The Reviewer found no residual change.",
+			},
+			"reviewer-pass-before-bounded-minority-residual",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardExcludedRanges: ["段落0-段落17", "段落19"],
+					outsideCarrierExcludedRanges: ["段落18", "段落20"],
+				},
+				"The hard projection leaves two small address islands that independently fail the outside-carrier gates.",
+			),
+			"release-bounded-minority-residual-after-pass",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "4".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+		auditNonEmptyReviewerNoChange: true,
+	});
+
+	expect(scripted.callCount()).toBe(2);
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.context.hardBoundaryResidualPrecisionMode).toBe("reviewer_no_change_hard");
+	expect(result.release).toMatchObject({
+		hardExcludedRanges: ["段落0-段落17", "段落19"],
+		hardBoundaryResidualAuthorityRanges: ["段落18", "段落20"],
+		outsideCarrierExcludedRanges: ["段落18", "段落20"],
+		finalRanges: [],
+	});
 });
 
 test("discards a contract-invalid Reviewer patch and runs only the protected terminal-or-hard audit", async () => {
@@ -1148,12 +1251,10 @@ test("publishes a source-proven completed supplier response as a terminal null",
 		outsideCarrierExcludedRanges: ["段落0-段落2"],
 		finalRanges: [],
 	});
-	expect(scripted.userPrompts[1]).toContain("wholeSourceIdentityVetoContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"Copied tender clauses, technical detail, future duties, response tables, or commitments cannot reopen membership",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Mandatory whole_source_identity_veto before every local gate",
+	expect(scripted.userPrompts[1]).not.toContain("wholeSourceIdentityVetoContract=");
+	expect(scripted.systemPrompts[1]).toContain("供应商已完成响应");
+	expect(scripted.systemPrompts[1]).toContain(
+		"不得用局部操作义务、技术细节或 `duty_survival_attack` 恢复",
 	);
 });
 
@@ -1740,7 +1841,9 @@ test("demotes a buyer-issued full Candidate removal to hard-carrier-only review"
 	expect(scripted.userPrompts[1]).toContain("releaseAuditMode=hard_carrier_boundary_residual");
 	expect(scripted.userPrompts[1]).toContain("challengeRemoveRanges=[]");
 	expect(scripted.userPrompts[1]).toContain("releaseRemoveEnvelopeRanges=[]");
-	expect(scripted.userPrompts[1]).toContain("Every Candidate block starts as BASE_KEEP");
+	expect(scripted.userPrompts[1]).toContain(
+		"permissionSummary=The ordinary full-Candidate removal envelope is withdrawn. Candidate is BASE_KEEP",
+	);
 	expect(prompts.release).toContain(
 		"即使 `releaseRemoveEnvelopeRanges=[]` 且 source overlay 仍显示 `BASE_KEEP`",
 	);
@@ -1915,8 +2018,8 @@ test("allows precision deletion on a unique residual after a Reviewer-confirmed 
 	expect(scripted.userPrompts[1]).toContain(
 		"releaseAuditMode=bounded_patch_with_confirmed_hard_residual",
 	);
-	expect(scripted.userPrompts[1]).toContain(
-		"confirmedHardResidualContract=In a normal bounded patch",
+	expect(scripted.systemPrompts[1]).toContain(
+		"普通 bounded patch 只有当至少一个 `REMOVE_REVIEW` Candidate block",
 	);
 });
 
@@ -2089,7 +2192,172 @@ test("allows precision deletion on the sole surviving Candidate interval", async
 	});
 });
 
-test("does not open residual precision when two Candidate address runs remain", async () => {
+test("allows a disconnected residual at the exact island, block, and ratio bounds", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			Array.from({ length: 640 }, (_, blockId) => ({
+				blockId,
+				text: `Candidate 段落${blockId}。`,
+			})),
+			["段落0-段落639"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason: "The Reviewer proposes ordinary removal of every Candidate block.",
+			},
+			"reviewer-exact-bounded-minority-residual",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardExcludedRanges: ["段落0-段落573", "段落596", "段落619"],
+					outsideCarrierExcludedRanges: [
+						"段落574-段落595",
+						"段落597-段落618",
+						"段落620-段落639",
+					],
+				},
+				"The hard projection leaves exactly three islands, 64 blocks, and 10% of Candidate.",
+			),
+			"release-exact-bounded-minority-residual",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "5".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.release).toMatchObject({
+		hardBoundaryResidualAuthorityRanges: [
+			"段落574-段落595",
+			"段落597-段落618",
+			"段落620-段落639",
+		],
+		outsideCarrierExcludedRanges: [
+			"段落574-段落595",
+			"段落597-段落618",
+			"段落620-段落639",
+		],
+	});
+});
+
+test("does not open residual precision when four minority address runs remain", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			Array.from({ length: 100 }, (_, blockId) => ({
+				blockId,
+				text: `Candidate 段落${blockId}。`,
+			})),
+			["段落0-段落99"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason: "The Reviewer proposes ordinary removal of every Candidate block.",
+			},
+			"reviewer-four-residual-islands",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardExcludedRanges: ["段落0-段落91", "段落93", "段落95", "段落97", "段落99"],
+					outsideCarrierExcludedRanges: ["段落92", "段落94", "段落96", "段落98"],
+				},
+				"Four disconnected residual islands exceed the mechanical island limit.",
+			),
+			"release-four-residual-islands",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "6".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落92", "段落94", "段落96", "段落98"]);
+	expect(result.release).toMatchObject({
+		hardBoundaryResidualAuthorityRanges: [],
+		outsideCarrierExcludedRanges: [],
+	});
+});
+
+test("does not open residual precision when a disconnected residual exceeds 64 blocks", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			Array.from({ length: 700 }, (_, blockId) => ({
+				blockId,
+				text: `Candidate 段落${blockId}。`,
+			})),
+			["段落0-段落699"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				removal: { mode: "candidate_complement", preserve_ranges: [] },
+				reason: "The Reviewer proposes ordinary removal of every Candidate block.",
+			},
+			"reviewer-over-block-residual",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardExcludedRanges: ["段落0-段落633", "段落667"],
+					outsideCarrierExcludedRanges: ["段落634-段落666", "段落668-段落699"],
+				},
+				"The disconnected residual is below 10% but exceeds the 64-block limit.",
+			),
+			"release-over-block-residual",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "7".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落634-段落666", "段落668-段落699"]);
+	expect(result.release).toMatchObject({
+		hardBoundaryResidualAuthorityRanges: [],
+		outsideCarrierExcludedRanges: [],
+	});
+});
+
+test("does not open residual precision when two Candidate address runs exceed the minority ratio", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -2145,7 +2413,7 @@ test("does not open residual precision when two Candidate address runs remain", 
 	});
 });
 
-test("does not open residual precision when a hard exclusion is internal to a Candidate run", async () => {
+test("does not open residual precision when an internal hard island leaves a high-ratio residual", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			Array.from({ length: 5 }, (_, blockId) => ({
@@ -2294,11 +2562,11 @@ test("requires every approved four-carrier deletion to use the hard field", asyn
 
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual([]);
-	expect(scripted.userPrompts[1]).toContain(
-		"Every four-carrier deletion uses hard_excluded_ranges regardless of marker",
+	expect(scripted.systemPrompts[1]).toContain(
+		"四类载体 descendant 只进 `hard_excluded_ranges`",
 	);
-	expect(scripted.userPrompts[1]).toContain(
-		"outside_carrier_excluded_ranges is never an alternative encoding for a hard carrier",
+	expect(scripted.systemPrompts[1]).toContain(
+		"载体外授权 atom 只进 `outside_carrier_excluded_ranges`",
 	);
 });
 
@@ -2569,13 +2837,9 @@ test("uses a narrative-blind Release to apply a bounded repair", async () => {
 	expect(scripted.userPrompts[1]).toContain(
 		"# Complete immutable source with Candidate-only IN/OUT membership",
 	);
-	expect(scripted.userPrompts[1]).toContain(
-		"candidateAuditOrderingContract=The Harness orders continuous Candidate intervals by descending block count using addresses only",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"releaseTerminalContract=Submit one phased semantic plan in fixed order: hard_carrier_reason -> residual_reason -> hard_excluded_ranges -> outside_carrier_excluded_ranges -> accepted_add_ranges",
-	);
-	expect(scripted.userPrompts[1].lastIndexOf("# Final release checklist")).toBeGreaterThan(
+	expect(scripted.systemPrompts[1]).toContain("candidateHardCarrierAuditOrder");
+	expect(scripted.systemPrompts[1]).toContain("hard_carrier_reason");
+	expect(scripted.userPrompts[1].lastIndexOf("# Compact Release task card")).toBeGreaterThan(
 		scripted.userPrompts[1].lastIndexOf("OUT|段落3："),
 	);
 	expect(scripted.userPrompts[1]).not.toContain(hiddenReviewerNarrative);
@@ -2736,7 +3000,7 @@ test("renders only the challenged side within one fixed text-blind budget", asyn
 	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=69");
 	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
 	expect(scripted.userPrompts[1]).toContain(
-		"The harness repeats only REMOVE_REVIEW, ADD_REVIEW, and BOUNDARY_REVIEW addresses",
+		"navigationPurpose=Source, structure, focus, and permission-transition views are answer-free navigation",
 	);
 	expect(scripted.userPrompts[1]).not.toContain("## CANDIDATE_KEEP_SIDE");
 	expect(scripted.userPrompts[1]).toContain("## PROPOSED_CHANGE_SIDE");
@@ -3278,7 +3542,7 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	);
 	expect(scripted.userPrompts[1]).toContain("reviewerPreserveRangesAndRationale=withheld");
 	expect(scripted.userPrompts[1]).toContain(
-		"reviewerMechanicalPatchVisibility=exact REMOVE_REVIEW envelope for ordinary changes; all other Candidate blocks are protected BASE_KEEP except the explicit four-carrier veto",
+		"permissionSummary=REMOVE_REVIEW is the exact Reviewer-proposed Candidate subset",
 	);
 	expect(scripted.userPrompts[1]).not.toContain("challengePreserveRanges=");
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
@@ -3287,26 +3551,16 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	expect(scripted.userPrompts[1]).not.toContain("AUDIT_KEEP|");
 	expect(scripted.userPrompts[1]).not.toContain("CANDIDATE_REVIEW|");
 	expect(scripted.userPrompts[1]).not.toContain("REMOVE_REVIEW|段落1：");
-	expect(scripted.userPrompts[1]).toContain(
-		"If that sweep hard-excludes at least one REMOVE_REVIEW Candidate block",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"challengeEnvelopeMetrics=Permission-and-budget metadata only",
-	);
-	expect(scripted.userPrompts[1]).toContain("wholeSourceIdentityVetoContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"Whole-source terminal identities outrank local technical content",
-	);
 	expect(scripted.userPrompts[1]).toContain("focusedChangeTargetBlockCount=5");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeIncludedTargetBlockCount=5");
 	expect(scripted.userPrompts[1]).toContain("focusedChangeCoverage=complete");
 	expect(scripted.userPrompts[1]).toContain("focusedReviewRenderedBlockCount=8");
 	expect(scripted.userPrompts[1]).toContain("focusedReviewIncluded=true");
 	expect(scripted.userPrompts[1]).toContain(
-		"# Text-blind challenged-side atomic navigation view (bounded mechanical duplicate)",
+		"# Text-blind challenged-side atomic navigation view",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"focusViewPurpose=Text-blind challenged-side atomic navigation only",
+		"navigationPurpose=Source, structure, focus, and permission-transition views are answer-free navigation",
 	);
 	expect(scripted.userPrompts[1].match(/^IN\|段落1：/gmu)).toHaveLength(1);
 	expect(scripted.userPrompts[1].match(/^IN\|段落0：/gmu)).toHaveLength(1);
@@ -3314,26 +3568,13 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	expect(scripted.userPrompts[1]).toContain(
 		"ATOMIC_CHANGE_TARGET|REMOVE_REVIEW|段落0：",
 	);
-	expect(scripted.userPrompts[1]).toContain(
-		"an independent technical chapter outside the four carriers has fact payload",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"a heading such as business, fulfillment, delivery, or after-sales requirements is not a pure-commerce verdict",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Every BASE_KEEP block is mechanically retained unless hard_excluded_ranges authorizes its four-carrier subtraction",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"A corrected root with a partial hard delta is an invalid holey projection",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"To omit a descendant, first correct the root or exit in residual_reason",
-	);
 	expect(scripted.userPrompts[0]).toContain("# Run metadata");
 	expect(scripted.userPrompts[0]).toContain("# Terminal task card");
 	expect(scripted.userPrompts[0]).toContain("residual_island_completion");
 	expect(scripted.userPrompts[0]).toContain("false_protection_counterexample_attack");
-	expect(scripted.userPrompts[0]).toContain("A parent title or representative positive block never proves the whole residual");
+	expect(scripted.userPrompts[0]).toContain(
+		"A parent title or representative positive block never proves the whole residual",
+	);
 	expect(scripted.userPrompts[0]).toContain(
 		"A chapter that only explains how to price or points to an absent schedule is not the schedule itself",
 	);
@@ -3344,173 +3585,29 @@ test("mechanically expands a broad Candidate complement around preserved technic
 	expect(prompts.runtimeContract).toContain("project_fact_membership_attack");
 	expect(prompts.reviewer).toContain("false_protection_counterexample_attack");
 	expect(prompts.release).toContain("project_fact_membership_attack");
-	expect(scripted.userPrompts[1]).toContain(
-		"This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region",
+	expect(prompts.release).toContain("cover_navigation_shell");
+	expect(scripted.systemPrompts[1]).toContain("counterexample_first_duty_attack");
+	expect(scripted.systemPrompts[1]).toContain("pricing_basis_role_attack");
+	expect(scripted.systemPrompts[1]).toContain("pre_award_stage_gate");
+	expect(scripted.systemPrompts[1]).toContain("boundaryReviewDirectionContract");
+	expect(scripted.systemPrompts[1]).toContain("contractAttachmentSequenceContract");
+	expect(scripted.systemPrompts[1]).toContain("survivorProjectionInvariant");
+	expect(scripted.systemPrompts[1]).toContain("boundedResidualPartitionInvariant");
+	expect(scripted.systemPrompts[1]).toContain(
+		"技术标题、参数密度、附件编号重启或局部技术价值",
 	);
+	expect(scripted.userPrompts[1]).toContain("boundaryReviewDirectionContract=system");
+	expect(scripted.userPrompts[1]).toContain("contractAttachmentSequenceContract=system");
+	expect(scripted.userPrompts[1]).toContain("survivorProjectionInvariant=system");
+	expect(scripted.userPrompts[1]).toContain("boundedResidualPartitionInvariant=system");
+	expect(scripted.userPrompts[1]).not.toContain("wholeSourceIdentityVetoContract=");
+	expect(scripted.userPrompts[1]).not.toContain("peerRootFractureContract=");
+	expect(scripted.userPrompts[1]).not.toContain("outsideCarrierPrecisionClosureContract=");
+	expect(scripted.userPrompts[1]).not.toContain("projectFactAttackClosureContract=");
+	expect(scripted.userPrompts[1]).not.toContain("pricingBasisRoleContract=");
+	expect(scripted.userPrompts[1]).toContain("# Compact Release task card");
 	expect(scripted.userPrompts[1]).toContain(
-		"A physical-file title, invitation act, attachment relationship, or notice elements scattered across separate chapters is insufficient evidence for null",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Do not invent an invitation-body Owner spanning all numbered sections",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"do not place the heading or body in either exclusion field",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Engineering quantities, completion, acceptance or quality-retention language used only as a monetary basis",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"a later 'but the duties are technical' clause is a direct contradiction",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"A qualified requirement sentence that says see an appendix does not make that appendix qualified",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Only a boundary-independent technical appendix under its own qualified Owner can enter accepted_add_ranges or remain selected",
-	);
-	expect(scripted.userPrompts[1]).toContain("peerRootFractureContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"adjacency, chapter order, an earlier cross-reference, or placement between contract and response-format chapters is insufficient",
-	);
-	expect(scripted.userPrompts[1]).toContain("hardCarrierFunctionContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"never use mixed or multi-carrier to produce hard_hypothesis=none or retain a descendant",
-	);
-	expect(scripted.userPrompts[1]).toContain("announcementPreambleBoundaryContract=");
-	expect(scripted.userPrompts[1]).toContain("substantiveResponseWrapperContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"orphaned general-compliance, response, no-deviation, or acceptance phrase",
-	);
-	expect(scripted.userPrompts[1]).toContain("outsideCarrierPrecisionClosureContract=");
-	expect(scripted.userPrompts[1]).toContain("outsideCarrierCounterexampleContract=");
-	expect(scripted.userPrompts[1]).toContain("projectFactAttackClosureContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"project_fact_membership_attack=scope:<ranges>;remove:<ranges or none>;survive:<ranges or none>",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Names of drawings, schedules, lists, specifications, or other materials are not body when their actual content is absent",
-	);
-	expect(scripted.userPrompts[1]).toContain("pricingBasisRoleContract=");
-	expect(scripted.userPrompts[1]).toContain("Mandatory peer_root_fracture_attack");
-	expect(scripted.userPrompts[1]).toContain("Mandatory preamble_peer_reset_test");
-	expect(scripted.userPrompts[1]).toContain("Mandatory outside-carrier function fracture");
-	expect(scripted.userPrompts[1]).toContain("counterexample_first_duty_attack");
-	expect(scripted.userPrompts[1]).toContain("Mandatory price_wrapper_empty_remainder_test");
-	expect(scripted.userPrompts[1]).toContain("Mandatory subject_predicate_remainder_test");
-	expect(scripted.userPrompts[1]).toContain(
-		"Repetition of the same facts in an earlier separate announcement is not local Owner evidence for a later root.",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Delete the child only when this stripped remainder is empty of work facts",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"When the unlock conditions fail, do not run a global false-protection sweep over BASE_KEEP",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"A new peer heading starts a new Owner decision",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Project the corrected residual plan into outside_carrier_excluded_ranges",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"A non-empty residual cannot be called already covered",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Every Phase 1 hard range must then either remain in the final hard projection",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"every still-affirmed Candidate intersection must appear in this field",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"scanning each continuous Candidate interval from first through last in candidateHardCarrierAuditOrder",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Closure never extends backward across the carrier start",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Before local partitioning, test the whole-document communicative-role hypothesis",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"all chapters participating in one procurement does not make them one notice",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"carrier_root_exit_attack=<actual four-class root address -> first different-Owner peer root address or EOF>",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Carry an actual Owner through all child clauses until the next peer exit",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"A later carrier never expands backward",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"do not search BASE_KEEP for ordinary outside-carrier cleanup",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"A structural exit never automatically ends Owner",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Mandatory mixed_container_root_sweep before atom review",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"is a forbidden holey selection",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"run peer-level outside_carrier_precision_closure and counterexample-first survival tests",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Stage Owner outranks future-tense wording",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"First close personnel Stage Owner at subsection level",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Do not carve out one child merely because it also describes future staffing",
-	);
-	expect(scripted.userPrompts[1]).toContain("preAwardStageGateContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"Mandatory pre_award_stage_gate ordering",
-	);
-	expect(scripted.userPrompts[1]).toContain("nonFactShellClosureContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"Mandatory non_fact_shell_closure",
-	);
-	expect(scripted.userPrompts[1]).toContain("headingMembershipIndependenceContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"Mandatory heading membership independence outside the four carrier gate",
-	);
-	expect(scripted.userPrompts[1]).toContain("performanceTransitionAttackContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"Delete only when the remainder solely allocates money, valuation, title, or payment and imposes no actual transition action",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Contract-format containment requires an actual source-proven contract agreement",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"A bounded bidder/supplier commitment, response-commitment, no-deviation commitment, or declaration section is a response-format root",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"a direct work duty remains qualified when cost inclusion is merely incidental",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"direct requirement on the successful supplier's post-award staffing, resources, submission, review, approval, filing, records, or data handling is performance content",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"direct implementation, resources, plans/reports, records, data control, delivery",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"remedyTriggerSeparation=Quality error, misconduct, or false deliverables",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"When the unlock conditions fail, do not run a global false-protection sweep over BASE_KEEP",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"generic supply/quotation rules, drafting instructions, default duties, blank schedules/tables",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"cannot reopen membership through primary-effect, normative-incorporation, or duty_survival_attack",
-	);
-	expect(scripted.userPrompts[1]).toContain(
-		"Pure budget, pre-award proof/procedure, price/payment/settlement/guarantee, pure legal remedy, and bare pointers may be excluded",
+		"5. TERMINAL_ACTION: Call submit_requirement_release exactly once",
 	);
 });
 
@@ -3693,9 +3790,11 @@ test("lets Release close a Reviewer-missed hard carrier without opening ordinary
 		hardExcludedRanges: ["段落0-段落3"],
 		finalRanges: [],
 	});
-	expect(scripted.userPrompts[1]).toContain("hardCarrierVetoContract=");
-	expect(scripted.userPrompts[1]).toContain(
-		"The Harness deletes only explicitly authorized hard/outside exclusions, mechanically restores every other REMOVE_REVIEW block",
+	expect(scripted.systemPrompts[1]).toContain(
+		"公告/通知、须知、投标/响应/报价格式、合同条款及格式 root",
+	);
+	expect(scripted.systemPrompts[1]).toContain(
+		"Harness 自动恢复所有未进入 exclusion 的 `REMOVE_REVIEW`",
 	);
 });
 
@@ -3755,8 +3854,9 @@ test("renders address-only permission transitions for hard-carrier root closure"
 		'PERMISSION_TRANSITION|BASE_KEEP|["段落2-段落4"]|REMOVE_REVIEW|["段落5-段落6"]',
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"A permission-marker switch is never a source-proven Owner exit",
+		"permission-transition views are answer-free navigation",
 	);
+	expect(scripted.userPrompts[1]).toContain("not semantic evidence, confidence, votes, or Owner exits");
 });
 
 test("does not let exact Release delete an unchallenged Candidate block", async () => {

@@ -131,6 +131,19 @@ v91 `hypothesis_terminal_adjudication` 继承 v58 的匿名 A/B、任意子集�
 
 每个 case 必须先判断 Agent 结果对当前 source 是否绝对正确，再比较 production baseline、xq-agent 或其他系统的相对胜负。两侧都错误不能记为平局；结果更短不能自动视为更精确；中间阶段发现但最终未修复的问题仍计为最终错误。
 
+### Single-prompt 衍生 Agent 的统一净价值指标
+
+本节是当前评分办法 Reviewer、采购需求 Reviewer，以及之后所有从成熟 single-prompt candidate 衍生的 Reviewer、Repair 或 Release Agent 必须继承的评估合同。运行前必须冻结 candidate、产品语义合同、评测分母和独立 evaluator；运行时不得看到 `bad`、`good`、`great` 标签或任何评测答案。
+
+- **`bad -> fixed` 是主指标**：`bad` 表示 candidate 存在会改变目标内容、Owner、完整性、精度、边界或方向的材料性语义错误；`fixed` 表示最终结果关闭了该 case 的全部材料性错误，而不只是局部改善。修复率为 `fixed bad cases / all frozen bad candidate cases`。
+- **`good -> great` 是次指标**：`good` 表示 candidate 已满足冻结的语义正确性合同；只有在运行前由独立评测规则确认仍存在材料性的运营质量改进空间时，该 case 才进入 `good -> great` 分母。`great` 必须在不造成任何语义损失或错误方向的前提下，显著改善已冻结的范围精度、source usability、下游 token/截断风险、延迟或注意力负担。单纯更短、更整洁、措辞不同或删除无害内容，不能自动记为 `great`。
+- **必须同时报告保护与失败象限**：至少报告 `bad -> fixed`、`bad -> bad`、`good -> great`、`good -> good` 和 `good -> bad` 的 case 数、分母和比例。`bad -> bad` 即使局部变好仍不算修复；`good -> bad` 是阻断性回退，不能被 `good -> great` 或等量 `bad -> fixed` 抵消。
+- **仅为评估口径，不是运行 profile**：所有 case 必须进入同一个 Agent、同一个 Prompt 合同、同一个工具入口和同一调用预算。运行时不得接收、推断或选择 `bad`、`good`、`fixed`、`great` 模式，不得顺序运行 correctness 与 operational 两套 Reviewer，也不得按 case 切换 Prompt、模型或 patch 权限。Agent 只依据 source 与 candidate 做一次统一残差审查；独立 evaluator 在 raw result 落盘后才分类 transition。
+- **语义轴与运营轴分开计分但不拆 Agent**：`bad -> fixed` 只能由材料性语义正确性决定；`good -> great` 只能由预先冻结、可复核的下游价值标准决定。统一 Agent 可以在同一产品合同内修复材料性语义错误，或在无语义损失时产生材料性运营改善；两类结果使用同一运行路径，只在事后评估中分开统计。
+- **不得挑选案例或结果**：分母必须在运行前锁定，所有 transition 由同一冻结 evaluator 在 raw result 和 trace 落盘后统一裁决。不得只展示成功修复、把 runner failure 从分母删除、在多个 Prompt/模型/run 中挑优，或查看标签后改变路由、阈值、调用次数和最终输出。
+
+质量结论应以净 transition 为核心，而不是只报最终正确率。最终正确率回答“现在有多准”，`bad -> fixed` 回答“Agent 修复了多少 single prompt 的真实错误”，`good -> great` 回答“Agent 在不伤害正确性的前提下创造了多少额外产品价值”；三者必须分别报告，不能互相替代。
+
 ### 2. 稳定性与协议完整性
 
 - 相同冻结版本在重复运行中的语义结果应稳定；协议失败、超时和无结果不能隐藏在平均质量中。
