@@ -39,6 +39,8 @@ Root 与 exit 由模型根据完整 source 的实际 communicative function 判�
 
 同一不可分 block 剥离程序、价格、证明或救济包装后仍有当前项目对象、范围、数量、动作、资源、技术基线或结果义务时，完整保留。不可分性只存在于单个 canonical block 内。
 
+必须执行 independent-proposition remainder test：semantic role 优先于 embedded operands。项目、工作包、人员、证书、标准或技术名词若只作为预算、费率、计价、结算、响应填写、证明材料或文档提交谓词的操作数，随包装一起消失；不能仅因名词具体就认定 survivor。只有目标 block 自身另行声明一个不依赖该包装也具有独立真值条件的范围、实际资源投入、履约动作、技术基线或结果命题，才形成 surviving remainder。
+
 不同 `block_id` 永远是 Harness 已授权的可分离输出原子。“同一不可分 block”只允许指恰好一个 canonical block object / 一个 `block_id`；任何覆盖两个或更多 block 的 heading、subsection、sibling group 或 compact range 都不得援引 block atomicity。地址相邻、语法承接、同属一句阅读逻辑、共同服务 cross-reference、标题—正文 closure 或阅读更顺畅，都不能把两个 block 声称为不可分。后一独立 pointer、meta、程序或 wrapper block 必须用自身 stripped remainder 单独裁决，其他 sibling 的 survivor 不能借给它。
 
 一个 canonical table block 内的 row、cell 或文本片段不是独立输出地址。Owner gate 已关闭且该 block 位于四类 carrier 外时，只要同一 table block 任一 row/片段仍有合格对象、参数、人员、工期、质量、服务或结果事实，付款、价格、合同指针或其他 excluded row 不能授权删除整个 block；只有剥离全部非目标包装后整块 surviving remainder 为零，才可排除该 block。模型可以在内部逐 row 理解语义，但不能输出 row-level patch、把 row-level exclusion rationale 投影为整块删除，或生成逐 row ledger。该规则不允许 hard-carrier descendant 穿透 Owner gate。
@@ -53,6 +55,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 - mixed scope/form heading 下每个 sibling 独立判断；采购范围 child 可以保留，独立采购/评审方式 child 仍排除。
 - pricing-basis 与 price-wrapper 必须逐 child 剥离。技术名词若只用于计算、编制、填写、比较、校验或分配价格，不形成成交后义务。
+- proof-object test 必须逐 child 执行。若全部谓词只要求在响应文件中填写、提交、附具、证明或展示资格，人员、岗位、资质、证书、社保、截图和期限只是被证明对象，剥离后 remainder 为零；相邻实际人员配置不得借入。只有同一 target block 自身另行要求成交后实际投入、驻场、保持配置、履行、更换限制或持续服务，才按 block atomicity 保留。
 - 多 block 的报价、计价、结算或费用 subsection 不是 categorical carrier。禁止先把整个范围概括为 pricing 再只恢复代表性例外；必须逐 canonical sibling 寻找被价格 children 夹住的直接施工、服务、临时设施、现场资源取得或自理、人员设备配置、交付和结果义务，并把所有 survivor islands 纳入 selection。
 - pre-award stage Owner gate 只在四类 carrier 外运行，且必须在任何 stripped-remainder 之前建立；它不能把已成立 hard carrier 内部的低层 subsection 重新解释成独立 Owner。顶层或边界完整、主功能明确为投标人/供应商应具备资格、资格审查、强制响应、人员准入或最低配置的 module，从该 root 延续到下一个同级或更高层级、功能不同的 peer；其内部人员组织、业绩、信用、质保、承诺或其他低层 subsection 都不是 exit。若该 module 通过岗位、证书、人数、承诺、证明、进场信息或无效响应后果共同定义成交前准入/响应比较，其 root、表头和全部 children 整体属于 pre-award Owner；不能剥掉 Owner 后把未来岗位、人数、进场、人员稳定、质保或其他看似 post-award 的 child 挖成履约岛。只有 source 先证明目标位于该 module 的真实 peer exit 之后，或一个边界独立 module 主要治理成交后实际投入且资格/证明只是局部注释时，才进入履约 atom 判断。
 - document-authoring meta 剥离后没有当前项目事实时排除；它位于真实需求章或标题与正文之间也不能被 closure 带回。
@@ -75,6 +78,8 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 第二轮可以推翻 provisional，但保护的是证据负担，不是首轮结论。Witness 的 exclude/select lane 名、非空 lane 数和 supporting block 数量都没有证据权重，不构成投票。若 provisional 已写出具体 source premise，final 反转时必须指出哪项 premise 被 immutable source 的肯定反证推翻，不能只因某个 lane 请求相反方向、Word path/style、物理位置、EOF、另一种可能解释或缺少细节而静默反转。把 selected 改为 excluded 时，必须在 source 中确认真实的 hard Owner、程序/价格/证明/法律/meta/shell 功能，或明确的“另见/详见”查找关系等正向 exclusion predicate；缺少项目名、数字参数、标准编号、展开程度或外部全文不是反证。找不到肯定反证时必须拒绝该 Witness challenge。这个证据负担同样适用于 Witness 未挑中的 provisional→final delta；neutral replay 允许重审，不允许无肯定 source predicate 的自由漂移。
 
+第二轮必须是 targeted delta adjudication，不得重新生成另一份整文答案。将 normalized provisional 的 block-ID set 冻结为 `S0`；`S0` 不是真值，但是唯一集合编辑基线。固定顺序为 provisional self-consistency、全部 selected block closure、全部 provisional excluded gap closure、Witness reconciliation、delta projection checksum。每个变化必须由 exact target-own predicate 成立并进入 `Δ-` 或 `Δ+`；对没有 exact predicate 的地址保持 `S0`。卡槽不足或卡错误不能缩小双向 closure。最终只能按 `S=(S0-Δ-)∪Δ+` 形成 final，不得从 reason、章节摘要或新的整段分组重生 ranges。
+
 把 excluded 改为 selected 也承担对称负担：必须用目标 block 自身的肯定 source 事实推翻 provisional 的具体 exclusion premise，或证明它是真实统领合格 descendants 的合格需求 heading。若目标 heading 自身实际命名报价、计价、付款、程序、资格、法律救济、文档编制或 hard-carrier 功能，它就是 wrapper stop；后续存在 selected 施工、资源、质量或其他 survivor children 不能反向给该 wrapper membership。“它统领后续 selected 内容”“删掉会少一层标题”或地址连续本身都不是 source 反证。找不到肯定反证时必须拒绝 select challenge。
 
 若 provisional 已建立 cross-reference recovery 的三项前提——earlier source 独立于 hard carrier、later module 固定且非填报模板、对象与功能实际对应——final 排除时必须具体否定至少一项。前提不成立则应撤回 provisional；成立则不能用布局继承覆盖功能 peer fracture。
@@ -85,7 +90,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 最终 ranges 只由每个 `RUN_REGISTRY` 的正向 `final_selected_ranges` 机械并集得到。提交前必须执行 `symmetric_partition_fixed_point`：每个准备 selected 的 compact range 都是“其中每个 canonical block 均有 membership”的全称命题，必须主动寻找 target-own 肯定 exclusion 反例并拆出所有 hole；每个准备 excluded 的 gap 都是“其中每个 canonical block 均无 membership”的全称命题，必须主动寻找 target-own survivor 或真实 heading/body/table closure 反例并恢复。宽 range、组标签、端点、相邻正例或同 subsection 的其他 survivor 都不能替内部 block 证明。
 
-固定点结束后必须执行 `semantic_projection_checksum`，而不是直接复用 Candidate、provisional 或上一版 compact range：先冻结最终 block-ID set `S`，再且仅再由 `S ∩ run` 生成 typed ranges。令 `E` 为内部终态判断或 reason 中已明确判定为 hole/excluded 的 block，`K` 为已明确判定为 survivor/heading closure 的 block，`F` 为展开全部 typed `final_selected_ranges` 后的 block；提交前必须满足 `E ∩ F = ∅` 且 `K ⊆ F`。run 内部出现一个 hole 就必须把 typed range 拆成左右 survivor islands；不得为了更少 ranges、终态摘要更整齐或保持 provisional 形状而跨过 hole。checksum 失败时只能修改 typed ranges 或重新完成语义判断，不能删除/改写 reason 来掩盖冲突。reason 只记录决定性 predicates、holes、survivors 与 Witness reconciliation，不再复述一份“最终 compact ranges”；typed fields 是唯一集合投影。该检查只在模型内部完成，不输出 ledger。
+固定点结束后必须执行 `semantic_projection_checksum`，而不是直接复用 Candidate、provisional 或上一版 compact range。第二轮先按 `S=(S0-Δ-)∪Δ+` 冻结最终 block-ID set `S`，再且仅再由 `S ∩ run` 生成 typed ranges。令 `E` 为内部终态判断或 reason 中已明确判定为 hole/excluded 的 block，`K` 为已明确判定为 survivor/heading closure 的 block，`F` 为展开全部 typed `final_selected_ranges` 后的 block；提交前必须满足 `E ∩ F = ∅`、`K ⊆ F`、`Δ- ∩ F = ∅` 且 `Δ+ ⊆ F`。run 内部出现一个 hole 就必须把 typed range 拆成左右 survivor islands；不得为了更少 ranges、终态摘要更整齐或保持 provisional 形状而跨过 hole。checksum 失败时只能修改 typed ranges 或重新完成语义判断，不能删除/改写 reason 来掩盖冲突。reason 只记录决定性 predicates、holes、survivors 与 Witness reconciliation，不再复述一份“最终 compact ranges”；typed fields 是唯一集合投影。该检查只在模型内部完成，不输出 ledger。
 
 ## 通用性与禁止作弊
 

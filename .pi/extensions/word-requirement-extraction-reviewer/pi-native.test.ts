@@ -280,6 +280,26 @@ function witnessReviewPacket(observed: { userPrompt: string }) {
 	return packet.review_evidence.independent_semantic_witness;
 }
 
+test("loads the v32 delta, tournament, and semantic gate contracts", () => {
+	for (const prompt of [prompts.finalizer, prompts.piNativeSemanticContract]) {
+		expect(prompt).toContain("`S=(S0-Δ-)∪Δ+`");
+		expect(prompt).toContain("exact target-own predicate");
+		expect(prompt).toContain("`remove_consequence_then_normalize_condition`");
+	}
+	for (const invariant of [
+		"global card tournament",
+		"whole-block survivor veto",
+		"肯定 exclusion mechanism × source-proven peer-bounded partition",
+		"同一 remedy/price/proof cluster",
+		"pure price/proof candidate 与 pure consequence 同样优先",
+		"`select owner_boundary` 必须有真实 boundary evidence",
+		"source-determinate empty-heading candidate",
+		"受约束主体 + 可控制或可核验的行为/结果状态 + 明确肯定或禁止极性",
+	]) {
+		expect(prompts.witness).toContain(invariant);
+	}
+});
+
 test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () => {
 	const { result, scripted } = await runScenario([
 		{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
@@ -314,6 +334,9 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[2].serializedContext).toContain("REPLAY_TRUST_BOUNDARY");
 	expect(scripted.observed[2].serializedContext).toContain(
 		"UNTRUSTED_PROVISIONAL_SUBMISSION",
+	);
+	expect(scripted.observed[2].userPrompt).toContain(
+		`UNTRUSTED_PROVISIONAL_SUBMISSION=${JSON.stringify(selection(["段落0-段落2"]))}`,
 	);
 	expect(scripted.observed[2].serializedContext).toContain("HARNESS_REVIEW_PACKET");
 	expect(scripted.observed[2].serializedContext).toContain("review_available");
