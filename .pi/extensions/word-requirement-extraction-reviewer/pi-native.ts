@@ -63,7 +63,7 @@ const WITNESS_RESPONSE_FORMAT = "json_object";
 const FINALIZER_REVIEW_PACKET_TOKEN_RESERVE = 120_000;
 const WITNESS_STATIC_TOKEN_RESERVE = 32_000;
 const PI_NATIVE_RUNTIME_VERSION =
-	"pi-native-finalizer-witness-v33-rationale-aware-witness";
+	"pi-native-finalizer-witness-v42-role-sliced-prompts";
 
 type RunKind = "AUDIT_ISLAND" | "AUDIT_UNIVERSE";
 type HardCarrierType =
@@ -586,7 +586,7 @@ export async function runPiNativeRequirementReview(
 	const finalizerAuxiliaryText: PiNativeRequirementReviewResult["trace"]["finalizerAuxiliaryText"] = [];
 	const finalizerInputSha256s: string[] = [];
 	let replayPreparationError: string | null = null;
-	const activePromptHashes = {
+	const promptHashes = {
 		piNativeSemanticContract: options.prompts.hashes.piNativeSemanticContract,
 		piNativeRuntimeContract: options.prompts.hashes.piNativeRuntimeContract,
 		witness: options.prompts.hashes.witness,
@@ -601,7 +601,14 @@ export async function runPiNativeRequirementReview(
 				provisionalRationale:
 					"canonical-owner+residual-as-untrusted-claim-inventory",
 			},
-			prompts: activePromptHashes,
+			promptRouting: {
+				finalizerSystem: [
+					promptHashes.piNativeSemanticContract,
+					promptHashes.finalizer,
+				],
+				witnessSystem: [promptHashes.witness],
+				harnessGovernance: promptHashes.piNativeRuntimeContract,
+			},
 			models: {
 				finalizer: modelIdentity(options.finalizerRuntime.model),
 				witness: modelIdentity(options.witnessRuntime.model),
@@ -701,7 +708,7 @@ export async function runPiNativeRequirementReview(
 				finalizer: modelIdentity(options.finalizerRuntime.model),
 				witness: modelIdentity(options.witnessRuntime.model),
 			},
-			prompts: activePromptHashes,
+			prompts: promptHashes,
 			inputs: {
 				finalizerProvisionalSha256: finalizerInputSha256s[0] ?? null,
 				witnessSha256: witnessInputSha256,
@@ -1053,7 +1060,7 @@ export async function runPiNativeRequirementReview(
 				finalizer: modelIdentity(options.finalizerRuntime.model),
 				witness: modelIdentity(options.witnessRuntime.model),
 			},
-			prompts: activePromptHashes,
+			prompts: promptHashes,
 			inputs: {
 				finalizerProvisionalSha256: finalizerInputSha256s[0] ?? null,
 				witnessSha256: witnessInputSha256,
@@ -1141,11 +1148,7 @@ function prepareFinalSelection(
 		ranges: compactRanges(run.blockIds),
 		block_count: run.blockIds.length,
 	}));
-	const systemPrompt = [
-		prompts.piNativeSemanticContract,
-		prompts.piNativeRuntimeContract,
-		prompts.finalizer,
-	]
+	const systemPrompt = [prompts.piNativeSemanticContract, prompts.finalizer]
 		.map((prompt) => prompt.trim())
 		.join("\n\n");
 	const userPrompt = `COMPLETE_IMMUTABLE_SOURCE

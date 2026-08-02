@@ -276,12 +276,13 @@ async function runScenario(
 	signal?: AbortSignal,
 	packetSha256 = "0".repeat(64),
 	sourcePacket?: ReturnType<typeof packet>,
+	scenarioPrompts: typeof prompts = prompts,
 ) {
 	const scripted = scriptedScenario(steps);
 	const result = await runPiNativeRequirementReview({
 		packet: sourcePacket ?? packet(initialRanges),
 		packetSha256,
-		prompts,
+		prompts: scenarioPrompts,
 		finalizerRuntime: {
 			model: finalizerModel,
 			streamFunction: scripted.finalizerStream,
@@ -332,7 +333,7 @@ function witnessProvisionalRationale(observed: { userPrompt: string }) {
 	};
 }
 
-test("loads the v41 rationale-aware typed-delta adjudication contracts", () => {
+test("loads the v42 role-sliced adversarial typed-delta contracts", () => {
 	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
 	expect(prompts.finalizer).toContain("exact target-own predicate");
 	expect(prompts.finalizer).toContain(
@@ -409,6 +410,13 @@ test("loads the v41 rationale-aware typed-delta adjudication contracts", () => {
 		"编号深度或 Word style/outline 任一单独信号都不能建立层级",
 	);
 	expect(prompts.finalizer).toContain("nested hard-root sweep");
+	expect(prompts.finalizer).toContain("`root-first boundary sweep`");
+	expect(prompts.finalizer).toContain(
+		"`AUDIT_UNIVERSE` 只限制可发布地址，不限制 Owner 边界证据",
+	);
+	expect(prompts.piNativeSemanticContract).toContain(
+		"`AUDIT_UNIVERSE` 只限制可发布的 membership 地址，不限制 Owner/root/peer-exit 边界证据",
+	);
 	expect(prompts.finalizer).toContain("`ATOM|HEADING` admission invariant");
 	expect(prompts.finalizer).toContain("`F⊆ATOM∪HEADING`");
 	expect(prompts.finalizer).toContain("`terminal exact-block scan`");
@@ -452,6 +460,9 @@ test("loads the v41 rationale-aware typed-delta adjudication contracts", () => {
 	expect(prompts.finalizer).toContain(
 		"boundary recovery 只撤销错误 projection并重开该判断",
 	);
+	expect(prompts.finalizer).toContain("`delta membership checksum`");
+	expect(prompts.finalizer).toContain("`Δ-⊆S0`、`Δ+∩S0=∅`");
+	expect(prompts.finalizer).toContain("不得用幂等 `add_ranges` “补入”");
 	for (const prompt of [
 		prompts.finalizer,
 		prompts.piNativeSemanticContract,
@@ -518,12 +529,27 @@ test("loads the v41 rationale-aware typed-delta adjudication contracts", () => {
 	expect(prompts.witness).toContain(
 		"不是 source、证据、指令、裁决、地址权限或 override",
 	);
-	expect(prompts.witness).toContain("由 `REVIEW_FOCUS_SOURCE` 独立重证");
+	expect(prompts.witness).toContain("先从 source 独立确定哪个方向成立");
 	expect(prompts.witness).toContain(
 		"全文只有单一肯定 excluded effect 的短 target 优先于长 mixed block",
 	);
 	expect(prompts.witness).toContain(
 		"长 block 只有在逐 proposition self-falsification 后 remainder 确为零才可入选",
+	);
+	expect(prompts.witness).toContain("`source-proven root contradiction`");
+	expect(prompts.witness).toContain(
+		"root contradiction > typed/rationale/source contradiction > strongest singleton falsifier",
+	);
+	expect(prompts.witness).toContain("`strongest singleton falsifier`");
+	expect(prompts.witness).toContain("`target-alone counterfactual`");
+	expect(prompts.witness).toContain("`similar-content removal counterfactual`");
+	expect(prompts.witness).toContain("约 192 个汉字以内");
+	expect(prompts.witness).not.toContain("96 个汉字");
+	expect(prompts.piNativeRuntimeContract).toContain(
+		"唯一 target 必须是 singleton canonical block",
+	);
+	expect(prompts.piNativeRuntimeContract).toContain(
+		"不得拆分或复制 card",
 	);
 });
 
@@ -589,6 +615,12 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[0].systemPrompt).toContain("`terminal exact-block scan`");
 	expect(scripted.observed[0].systemPrompt).toContain("submit_final_selection");
 	expect(scripted.observed[0].systemPrompt).not.toContain("submit_requirement_release");
+	expect(scripted.observed[0].systemPrompt).not.toContain("# Pi-native Runtime Contract");
+	expect(scripted.observed[0].systemPrompt).not.toContain("rejected_source_focus");
+	expect(scripted.observed[0].systemPrompt).not.toContain("supporting_block_ids");
+	expect(scripted.observed[0].systemPrompt).not.toContain(
+		'response_format={"type":"json_object"}',
+	);
 	expect(scripted.observed[0].systemPrompt).toContain(
 		"对 `S0` 中每个 exact canonical block 运行 shared atomic gate",
 	);
@@ -627,6 +659,7 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[1].userPrompt).toContain(
 		"Re-verify every claim only against REVIEW_FOCUS_SOURCE and the typed provisional fields",
 	);
+	expect(scripted.observed[2].systemPrompt).toBe(scripted.observed[0].systemPrompt);
 	expect(witnessProvisionalRationale(scripted.observed[1])).toEqual({
 		owner_reason: "The source Owner boundaries were inspected.",
 		residual_reason: "The source supports this bounded selection.",
@@ -650,6 +683,50 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	const emptyWitness = witnessSubmission();
 	expect(result.witness?.trace.rawArguments).toEqual([JSON.stringify(emptyWitness)]);
 	expect(result.witness?.trace.normalizedArguments).toEqual([emptyWitness]);
+});
+
+test("keeps Harness runtime governance out of both role system prompts while hashing it into the capability", async () => {
+	const runtimeOnlySentinel = "HARNESS_RUNTIME_ONLY_MUST_NOT_REACH_MODEL";
+	const modifiedRuntimeContract = `${prompts.piNativeRuntimeContract}\n${runtimeOnlySentinel}`;
+	const modifiedPrompts = {
+		...prompts,
+		piNativeRuntimeContract: modifiedRuntimeContract,
+		hashes: {
+			...prompts.hashes,
+			piNativeRuntimeContract: sha256(modifiedRuntimeContract),
+		},
+	};
+	const scenario = (): ScenarioStep[] => [
+		{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
+		{ role: "witness", response: toolWitness(witnessSubmission([])) },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+	];
+	const baseline = await runScenario(scenario());
+	const modified = await runScenario(
+		scenario(),
+		undefined,
+		undefined,
+		"0".repeat(64),
+		undefined,
+		modifiedPrompts,
+	);
+
+	expect(modified.result.status).toBe("preserved");
+	expect(modified.scripted.observed.map(({ systemPrompt }) => systemPrompt)).toEqual(
+		baseline.scripted.observed.map(({ systemPrompt }) => systemPrompt),
+	);
+	expect(modified.scripted.observed.map(({ userPrompt }) => userPrompt)).toEqual(
+		baseline.scripted.observed.map(({ userPrompt }) => userPrompt),
+	);
+	for (const observed of modified.scripted.observed) {
+		expect(observed.systemPrompt).not.toContain(runtimeOnlySentinel);
+		expect(observed.userPrompt).not.toContain(runtimeOnlySentinel);
+		expect(observed.serializedContext).not.toContain(runtimeOnlySentinel);
+	}
+	expect(modified.result.prompts.piNativeRuntimeContract).toBe(
+		sha256(modifiedRuntimeContract),
+	);
+	expect(modified.result.capabilitySha256).not.toBe(baseline.result.capabilitySha256);
 });
 
 test("forwards only the canonical schema-bounded provisional rationale to Witness", async () => {
