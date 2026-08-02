@@ -280,24 +280,139 @@ function witnessReviewPacket(observed: { userPrompt: string }) {
 	return packet.review_evidence.independent_semantic_witness;
 }
 
-test("loads the v32 delta, tournament, and semantic gate contracts", () => {
+test("loads the v37 exact-set and adversarial semantic adjudication contracts", () => {
+	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
+	expect(prompts.finalizer).toContain("exact target-own predicate");
+	expect(prompts.finalizer).toContain(
+		"先冻结 exact `S` 并从它生成 typed ranges，再据 `S` 写 reason",
+	);
+	expect(prompts.finalizer).toContain(
+		"任何 reason 已判 excluded 却仍在 `F`、或已判 selected 却不在 `F` 的地址",
+	);
+	expect(prompts.finalizer).toContain(
+		"`owner_reason` 只允许写整文身份和决定性的 Owner root→first peer exit",
+	);
+	expect(prompts.finalizer).toContain("不得写 run-by-run atom");
+	expect(prompts.finalizer).toContain(
+		"所有 membership 与原子依据只能压缩写入 `residual_reason`",
+	);
 	for (const prompt of [prompts.finalizer, prompts.piNativeSemanticContract]) {
-		expect(prompt).toContain("`S=(S0-Δ-)∪Δ+`");
-		expect(prompt).toContain("exact target-own predicate");
 		expect(prompt).toContain("`remove_consequence_then_normalize_condition`");
+		expect(prompt).toContain("shared atomic controlling-predicate gate");
+		expect(prompt).toContain("价格操作数不得改写为项目物理规模");
+		expect(prompt).toContain("跨 block 指代不得借入 antecedent");
+		expect(prompt).toContain(
+			"跨过可分离的 excluded meta、bare pointer 或价格 child",
+		);
+		expect(prompt).toContain("closure 只增加 heading");
+		expect(prompt).toContain("不得用“其余范围均合格”之类组摘要");
 	}
+	for (const prompt of [
+		prompts.finalizer,
+		prompts.piNativeSemanticContract,
+		prompts.witness,
+	]) {
+		expect(prompt).toContain("performance threshold");
+		expect(prompt).toContain("monetary formula operand");
+		expect(prompt).toContain("supplier-side baseline");
+		expect(prompt).toContain("`D(h)`");
+		expect(prompt).toContain("较低层级的编号或 source-function subheading");
+		expect(prompt).toContain("applicability ATOM");
+	}
+	expect(prompts.finalizer).toContain(
+		"后果条件含并列或选择性 trigger 时逐 proposition 判断",
+	);
+	expect(prompts.piNativeSemanticContract).toContain(
+		"后果条件含并列或选择性 trigger 时，逐 proposition 检查每个 trigger",
+	);
+	expect(prompts.witness).toContain(
+		"后果条件含并列或选择性 trigger 时逐 proposition 判断",
+	);
+	expect(prompts.finalizer).toContain(
+		"Word style、字号或 outline path 相同不能把 child 自动升级为 peer",
+	);
+	expect(prompts.piNativeSemanticContract).toContain(
+		"Word style、字号或 outline path 与父 heading 相同也不能自动升级为 peer",
+	);
+	expect(prompts.witness).toContain(
+		"Word style/outline 相同不能把 child 自动升级为 peer",
+	);
+	expect(prompts.finalizer).toContain("nested hard-root sweep");
+	expect(prompts.finalizer).toContain("`ATOM|HEADING` admission invariant");
+	expect(prompts.finalizer).toContain("`F⊆ATOM∪HEADING`");
+	expect(prompts.finalizer).toContain("`terminal exact-block scan`");
+	expect(prompts.finalizer).toContain("固定覆盖三组风险面");
+	expect(prompts.finalizer).toContain("a) 每个 selected island 的 local hard root");
+	expect(prompts.finalizer).toContain(
+		"b) 每个 selected price/proof/procedure/legal/meta/shell/pointer/open-ended-enforcement/remedy cluster",
+	);
+	expect(prompts.finalizer).toContain("每个 selected island 的末 block 单独重跑 shared gate");
+	expect(prompts.finalizer).toContain(
+		"c) 每个 excluded gap 的 target-own survivor、履约侧具体 threshold 与 heading/table closure",
+	);
+	expect(prompts.finalizer).toContain(
+		"卡错误、缺卡或卡槽不足都不能缩小 selected/excluded closure",
+	);
+	expect(prompts.finalizer).toContain("必须先完成 Owner recovery");
+	expect(prompts.piNativeSemanticContract).toContain(
+		"Owner recovery 必须先于 later module 的 atom membership",
+	);
+	expect(prompts.witness).toContain("Owner recovery 先于 atom gate");
+	for (const prompt of [
+		prompts.finalizer,
+		prompts.piNativeSemanticContract,
+		prompts.witness,
+	]) {
+		expect(prompt).toContain("达到、维持、交付或避免的具体履约状态/结果");
+		expect(prompt).toContain("不是 supplier performance result");
+		expect(prompt).toMatch(
+			/earlier block 同时(?:写|含)“遵守\/执行\/符合 X”与“详见附件”时.*operative incorporation/u,
+		);
+		expect(prompt).toMatch(/逐 block (?:atom evaluation|原子裁决)/u);
+	}
+	expect(prompts.finalizer).toContain(
+		"Heading closure 必须 bottom-up",
+	);
+	expect(prompts.piNativeSemanticContract).toContain(
+		"Heading/body closure 必须自底向上构造",
+	);
+	expect(prompts.witness).toContain(
+		"Heading closure 必须 bottom-up",
+	);
+	expect(prompts.piNativeSemanticContract).toContain(
+		"每个 final selected block 必须且只能有一种 source-grounded provenance",
+	);
+	expect(prompts.witness).toContain(
+		"必须先内部剥离全部 excluded-role propositions并重读剩余 target",
+	);
 	for (const invariant of [
 		"global card tournament",
 		"whole-block survivor veto",
+		"shared atomic controlling-predicate gate",
+		"`ranges[0]` 必须精确为一个 singleton canonical block",
+		"start=end 或 `段落N`",
+		"禁止用“前半段”“后半段”“尾句”“其中”等 block 内自然语言切片",
 		"肯定 exclusion mechanism × source-proven peer-bounded partition",
 		"同一 remedy/price/proof cluster",
-		"pure price/proof candidate 与 pure consequence 同样优先",
 		"`select owner_boundary` 必须有真实 boundary evidence",
 		"source-determinate empty-heading candidate",
-		"受约束主体 + 可控制或可核验的行为/结果状态 + 明确肯定或禁止极性",
+		"供应商履约侧主体 + 可控制或可核验的行为/结果状态 + 明确肯定或禁止极性",
 	]) {
 		expect(prompts.witness).toContain(invariant);
 	}
+	expect(prompts.witness).toContain("第一个输出字符必须是 `{`");
+	expect(prompts.witness).toContain("最后一个输出字符必须是 `}`");
+	expect(prompts.witness).toContain("边界独立、可定位的 distinct root/module");
+	expect(prompts.witness).toContain("embedded clause 当作 Owner root");
+	expect(prompts.witness).toContain(
+		"`核心/主要/dominant` 不是 atomic exclusion 证据",
+	);
+	expect(prompts.witness).toContain(
+		"全文只有单一肯定 excluded effect 的短 target 优先于长 mixed block",
+	);
+	expect(prompts.witness).toContain(
+		"长 block 只有在逐 proposition self-falsification 后 remainder 确为零才可入选",
+	);
 });
 
 test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () => {
@@ -348,40 +463,39 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[2].serializedContext).not.toContain('"role":"toolResult"');
 	expect(scripted.observed[0].systemPrompt).toContain("Pi-native Word 采购需求语义合同");
 	expect(scripted.observed[0].systemPrompt).toContain("规范性纳入");
-	expect(scripted.observed[0].systemPrompt).toContain("excluded→selected 反转承担对称证据负担");
 	expect(scripted.observed[0].systemPrompt).toContain(
-		"每个准备 selected 的 heading 必须先按自身 communicative function 和 stripped remainder 独立判断",
+		"shared atomic controlling-predicate gate",
 	);
 	expect(scripted.observed[0].systemPrompt).toContain(
-		"authoring wrapper，即使下层存在合格项目事实、范围、清单项或 body，该 wrapper 仍排除",
+		"报价、付款、程序、资格、法律、文档编制或 hard-carrier wrapper 不能被 child 反向救回",
 	);
+	expect(scripted.observed[0].systemPrompt).toContain("第二轮 targeted delta adjudication");
+	expect(scripted.observed[0].systemPrompt).toContain("`terminal exact-block scan`");
 	expect(scripted.observed[0].systemPrompt).toContain("submit_final_selection");
 	expect(scripted.observed[0].systemPrompt).not.toContain("submit_requirement_release");
 	expect(scripted.observed[0].systemPrompt).toContain(
-		"每张 Witness card 的唯一 target range 展开后的每个 block",
+		"对 `S0` 中每个 exact canonical block 运行 shared atomic gate",
 	);
-	expect(scripted.observed[0].systemPrompt).toContain("`owner_reason` 最多 1200 个字符");
+	expect(scripted.observed[0].systemPrompt).toContain("`owner_reason` 最多 1200 字符");
 	expect(scripted.observed[0].systemPrompt).toContain(
-		"`residual_reason` 以 2400 个字符为压缩目标、8000 个字符为协议硬上限",
+		"`residual_reason` 以 2400 字符为目标、8000 字符为硬上限",
 	);
-	expect(scripted.observed[0].systemPrompt).toContain("symmetric_partition_fixed_point");
+	expect(scripted.observed[0].systemPrompt).toContain("终态 checksum");
 	expect(scripted.observed[0].systemPrompt).not.toContain(
 		'response_format={"type":"json_schema"',
 	);
-	expect(scripted.observed[1].systemPrompt).toContain("独立、窄职责对抗证人");
+	expect(scripted.observed[1].systemPrompt).toContain("独立、窄职责 Witness");
+	expect(scripted.observed[1].systemPrompt).toContain("global card tournament");
 	expect(scripted.observed[1].systemPrompt).toContain(
-		"select lane 有对称证据硬门",
+		"`ranges[0]` 必须精确为一个 singleton canonical block",
 	);
 	expect(scripted.observed[1].systemPrompt).toContain(
-		"每张 card 的唯一 `ranges[0]` 展开后的全部 target block",
+		"Heading closure 必须 bottom-up",
 	);
 	expect(scripted.observed[1].systemPrompt).toContain(
-		"在查看任何普通 body atom 前，先枚举全部 selected headings",
+		"报价、计价、付款、程序、资格、法律、文档编制或 hard-carrier wrapper 是 stop",
 	);
-	expect(scripted.observed[1].systemPrompt).toContain(
-		"只攻击该最小可见同-group heading block",
-	);
-	expect(scripted.observed[1].systemPrompt).toContain("mandatory self-falsification");
+	expect(scripted.observed[1].systemPrompt).toContain("whole-block survivor veto");
 	expect(scripted.observed[1].systemPrompt).not.toContain("Pi-native Word 采购需求语义合同");
 	expect(scripted.observed[1].systemPrompt).not.toContain("Pi-native Runtime Contract");
 	expect(scripted.observed[1].systemPrompt).not.toContain("submit_requirement_release");
