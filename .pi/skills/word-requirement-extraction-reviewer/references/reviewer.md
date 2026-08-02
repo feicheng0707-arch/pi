@@ -1,5 +1,7 @@
 # Residual Reviewer
 
+> V1 legacy overlay baseline only. Active Pi-native runs must not load this file; use `finalizer.md`, `witness.md`, `pi-native-runtime-contract.md`, and `pi-native-semantic-contract.md`.
+
 `runtime-contract.md` 是完整的可执行语义切片。本文件只定义 Reviewer 的一次残差审查程序，不重复语义合同，不从零重做完整提取。把冻结 Candidate 当作成熟但可能出错的外部 patch：只寻找一个能改变 case 结论的最强材料性反例；不能可靠证明时 `pass`。
 
 终态优先。内部只做一次整文关系判断、一次 Candidate 全域 Owner 审查、一次最强反例检查和一次反事实 final 闭合。不逐段复述 source，不输出 ledger，不反复改写结论。

@@ -8,7 +8,31 @@
 
 上游已经迭代成熟的 single-prompt candidate 是必须复用的第一份语义判断。Reviewer 的价值不是重新生成第二份完整答案，而是修复 single prompt 残余的 5%～10% 材料性错误，同时尽量做到 `candidate correct -> final correct`。若只增加包装、调用次数或随机变化，却没有提高 `candidate wrong -> final correct` 的净比例，就不能宣称质量提升。
 
-当前路线为 candidate-protected residual review：
+### 当前 active Pi-native 路线
+
+当前产品路线是固定三调用的 Pi-native Finalizer/Witness：同一个 GLM Pi Agent loop 先提交 provisional，Doubao 2.0 Pro 只提交有界反例，随后同一个 GLM Finalizer 在全新、确定性的 neutral-replay provider context 中提交 final。该 context 只由原始不可变 user 输入追加 normalized provisional 与 review packet 构成，不回放历史 assistant/toolResult 角色或 tool-call ID。Witness 没有 override；代码不在两者之间做语义裁决。发布必须满足 `FINAL_SELECTION ∩ FINAL_HARD_ROOT_PROJECTION = ∅`，且恰好发生 `2 Finalizer + 1 Witness`。Harness 可把 provisional typed selection 与 hard-root projection 的确定性交集作为 mechanical contract blocker 回传，类似 coding agent 的编译错误；它只能指出字段自相矛盾，不能决定应修改 selection、claim exit 或哪项语义结论。任何失败均原样保留 Candidate。
+
+Witness 固定提交 `exclude` 与 `select` 两个必填、非 nullable lane；每个 lane 只能提交该方向最强的一张反例，或以 `kind=none` 和三个精确空字段表示无反例。direction 由外层 lane 机械派生，不是模型字段；lane 名、非空 lane 数和 supporting block 数量都没有证据权重，不能形成投票。每个非空 lane 可引用 1-8 个有界 focus block；这只扩大 source evidence 地址容量，不改变 source quote 总量/单 block 上限、三次 provider call 上限或 Harness 语义边界。全局 JSON/turn/schema/cross-field 与完整 source 地址合同必须先通过，随后代码才按 lane 对 target 的 focus、provisional state、同一连续 group 和 support 的全局 focus 权限做机械校验。source 中真实存在但未获动态权限的 card 必须整 lane 弃权，不能裁剪或修补；单 lane rejected 只形成 `partial` coverage 并保留另一 lane，双 lane rejected 才阻断发布。`valid_none`、`valid_challenge` 与 `rejected_source_focus` 不得合并。exclude lane 必须由目标 block 自身的肯定 exclusion predicate 支撑；普通重复、语义冗余、可由别处覆盖或结果更短/整洁都不能单独授权排除。Finalizer 第二轮必须逐 lane 独立核验有效 predicate；rejected lane 的 range、premise、supporting ID、typed reason 与 error 只能留在 trace 且 `forwarded=false`，Finalizer 只能看到中性 coverage/lane status 和有效 challenge。
+
+Witness premise 应以约 192 字以内为紧凑目标，但字符数不是协议合法性或语义完整性的替代品。Harness 只校验 premise 非空白、字段 shape、地址与权限，不得因一句完整 premise 超过某个自然语言字符数而 contract-fail，也不得机械裁剪。成本和最坏输出由 Witness 全局 2400-token 上限硬控制。
+
+Active Pi-native 必须执行 canonical block provenance gate：对 selected 范围内每个可独立寻址的纯违约金、扣款、赔偿、责任后果、风险分配等 consequence/remedy sibling，不论它位于 island 首尾还是内部，都只能使用目标 block 自身的 operative predicate 证明 membership，前后相邻 block 的施工、供货、质量、修理、纠正或交付谓词不得借入。触发条件只说“造成质量问题/工期延误/交付损失”等泛化事件不等于结果义务；若主谓词只是承担责任、费用、损失或处罚，且剥离后只剩该泛化标签，该 block 就是肯定 false-positive hole。反之，否定式条件若自身明确供应商可控制且可独立核验的交付状态、资料完整性、数值阈值、合规标准或验收基线，必须做极性归一，把“未满足 X 才产生后果”中的 X 作为 surviving result duty；同 block 的不计价、扣款、责任或费用后果不能抹掉该 X。禁止用“工期与质量”“质量责任”等组级摘要批量保留其中每个独立 block。同一不可分 block 内确有直接 duty 时仍完整保留。该判断只由 Witness/Finalizer 基于 source 完成，不增加 ledger、schema、调用或代码语义裁决。
+
+Active Pi-native 还必须遵守 canonical table-block atomicity：同一个 table block 内的 row/cell 不是独立输出地址。在四类 carrier 外，只要任一 row/片段仍有合格对象、参数、人员、工期、质量、服务或结果事实，就不得因同表另有付款、价格、合同指针等 row 删除整个 block；只有整块剥离后 surviving remainder 为零才可排除。Witness 不得提交 row-level 删除 premise，Finalizer 不得把 row-level rationale 投影成整块 exclusion；模型内部可逐 row 阅读，但不增加 row schema、patch 地址或 ledger。该 atomicity 不会覆盖 hard-carrier Owner gate。
+
+Active Pi-native 的 hard-carrier 层级是不变量：source 一旦证明四类 root 与首个同级或更高层级、功能不同的 peer exit，内部低层 subsection 即使包含进场、人员、质量、交付等 post-award 措辞，也不能形成内容例外或内部 peer exit；Stage Owner、stripped-remainder 和 atom 判断只能在 Owner gate 之后、四类 carrier span 之外运行。Finalizer 不得为保留 descendant 把已成立的 hard-root exit 收窄到内部 subsection；selection 位于已承认 span 时必须删除，除非 source 证明其前方已有真实同级或更高层级不同功能 peer。该规则由模型判断 source 层级，不增加代码语义裁决。
+
+每个 Finalizer turn 的唯一权威输出仍是恰好一个 contract-valid `submit_final_selection`。Prompt 继续要求不输出 prose；若 provider 同轮附带普通 text，Harness 不读取、不解析、不解释其语义，也不让它参与 provisional、repair card、final 或发布，只机械记录原样拼接文本的字符数、SHA-256 与 `forwarded=false`。Finalizer trace 只持久化 raw tool arguments、normalized structured submissions 和上述 auxiliary-text 元数据，不持久化 raw Finalizer assistant message。转换为第二轮真实模型 context 时，Harness 必须先机械验证唯一 provisional tool call 与对应 tool result 成对匹配，再移除历史 assistant/toolResult 角色、tool-call ID 和全部 auxiliary text，把 normalized provisional 与 review packet 追加到原始 user 输入。thinking、未知或额外 tool call、截断和非法 schema 仍 fail-closed。
+
+非空 Candidate 的首版 `AUDIT_UNIVERSE` 只等于 Candidate，当前只承诺 false-positive precision repair；不得声称已解决任意远端 `OUT` omission。空 Candidate 才机械扩展到完整 source，用于修复 false-null。该路由只依据 Candidate 是否为空，不读取正文、case 或答案。
+
+运行时按角色切片加载 Prompt：Finalizer 加载 mode-specific 的 `pi-native-semantic-contract.md`、`pi-native-runtime-contract.md` 与 `finalizer.md`；Witness 只加载自包含的 `witness.md`，再接收当前 run 的有界 focus、结构化 provisional ranges/claims 和 exact JSON schema。Witness 不得接收 Finalizer 自己的 `owner_reason` / `residual_reason`；独立审查必须从 source 与实际地址决定出发，不能先被作者叙述锚定。不得把 Finalizer 的发布、neutral replay、trace 与 Harness 预算规则重复拼进 Witness system prompt。本文仍是治理和评估真源，但不整篇塞入模型上下文。这样避免旧模式字段、其他角色、重复语义规则和评估说明干扰窄职责判断。
+
+### V1 legacy overlay 基线
+
+以下从 Call 1 Reviewer、Call 2 Release、`REMOVE_REVIEW`/`BASE_KEEP` overlay 到两调用预算的描述，只记录 `review_word_requirement_extraction_candidate` 旧实验基线。它不定义 active Pi-native 执行，不得混入 active Prompt；若与上面的三调用合同冲突，以上面的 active 路线为准。
+
+V1 legacy 路线为 candidate-protected residual review：
 
 - Call 1 Reviewer 只提交 `pass` 或一个 source-grounded add/remove challenge；
 - 四类硬载体优先是 block/range 级终态门，不是 case 级早停权。Reviewer 确认 hard root→semantic-exit 后，禁止在该 hard range 内执行主要直接效力或 `duty_survival_attack`；但在终态投影前，必须将所有已确认 hard ranges 从 Candidate 中机械想象减去，继续对每个存活 Candidate residual island 执行 `pre_award_stage_gate`、`outside_carrier_precision_closure` 和反事实 duty 攻击。同一 Candidate 中的硬载体污染与载体外材料性 membership 错误必须在同一 case-level challenge 中一次关闭；不增加调用、不生成 ledger，也不搭载无关的普通噪声清理；
@@ -223,7 +247,24 @@ Release 不提交完整最终集合，只提交 `hard_excluded_ranges`、`outsid
 
 不可妥协红线：代码只负责通用 Agent harness 的薄适配和原子化机械能力，不能负责任何采购语义判断。
 
-Pi Agent 底座负责模型循环、消息上下文、工具调用、provider、流式响应、取消和基础错误处理。Extension 只负责：
+Active Pi-native 路线必须最大化复用 Pi Agent 底座的模型循环、同一 Agent loop、确定性的 neutral-replay 上下文转换、工具调用、provider、流式响应、取消和基础错误处理。Extension 只负责：
+
+- 不可变 answer-free packet、SHA、provider/model 与 Prompt/schema provenance；
+- canonical `段落N` 地址、范围解析、连续地址 run、集合一致性和最终 patch；
+- answer-free Word 布局事实的 hash 绑定、严格校验和有界呈现；
+- 调用前对 Finalizer 第二轮与 Witness 最坏上下文做容量预检、固定三调用上限、Token/输出/超时/取消预算；
+- Finalizer 与 Witness 的严格 schema、Witness focus 和 trace；Witness premise 只保留非空白校验与全局 2400-token 预算，不对自然语言字符数设本地 hard gate；Witness 必须返回完整 `exclude`/`select` 双 lane，空 lane 只能用 `kind=none,ranges=[],attacked_premise="",supporting_block_ids=[]` 表达。Harness 只接受一次纯 JSON text，以原生 `JSON.parse`、TypeBox 和交叉字段规则严格校验；缺字段、`null`、字符串 `"null"`、空对象、旧 primary/secondary、direction 或额外字段全部 fail-closed，不做兼容归一化；
+- Finalizer 将 `exit_block_id_exclusive` 写成完整 source 末端 block ID 加一时，Harness 只可把该 one-past-end 地址表示机械归一化为 EOF `null` 并记录 raw/normalized submission；这不证明 hard root 成立、Owner 延续到 EOF 或任何正文 membership，其他不存在或非法 exit 仍 fail-closed；
+- Finalizer 的 raw tool arguments、normalized structured submissions，以及每轮普通 auxiliary text 的字符数、SHA-256 与 `forwarded=false` trace；不持久化 raw Finalizer assistant message，该 text 不进入后续模型 context、任何语义判断或 patch；
+- 对 Finalizer 每条 submitted range 执行 run 权限投影：只允许非空、单连续授权岛加普通 `OUT` spill 的机械裁剪；全 `OUT`、cross-run、multi-island 或不存在地址必须 fail-closed；
+- 在任何逐 lane 动态判断前，对 Witness 两个 lane 的 target range 与 supporting ID 统一做完整 source 地址校验；非法或不存在地址整 Witness fail-closed。随后只按最终实际序列化的 focus 做原子权限校验：`exclude` target 必须完整位于一个 selected group，`select` target 必须完整位于一个 excluded group，support 只须真实存在且进入全局 focus。source 中存在但 focus/state/group 越权时拒绝整张 lane card，不裁剪、不补洞、不把同向地址过滤成残余 challenge；单 lane rejected 保留另一 lane，双 lane rejected 才使 Witness fail；
+- 仅对权限有效的 Witness ranges 做 `AUDIT_UNIVERSE` 交集与 claimed/unclaimed 机械分区；rejected 原始 lane 和 typed reason 只进入 trace 并标记 `forwarded=false`，不得把其 range、premise、support、error 或错误地址转发给 Finalizer；
+- 仅按 provisional hard-root projection 的地址连续岛，为 Witness focus 加入每岛固定首尾各两个 block，使 Owner 反例只能引用实际看过的有界 source；全部 focus block 去重后只按 provisional state 与连续 block ID 分成 selected/excluded 两类岛，每个 block 和正文只出现一次；该窗口与分组都不证明 claim、Owner、membership 或修复方向；
+- 校验 final selection 与 final hard-root projection 零交集，并在任何失败时保留 Candidate。
+
+代码不得读取标题或正文含义，不得生成 semantic challenge、Owner 结论、membership 结论、修复方向或自动 override，也不得在 repair card 中硬编码价格、法律、载体、资格、heading 等业务攻击指令。所有语义原则只能进入受 Prompt hash 约束的 active Prompt。Witness 只提供模型反例；Finalizer 必须自行接受、反驳、收窄或撤回 claim。非空 Candidate 的 Candidate-only universe 与空 Candidate 的完整 source universe 只由地址集合和 Candidate 是否为空确定。
+
+以下旧 overlay、`REMOVE_REVIEW`、`BOUNDARY_REVIEW`、residual unlock 与两角色隔离细节只适用于 V1 legacy 工具：
 
 - 不可变 packet、SHA 和 answer-free 边界；
 - canonical `段落N` 地址、范围解析、集合差异和机械合并；
@@ -255,6 +296,12 @@ Pi Agent 底座负责模型循环、消息上下文、工具调用、provider、
 评测必须在 Agent raw result 和 trace 落盘后独立进行。离线代码只能比较结果，不能在计分前执行生产路径中不存在的语义补丁。
 
 ## 六、成本与调用上限
+
+Active Pi-native 每个 case 固定最多三次 provider call：GLM Finalizer provisional、Doubao 2.0 Pro Witness、同一个 GLM Finalizer final。成功发布必须恰好三次；失败路径可提前终止。Finalizer provider 边界最多两次，首轮无合法 provisional 时立即停止，第二轮后无条件停止；每轮必须恰好一个目标工具调用。普通 text 若出现只能作为不参与结果的 trace-only auxiliary output；thinking、未知或额外工具仍拒绝。Witness 无论是否发现反例都只调用一次。无 retry、第四次调用、投票、best-of-N、逐 block ledger 或自由读搜 loop。两次 Finalizer 和 Witness 均关闭 thinking；Witness 最多 2400 output tokens，使用 `tools=[]`，provider payload 发送 exact strict `response_format={"type":"json_schema",...}` 与 `thinking={"type":"disabled"}`。provider constrained decoding 只提高协议可靠性，不构成语义裁决；唯一接受路径仍是单一 assistant text 的严格 `JSON.parse`、同一 TypeBox schema 和 lane 交叉字段校验。
+
+调用前必须用 answer-free、确定性的上下文估算做容量预检。provider、capacity、timeout、abort、budget、全局 JSON/turn/schema/cross-field、完整 source 地址、双 lane 动态授权、调用数或最终一致性失败均不应用语义改写，Candidate 原样保留并标记 degraded。单 lane 的 focus/state/group 动态越权只把该原始 card 机械降为 `rejected_source_focus`，不增加调用、不触发 retry，也不阻断有效另一 lane 与第三次 Finalizer；成功结果必须显式标记 `partial` coverage。上述非空单岛普通 `OUT` spill 的最小权限投影只是删除模型无权选择的地址，不是 range failure、语义补丁或答案裁决；其他越权形态仍失败关闭。上游 Candidate 成本与新增 Agent 成本分开报告。
+
+以下两调用成本规则只适用于 V1 legacy baseline：
 
 - 空 Candidate 的 Reviewer pass / 机械 no-op：新增 1 次 Doubao 2.0 Pro 语义调用；
 - 非空 Candidate：固定最多新增 1 次 Doubao 2.0 Pro + 1 次 GLM 5.2；contract-valid challenge 走 bounded patch Release，pass / 机械 no-op / Reviewer contract failure 走 terminal-or-hard veto Release audit；

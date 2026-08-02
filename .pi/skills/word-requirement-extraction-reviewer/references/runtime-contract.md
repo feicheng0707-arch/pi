@@ -1,5 +1,7 @@
 # Word 采购需求 Reviewer Runtime Contract
 
+> V1 legacy overlay baseline only. Active Pi-native runs must not load this file; use `pi-native-runtime-contract.md`.
+
 本文件是 `semantic-contract.md` 的可执行切片，不创造新语义。完整 product principles 与 semantic contract 仍是治理真源；运行时只保留会改变终态的优先级，避免低优先级局部规则覆盖高优先级载体边界。
 
 ## 目标

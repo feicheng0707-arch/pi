@@ -24,6 +24,11 @@ import { stream } from "@earendil-works/pi-ai/compat";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
+import {
+	piNativeFinalizerStreamFunction,
+	piNativeWitnessStreamFunction,
+	runPiNativeRequirementReview,
+} from "./pi-native.ts";
 
 const REVIEWER_PROVIDER = "pi-requirement-reviewer-doubao";
 const REVIEWER_MODEL_ID = "doubao-seed-2-0-pro-260215";
@@ -35,7 +40,7 @@ const MAX_PACKET_BYTES = 20 * 1024 * 1024;
 const REVIEWER_MAX_TOKENS = 4_000;
 const RELEASE_MAX_TOKENS = 19_000;
 const REVIEWER_THINKING_LEVEL: ThinkingLevel = "medium";
-const RELEASE_THINKING_LEVEL: ThinkingLevel = "low";
+const RELEASE_THINKING_LEVEL: ThinkingLevel = "off";
 const REQUEST_TIMEOUT_MS = 300_000;
 const WORKFLOW_TIMEOUT_MS = 600_000;
 const CONTEXT_SAFETY_TOKENS = 8_000;
@@ -62,15 +67,15 @@ const MAX_RELEASE_STRUCTURE_FOCUS_NODES = 64;
 const MAX_RELEASE_STRUCTURE_FOCUS_CHARACTERS = 8_000;
 const MAX_RELEASE_PERMISSION_TRANSITIONS = 32;
 const RUNTIME_CONTRACT_VERSION =
-	"candidate-protected-hybrid-v166-terminal-negative-remainder-gates";
+	"candidate-protected-hybrid-v168-derived-hard-projections";
 const FULL_REMOVAL_SAFETY_CONTRACT =
-	"fullRemovalSafetyContract=When Reviewer classifies the complete source as buyer_issued with instantiation=present but proposes ordinary removal of every Candidate block, the Harness withdraws that ordinary removal envelope before Release. Every Candidate block becomes protected BASE_KEEP, challengeRemoveRanges and releaseRemoveEnvelopeRanges become empty, and releaseAuditMode becomes hard_carrier_boundary_residual. Release first performs the unchanged candidate-wide four-carrier sweep through hard_excluded_ranges. After that typed hard delta, outside_carrier_excluded_ranges may subtract Candidate only when at least one Candidate block is hard-excluded and every remaining Candidate block forms exactly one non-empty continuous residual island. The island may be left by a hard prefix, hard suffix, dual hard boundaries, or by fully hard-excluding every other Candidate interval; the Harness derives and clips this narrow authority from addresses only. An internal hard island that leaves two sides, multiple residual islands, no Candidate hard exclusion, or a fully hard-excluded Candidate grants no residual authority. ADD_REVIEW remains independently available. This is a patch-shape and topology safety policy only: code does not inspect source meaning or choose keep/remove semantics, and terminal non_procurement, completed-supplier-response, contract, or instantiation=absent decisions keep their original bounded envelope.";
+	"fullRemovalSafetyContract=When Reviewer classifies the complete source as buyer_issued with instantiation=present but proposes ordinary removal of every Candidate block, the Harness withdraws that ordinary removal envelope before Release. Every Candidate block becomes protected BASE_KEEP, challengeRemoveRanges and releaseRemoveEnvelopeRanges become empty, and releaseAuditMode becomes hard_carrier_boundary_residual. Release first performs the unchanged candidate-wide four-carrier sweep by submitting hard_root_claims only. After the Harness derives the hard projection union, outside_carrier_excluded_ranges may subtract Candidate only when at least one Candidate block is hard-excluded and every remaining Candidate block forms exactly one non-empty continuous residual island. The island may be left by a hard prefix, hard suffix, dual hard boundaries, or by fully hard-excluding every other Candidate interval; the Harness derives and clips this narrow authority from addresses only. An internal hard island that leaves two sides, multiple residual islands, no Candidate hard exclusion, or a fully hard-excluded Candidate grants no residual authority. ADD_REVIEW remains independently available. This is a patch-shape and topology safety policy only: code does not inspect source meaning or choose keep/remove semantics, and terminal non_procurement, completed-supplier-response, contract, or instantiation=absent decisions keep their original bounded envelope.";
 const CONFIRMED_HARD_RESIDUAL_CONTRACT =
-	"confirmedHardResidualContract=In a normal bounded patch, hard-boundary residual precision unlocks only when Release independently places at least one Candidate block from the Reviewer REMOVE_REVIEW envelope into hard_excluded_ranges. The Harness then computes complete Candidate minus all submitted hard exclusions. If and only if the result is exactly one non-empty continuous block-address run, that entire run becomes a bounded outside-carrier review envelope for the same Release call. Release must audit that run after the hard projection and may put only exact safely separable outside-carrier non-requirement atoms into outside_carrier_excluded_ranges; every omitted block remains selected. A hard finding only in BASE_KEEP, no confirmed REMOVE_REVIEW hard block, two residual runs, no residual, or no Candidate hard exclusion grants no authority. This is content-blind topology and patch-coupling only; code never reads source meaning or chooses a deletion.";
+	"confirmedHardResidualContract=In a normal bounded patch, hard-boundary residual precision unlocks only when the Harness-derived projection of Release hard_root_claims contains at least one Candidate block from the Reviewer REMOVE_REVIEW envelope. The Harness then computes complete Candidate minus all derived hard exclusions. If and only if the result is exactly one non-empty continuous block-address run, that entire run becomes a bounded outside-carrier review envelope for the same Release call. Release must audit that run after settling the root claims and may put only exact safely separable outside-carrier non-requirement atoms into outside_carrier_excluded_ranges; every omitted block remains selected. A hard finding only in BASE_KEEP, no confirmed REMOVE_REVIEW hard block, two residual runs, no residual, or no Candidate hard exclusion grants no authority. This is content-blind topology and patch-coupling only; code never reads source meaning or chooses a deletion.";
 const HARD_CARRIER_VETO_CONTRACT =
-	"hardCarrierVetoContract=Release has one candidate-wide safety authority in addition to the bounded Reviewer patch: any Candidate block inside an actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root must be written to hard_excluded_ranges before subtraction. Candidate need not contain the carrier root title or start block. For every Candidate interval, inspect source ancestors before its first Candidate block; when the actual root begins in OUT and the Candidate contains only descendants, project the root-to-semantic-exit intersection with Candidate into hard_excluded_ranges. 'The root is not independently present inside Candidate' is never a keep reason. Once the corrected two-reason plan affirms an actual root through its semantic exit, every authorized Candidate or ADD_REVIEW block in that root-closed interval must be projected to hard_excluded_ranges. There is no technical-duty, usefulness, primary-effect, or duty-survival keep option inside the affirmed root. To omit any descendant from hard_excluded_ranges, residual_reason must first retract or narrow the root or establish an earlier different-Owner peer exit. A corrected root with a partial hard delta is an invalid holey projection. Every four-carrier deletion uses hard_excluded_ranges regardless of marker; outside_carrier_excluded_ranges is never an alternative encoding for a hard carrier. This is a four-carrier root-and-exit sweep, not a general BASE_KEEP cleanup pass. A REMOVE_REVIEW-to-BASE_KEEP or BASE_KEEP-to-REMOVE_REVIEW marker transition is only a permission boundary and can never prove a semantic Owner exit; follow the actual source root across the transition and through any later OUT or marker change until the first different-Owner peer root or EOF. Outside-carrier atom deletion is ordinarily limited to REMOVE_REVIEW. The only BASE_KEEP exception is the runtime-declared full-removal safety mode, where the Harness derives the one non-empty continuous residual island left across Candidate after at least one hard exclusion; every other Candidate block must already be hard-excluded. The Harness derives the final set mechanically from the typed deltas and ignores unauthorized exclusions.";
+	"hardCarrierVetoContract=Release has one candidate-wide safety authority in addition to the bounded Reviewer patch: submit one hard_root_claim for every actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root whose span intersects hardRootClaimProjectionUniverseRanges. Candidate need not contain the carrier root title or start block. For every Candidate interval, inspect source ancestors before its first Candidate block; when the actual root begins in OUT and Candidate contains only descendants, submit the OUT root and its semantic exit. 'The root is not independently present inside Candidate' is never a keep reason. Once the corrected two-reason plan affirms an actual root through its semantic exit, the Harness mechanically projects every authorized Candidate, ADD_REVIEW, and BOUNDARY_REVIEW address in that span into the derived hard exclusion union. There is no technical-duty, usefulness, primary-effect, or duty-survival keep option inside the affirmed root. To retain any descendant, residual_reason must first retract the claim, narrow its exit, or establish an earlier different-Owner peer exit. A REMOVE_REVIEW-to-BASE_KEEP or BASE_KEEP-to-REMOVE_REVIEW marker transition is only a permission boundary and can never prove a semantic Owner exit; follow the actual source root across the transition and through any later OUT or marker change until the first different-Owner peer root or EOF. outside_carrier_excluded_ranges is never an alternative encoding for a hard carrier. Outside-carrier atom deletion is ordinarily limited to REMOVE_REVIEW. The only BASE_KEEP exception is the runtime-declared full-removal safety mode, where the Harness derives the one non-empty continuous residual island left across Candidate after at least one hard exclusion; every other Candidate block must already be hard-excluded. The Harness derives every hard projection and the final set mechanically; code never chooses carrier semantics.";
 const WHOLE_SOURCE_IDENTITY_VETO_CONTRACT =
-	"wholeSourceIdentityVetoContract=Before carrier or atom gates, independently inspect the beginning, middle, and end to decide whole-source authorship and use. If affirmative source evidence establishes one completed supplier-authored bid, response, technical proposal, implementation plan, or deliverable; one non-procurement document; one contract-only document; or one uninstantiated template or form through its true end, and whole_container_disconfirmation finds no boundary-independent buyer-issued requirement region, that identity is terminal for every runtime-authorized Candidate block. Copied tender clauses, technical detail, future duties, response tables, or commitments cannot reopen membership, and duty_survival_attack is forbidden. When the runtime grants a complete-Candidate terminal veto, put exactly the complete Candidate in outside_carrier_excluded_ranges and leave hard_excluded_ranges and accepted_add_ranges empty so the mechanically derived final is null. Do not infer this veto from a title, completed tone, or one supplier phrase; mixed-author handoffs and buyer-provided technical reports require block-level Owner judgment.";
+	"wholeSourceIdentityVetoContract=Before carrier or atom gates, independently inspect the beginning, middle, and end to decide whole-source authorship and use. If affirmative source evidence establishes one completed supplier-authored bid, response, technical proposal, implementation plan, or deliverable; one non-procurement document; one contract-only document; or one uninstantiated template or form through its true end, and whole_container_disconfirmation finds no boundary-independent buyer-issued requirement region, that identity is terminal for every runtime-authorized Candidate block. Copied tender clauses, technical detail, future duties, response tables, or commitments cannot reopen membership, and duty_survival_attack is forbidden. When the runtime grants a complete-Candidate terminal veto, put exactly the complete Candidate in outside_carrier_excluded_ranges and leave hard_root_claims and accepted_add_ranges empty so the mechanically derived final is null. Do not infer this veto from a title, completed tone, or one supplier phrase; mixed-author handoffs and buyer-provided technical reports require block-level Owner judgment.";
 const UNINSTANTIATED_TEMPLATE_TERMINAL_CONTRACT =
 	"uninstantiatedTemplateTerminalContract=Instantiation requires at least one already-filled fact that distinguishes the current procurement object, scope, work package, quantity, site, or commissioned relationship. A template or model identifier, generic supply or quotation rule, drafting instruction, default obligation, blank schedule or table, and a pointer to an absent notice, list, or specification cannot establish it. When the complete source remains an uninstantiated template, that whole-source identity is terminal: do not reopen local generic supply, pricing, quality, compliance, or future-work clauses through primary-effect, normative-incorporation, or duty_survival_attack. Submit the complete authorized omission and accept no additions.";
 const PERFORMANCE_TRANSITION_ATTACK_CONTRACT =
@@ -78,7 +83,7 @@ const PERFORMANCE_TRANSITION_ATTACK_CONTRACT =
 const PEER_ROOT_FRACTURE_CONTRACT =
 	"peerRootFractureContract=Address continuity never carries Owner across a source-proven peer root. Inside every continuous Candidate, IN, or REMOVE_REVIEW interval, reopen Owner at each peer chapter, subsection, appendix, table root, or equivalent functional boundary. When a qualified requirement region is followed by a new announcement/notice, bidder or supplier instruction, bid/response/quotation-format, or contract-terms root, end the qualified island immediately before that root and carry the new Owner to its semantic exit. A later qualified peer root may likewise reopen membership after a hard carrier. A contract root ends before a later peer technical, specification, material, brand, drawing, list, or equivalent requirement chapter unless the source itself identifies that peer as a contract attachment or continuation; adjacency, chapter order, an earlier cross-reference, or placement between contract and response-format chapters is insufficient. Only source-proven peer function can trigger the reset; block number, keywords, formatting, Candidate width, and permission markers cannot.";
 const HARD_CARRIER_FUNCTION_CONTRACT =
-	"hardCarrierFunctionContract=Four-class roots are defined by communicative function, never by isolated addressee or price words. Announcement/notice requires one uninterrupted outward-notification sequence, not an invitation sentence plus later peer requirements outside any source-proven notice root. Once source establishes an actual announcement/notice chapter or boundary-complete notification root, its numbered project synopsis, procurement scope, period, location, standard, and technical-summary children remain descendants until a same-or-higher different-Owner peer exits that root. Bidder/supplier instruction requires a rooted participation, acquisition, submission, evaluation, or response-procedure region, not any sentence addressed to a bidder. Bid/response/quotation format requires a response-artifact schema that prescribes submitted documents, fields, tables, declarations, signatures, or layout; ordinary price calculation, quotation construction, cost inclusion, payment, or commercial rules outside such a schema are outside-carrier atoms and can never enter hard_excluded_ranges. A local commitment sentence is not a format root without a boundary-complete declaration/commitment section. Contract terms still require an actual agreement, terms, format, or contract-appendix root. Mixed or multi-carrier is only a whole-source diagnosis: it rejects one whole-file carrier identity but never cancels a proven local four-class root. Every local root still owns its descendants through the peer exit; never use mixed or multi-carrier to produce hard_hypothesis=none or retain a descendant. When these functional roots are absent, keep the block out of hard_excluded_ranges and adjudicate any authorized price, procedure, proof, or legal atom only in Phase 2.";
+	"hardCarrierFunctionContract=Four-class roots are defined by communicative function, never by isolated addressee or price words. Announcement/notice requires one uninterrupted outward-notification sequence, not an invitation sentence plus later peer requirements outside any source-proven notice root. Once source establishes an actual announcement/notice chapter or boundary-complete notification root, its numbered project synopsis, procurement scope, period, location, standard, and technical-summary children remain descendants until a same-or-higher different-Owner peer exits that root. Bidder/supplier instruction requires a rooted participation, acquisition, submission, evaluation, or response-procedure region, not any sentence addressed to a bidder. Bid/response/quotation format requires a response-artifact schema that prescribes submitted documents, fields, tables, declarations, signatures, or layout; ordinary price calculation, quotation construction, cost inclusion, payment, or commercial rules outside such a schema are outside-carrier atoms and can never become hard_root_claims. A local commitment sentence is not a format root without a boundary-complete declaration/commitment section. Contract terms still require an actual agreement, terms, format, or contract-appendix root. Mixed or multi-carrier is only a whole-source diagnosis: it rejects one whole-file carrier identity but never cancels a proven local four-class root. Every local root still owns its descendants through the peer exit; never use mixed or multi-carrier to produce hard_hypothesis=none or retain a descendant. When these functional roots are absent, submit no hard_root_claim for that block and adjudicate any authorized price, procedure, proof, or legal atom only in Phase 2.";
 const ANNOUNCEMENT_PREAMBLE_BOUNDARY_CONTRACT =
 	"announcementPreambleBoundaryContract=This reset applies only when no source-proven announcement/notice chapter or boundary-complete notification root encloses both the preamble and the later content. An isolated buyer or agent sentence announcing an open invitation, commission, or welcome to participate does not convert its enclosing tender-book, requirement, specification, or technical chapter into an announcement carrier. Without a boundary-complete outward-notification sequence, treat that sentence as at most a local preamble and reopen Owner at the next source-proven numbered peer root. A peer procurement-content, object, scope, site, schedule, quality, specification, drawing, list, or technical-requirement root is then a semantic exit even without an explicit end-of-notice phrase. Once an actual announcement/notice root is proven, disable this reset inside that root: its numbered project synopsis, procurement scope, period, location, standard, and technical-summary children cannot be their own exits; only a same-or-higher different-Owner peer outside the real notice root can reopen Owner. Repetition of the same project facts in an earlier separate notice cannot transfer announcement Owner to a later peer root outside that notice; decide the later root's local communicative function independently. Agent, commission, public-tender, or welcome language alone is insufficient to create or extend a notice root.";
 const EXPLICIT_CHAPTER_HIERARCHY_CONTRACT =
@@ -99,6 +104,43 @@ const promptDirectory = resolve(
 	"../../skills/word-requirement-extraction-reviewer/references",
 );
 const RangeSchema = Type.String({ pattern: "^段落\\d+(?:-段落\\d+)?$" });
+type HardCarrierType =
+	| "announcement"
+	| "bidder_instruction"
+	| "response_format"
+	| "contract_terms";
+const HardRootClaimSchema = Type.Object(
+	{
+		carrier_type: Type.Union(
+			[
+				Type.Literal("announcement"),
+				Type.Literal("bidder_instruction"),
+				Type.Literal("response_format"),
+				Type.Literal("contract_terms"),
+			],
+			{
+				description:
+					"Exact enum for the source-proven hard carrier root. The Harness treats this as a typed model claim and never infers carrier semantics from source text.",
+			},
+		),
+		root_block_id: Type.Integer({
+			minimum: 0,
+			description:
+				"Inclusive source block ID where the claimed hard-carrier root begins. It may be OUT but must exist in the immutable source.",
+		}),
+		exit_block_id_exclusive: Type.Union(
+			[
+				Type.Integer({ minimum: 1 }),
+				Type.Null(),
+			],
+			{
+				description:
+					"Exclusive source block boundary where the claimed hard-carrier Owner ends, or null when the root continues through EOF.",
+			},
+		),
+	},
+	{ additionalProperties: false },
+);
 const ReasonSchema = Type.String({
 	minLength: 1,
 	maxLength: 1_200,
@@ -109,13 +151,13 @@ const ReleaseHardCarrierReasonSchema = Type.String({
 	minLength: 1,
 	maxLength: 1_200,
 	description:
-		"Phase 1 only. Begin from the complete Candidate-only IN/OUT source, where Reviewer challenge markers are absent. Audit Candidate intervals in candidateHardCarrierAuditOrder and state only actual announcement/notice, bidder or supplier instruction, bid/response/quotation-format, and contract-terms/format roots with compact root->semantic-exit addresses. Candidate need not contain the root title: inspect source ancestors before each Candidate interval and include the Candidate intersection when a root begins in OUT. A chapter-level root can end only at a source-proven same-or-higher-rank peer; lower-rank numbered scope, schedule, standard, table, or technical-summary children remain descendants. Mixed or multi-carrier rejects only a whole-source identity and never cancels a named local root. Do not adjudicate outside-carrier price, payment, legal, proof, or work-duty atoms in this field. Keep the entire field under 900 characters and end with one compact hard_hypothesis=<ranges or none> clause listing every Candidate intersection of the named roots. The later hard_excluded_ranges field must exactly project the corrected four-carrier plan and may be empty only when no root remains affirmed.",
+		"Phase 1 only. Begin from the complete Candidate-only IN/OUT source, where Reviewer challenge markers are absent. Audit Candidate intervals in candidateHardCarrierAuditOrder and state only actual announcement/notice, bidder or supplier instruction, bid/response/quotation-format, and contract-terms/format roots with compact root->semantic-exit addresses. Candidate need not contain the root title: inspect source ancestors before each Candidate interval when a root begins in OUT. A chapter-level root can end only at a source-proven same-or-higher-rank peer; lower-rank numbered scope, schedule, standard, table, or technical-summary children remain descendants. Mixed or multi-carrier rejects only a whole-source identity and never cancels a named local root. Do not adjudicate outside-carrier price, payment, legal, proof, or work-duty atoms in this field. Keep the entire field under 900 characters and end with one compact hard_hypothesis=<carrier:root->exit or none> clause. The later hard_root_claims must encode every corrected root; the Harness alone derives projections and their union.",
 });
 const ReleaseResidualReasonSchema = Type.String({
 	minLength: 1,
 	maxLength: 1_200,
 	description:
-		"Phase 2 only. Adversarially test the Phase 1 hard-carrier hypothesis and correct every overbroad or incomplete root/exit decision. A chapter-level root can end only at a source-proven same-or-higher-rank peer; never promote a lower-rank numbered scope, schedule, standard, table, or technical-summary child into its own exit. Candidate omission of the root title is not a retraction: if source proves an OUT ancestor root, its Candidate descendants remain in the hard projection. Every Phase 1 hard range must either remain in the final hard projection or be explicitly retracted or narrowed here with a source-proven peer exit; silent omission is forbidden. In releaseAuditMode=reviewer_no_change_terminal_or_hard_veto, then decide only whether an independently proven whole-source terminal identity authorizes exact complete-Candidate outside-carrier deletion; ordinary atom cleanup, residual precision, additions, and duty_survival_attack are unavailable. In other modes, adjudicate every authorized REMOVE_REVIEW or ADD_REVIEW block outside the corrected hard-carrier plan. A non-empty residual cannot be dismissed as already hard-excluded. Apply compact over-deletion, counterexample-first duty, response-wrapper, source-fidelity, and three remainder tests only where authorized. If an authorized residual contains a project overview or equivalent current-project summary, execute the system-defined project_fact_membership_attack and include project_fact_membership_attack=scope:<ranges>;remove:<ranges or none>;survive:<ranges or none>; scope addresses must be completely partitioned and a skipped drafting/filling instruction is incomplete. preamble_peer_reset_test is disabled for numbered children inside a proven notice root. Keep the entire field under 900 characters and end with exactly one compact final_projection=hard:<ranges or none>;outside:<ranges or none>;add:<ranges or none> clause. The following three range fields must copy that corrected projection without overlap or omission.",
+		"Phase 2 only. Adversarially test the Phase 1 hard-carrier hypothesis and correct every overbroad or incomplete root/exit decision. A chapter-level root can end only at a source-proven same-or-higher-rank peer; never promote a lower-rank numbered scope, schedule, standard, table, or technical-summary child into its own exit. Candidate omission of the root title is not a retraction: if source proves an OUT ancestor root, its Candidate descendants remain in the Harness-derived hard projection. Every Phase 1 root must either remain in hard_root_claims or be explicitly retracted or narrowed here with a source-proven peer exit; silent omission is forbidden. In releaseAuditMode=reviewer_no_change_terminal_or_hard_veto, then decide only whether an independently proven whole-source terminal identity authorizes exact complete-Candidate outside-carrier deletion; ordinary atom cleanup, residual precision, additions, and duty_survival_attack are unavailable. In other modes, adjudicate every authorized REMOVE_REVIEW or ADD_REVIEW block outside the corrected hard-carrier plan. A non-empty residual cannot be dismissed as already hard-excluded. Apply compact over-deletion, counterexample-first duty, response-wrapper, source-fidelity, and three remainder tests only where authorized. If an authorized residual contains a project overview or equivalent current-project summary, execute the system-defined project_fact_membership_attack and include project_fact_membership_attack=scope:<ranges>;remove:<ranges or none>;survive:<ranges or none>; scope addresses must be completely partitioned and a skipped drafting/filling instruction is incomplete. preamble_peer_reset_test is disabled for numbered children inside a proven notice root. Keep the entire field under 900 characters and end with exactly one compact final_plan=claims:<carrier:root->exit or none>;outside:<ranges or none>;add:<ranges or none> clause. Then submit hard_root_claims, outside_carrier_excluded_ranges, and accepted_add_ranges; never calculate a hard projection array.",
 });
 type ReviewerIssueType =
 	| "material_omission"
@@ -226,20 +268,20 @@ const ReleaseDecisionSchema = Type.Object(
 	{
 		hard_carrier_reason: ReleaseHardCarrierReasonSchema,
 		residual_reason: ReleaseResidualReasonSchema,
-		hard_excluded_ranges: Type.Array(RangeSchema, {
+		hard_root_claims: Type.Array(HardRootClaimSchema, {
 			maxItems: 64,
 			description:
-				"After both reason fields have converged, exactly project the settled four-carrier plan. Candidate need not contain the root title: when an actual root starts in OUT, include every authorized Candidate, ADD_REVIEW, or BOUNDARY_REVIEW descendant in its root-to-semantic-exit intersection. For every actual announcement/notice, bidder or supplier instruction, bid/response/quotation format, or contract terms/format root still affirmed by residual_reason, list every authorized block from that root through its semantic peer exit, regardless of REMOVE_REVIEW or BASE_KEEP. An affirmed root and a partial descendant subset is forbidden: technical duties, usefulness, primary effect, and duty_survival_attack cannot preserve a block inside it. If any descendant should remain, first retract or narrow the root or establish an earlier different-Owner exit in residual_reason. This is the only field that may delete BASE_KEEP. Never include ordinary OUT. The Harness clips this field to Candidate or an authorized add marker and subtracts authorized Candidate blocks mechanically. Use [] only when the corrected plan affirms no four-carrier block.",
+				"Write one corrected semantic claim for every independently proven hard-carrier root. Each claim contains only carrier type, inclusive root block, and exclusive semantic exit; use null only for EOF. The Harness mechanically intersects every claim span with hardRootClaimProjectionUniverseRanges, rejects empty or overlapping derived projections, and derives the complete hard exclusion union. Do not calculate or submit projected ranges.",
 		}),
 		outside_carrier_excluded_ranges: Type.Array(RangeSchema, {
 			maxItems: 64,
 			description:
-				"Write this bounded outside-carrier deletion authorization after hard_excluded_ranges. If a whole-source identity veto is independently proven, list the runtime-authorized Candidate blocks here and do not run atom-level duty_survival_attack. Otherwise list only blocks already proven outside all four hard-excluded carriers whose own primary direct effect is safely separable non-requirement content; run duty_survival_attack first and split around every surviving direct work duty, short normative obligation, necessary heading, or source-fidelity dependency. Ordinary authority is limited to REMOVE_REVIEW or ADD_REVIEW. In releaseAuditMode=reviewer_no_change_terminal_or_hard_veto, this field has all-or-nothing authority only: submit exactly the complete Candidate when an independently proven whole-source non-procurement, completed-supplier-response, contract-only, or uninstantiated-template veto applies; partial Candidate outside-carrier deletion is unauthorized. In full_removal_safety mode, Candidate BASE_KEEP may be listed only when at least one Candidate block is hard-excluded and every remaining Candidate block forms exactly one non-empty continuous residual island. In reviewer_confirmed_hard mode, the same topology is available only when at least one hard-excluded Candidate block also belongs to REMOVE_REVIEW. The Harness derives and clips both scopes mechanically. Never encode a four-carrier block here or include unchallenged OUT. Use [] when no authorized outside-carrier block is safely excludable.",
+				"Write this bounded outside-carrier deletion authorization after hard_root_claims. If a whole-source identity veto is independently proven, list the runtime-authorized Candidate blocks here and do not run atom-level duty_survival_attack. Otherwise list only blocks outside every submitted hard-root claim whose own primary direct effect is safely separable non-requirement content; run duty_survival_attack first and split around every surviving direct work duty, short normative obligation, necessary heading, or source-fidelity dependency. Ordinary authority is limited to REMOVE_REVIEW or ADD_REVIEW. In releaseAuditMode=reviewer_no_change_terminal_or_hard_veto, this field has all-or-nothing authority only: submit exactly the complete Candidate when an independently proven whole-source non-procurement, completed-supplier-response, contract-only, or uninstantiated-template veto applies; partial Candidate outside-carrier deletion is unauthorized. In full_removal_safety mode, Candidate BASE_KEEP may be listed only when the Harness derives at least one Candidate hard exclusion and every remaining Candidate block forms exactly one non-empty continuous residual island. In reviewer_confirmed_hard mode, the same topology is available only when a derived Candidate hard exclusion also belongs to REMOVE_REVIEW. The Harness derives and clips both scopes mechanically. Never encode a four-carrier block here or include unchallenged OUT. Use [] when no authorized outside-carrier block is safely excludable.",
 		}),
 		accepted_add_ranges: Type.Array(RangeSchema, {
 			maxItems: 64,
 			description:
-				"Write this positive delta after both reason fields and both exclusion deltas. List only ADD_REVIEW blocks independently approved as qualified requirement content, or BOUNDARY_REVIEW blocks independently proven to be the complete same-Owner body, table, list, continuation, or appendix needed to close an adjacent Candidate shell. Omit rejected additions and reject any partial body whose required continuation extends into ordinary OUT. Candidate blocks and all other OUT are unauthorized and will be clipped mechanically. Do not repeat Candidate keep ranges; every Candidate block remains selected unless an authorized exclusion field subtracts it.",
+				"Write this positive delta after both reason fields, hard_root_claims, and outside_carrier_excluded_ranges. List only ADD_REVIEW blocks independently approved as qualified requirement content, or BOUNDARY_REVIEW blocks independently proven to be the complete same-Owner body, table, list, continuation, or appendix needed to close an adjacent Candidate shell. Omit rejected additions and reject any partial body whose required continuation extends into ordinary OUT. Candidate blocks and all other OUT are unauthorized and will be clipped mechanically. Do not repeat Candidate keep ranges; every Candidate block remains selected unless a Harness-derived hard projection or an authorized outside-carrier exclusion subtracts it.",
 		}),
 	},
 	{ additionalProperties: false },
@@ -319,12 +361,20 @@ export interface RequirementReviewPrompts {
 	runtimeContract: string;
 	reviewer: string;
 	release: string;
+	piNativeSemanticContract: string;
+	piNativeRuntimeContract: string;
+	witness: string;
+	finalizer: string;
 	hashes: {
 		productPrinciples: string;
 		semanticContract: string;
 		runtimeContract: string;
 		reviewer: string;
 		release: string;
+		piNativeSemanticContract: string;
+		piNativeRuntimeContract: string;
+		witness: string;
+		finalizer: string;
 	};
 }
 
@@ -449,11 +499,18 @@ interface ReviewerNoopChallenge {
 
 type ReviewerDecision = ReviewerPass | ReviewerChallenge | ReviewerNoopChallenge;
 
+interface ReleaseHardRootClaim {
+	carrierType: HardCarrierType;
+	rootBlockId: number;
+	exitBlockIdExclusive: number | null;
+	projectedRanges: string[];
+}
+
 interface ReleaseDecision {
 	verdict: "reject" | "publish";
 	hardCarrierReason: string;
+	hardRootClaims: ReleaseHardRootClaim[];
 	restoredRemoveRanges: string[];
-	submittedHardExcludedRanges: string[];
 	hardExcludedRanges: string[];
 	residualReason: string;
 	submittedOutsideCarrierExcludedRanges: string[];
@@ -921,12 +978,26 @@ function parseStructureEvidence(
 export async function loadRequirementReviewPrompts(
 	directory = promptDirectory,
 ): Promise<RequirementReviewPrompts> {
-	const [productPrinciples, semanticContract, runtimeContract, reviewer, release] = await Promise.all([
+	const [
+		productPrinciples,
+		semanticContract,
+		runtimeContract,
+		reviewer,
+		release,
+		piNativeSemanticContract,
+		piNativeRuntimeContract,
+		witness,
+		finalizer,
+	] = await Promise.all([
 		readFile(resolve(directory, "product-principles.md"), "utf8"),
 		readFile(resolve(directory, "semantic-contract.md"), "utf8"),
 		readFile(resolve(directory, "runtime-contract.md"), "utf8"),
 		readFile(resolve(directory, "reviewer.md"), "utf8"),
 		readFile(resolve(directory, "release.md"), "utf8"),
+		readFile(resolve(directory, "pi-native-semantic-contract.md"), "utf8"),
+		readFile(resolve(directory, "pi-native-runtime-contract.md"), "utf8"),
+		readFile(resolve(directory, "witness.md"), "utf8"),
+		readFile(resolve(directory, "finalizer.md"), "utf8"),
 	]);
 	return {
 		productPrinciples,
@@ -934,12 +1005,20 @@ export async function loadRequirementReviewPrompts(
 		runtimeContract,
 		reviewer,
 		release,
+		piNativeSemanticContract,
+		piNativeRuntimeContract,
+		witness,
+		finalizer,
 		hashes: {
 			productPrinciples: sha256(productPrinciples),
 			semanticContract: sha256(semanticContract),
 			runtimeContract: sha256(runtimeContract),
 			reviewer: sha256(reviewer),
 			release: sha256(release),
+			piNativeSemanticContract: sha256(piNativeSemanticContract),
+			piNativeRuntimeContract: sha256(piNativeRuntimeContract),
+			witness: sha256(witness),
+			finalizer: sha256(finalizer),
 		},
 	};
 }
@@ -1282,8 +1361,8 @@ export async function runRequirementReview(
 				toolLabel: "Submit requirement release",
 				toolDescription:
 					reviewerNoChangeHardCarrierAudit
-						? "Complete one independent terminal-or-hard veto audit. Write hard_carrier_reason and residual_reason before every range field. For a proven whole-source non-procurement, completed-supplier-response, contract-only, or uninstantiated-template identity, submit exactly the complete Candidate in outside_carrier_excluded_ranges and leave all other deltas empty. Otherwise, submit only independently proven four-carrier Candidate descendants in hard_excluded_ranges. Partial outside-carrier deletion, additions, ordinary cleanup, and residual precision are unauthorized. Submit an empty delta when neither veto is proven."
-						: "Complete one phased Release submission. Write hard_carrier_reason and residual_reason before every range field so the residual adversarial pass can correct an overbroad or incomplete four-carrier hypothesis. Then write the two deletion authorizations and accepted additions. Candidate need not contain a hard-carrier root title: inspect source ancestors and project every Candidate descendant of an affirmed OUT-starting root. Every actual four-carrier root still affirmed by residual_reason must be projected root-closed through its semantic exit in hard_excluded_ranges regardless of marker; narrow or retract the root before omitting any descendant. After the typed hard projection, the Harness may expose exactly one continuous Candidate residual for outside-carrier precision: full-removal safety requires any Candidate hard exclusion, while a normal bounded patch additionally requires at least one hard-excluded REMOVE_REVIEW block. For operational_precision, omit every challenged block that should remain from both exclusion fields. ADD_REVIEW is the Reviewer-proposed external subset. BOUNDARY_REVIEW is a separate content-blind, address-bounded external subset around Candidate run edges; accept it only when the complete immutable source proves that the entire authorized island is the same qualified body, table, list, continuation, or appendix needed to close an adjacent Candidate shell. It is not permission to search for unrelated omissions, and a partial body extending outside the authorized envelope must be rejected. Other OUT is unavailable. The Harness derives all executable authority, automatic restoration, and final ranges mechanically.",
+						? "Complete one independent terminal-or-hard veto audit. Write hard_carrier_reason and residual_reason, then hard_root_claims, outside_carrier_excluded_ranges, and accepted_add_ranges. For a proven whole-source non-procurement, completed-supplier-response, contract-only, or uninstantiated-template identity, submit exactly the complete Candidate in outside_carrier_excluded_ranges and leave hard_root_claims plus accepted additions empty. Otherwise, submit only carrier_type/root/exit claims for every independently proven four-carrier root; the Harness derives their complete projections and hard exclusion union. Partial outside-carrier deletion, additions, ordinary cleanup, and residual precision are unauthorized. Submit an empty delta when neither veto is proven."
+						: "Complete one phased Release submission. Write hard_carrier_reason and residual_reason first, then submit only carrier_type/root/exit hard_root_claims before the two range arrays. The Harness intersects each claim with the explicit projection universe, rejects empty or overlapping projections, and derives the hard exclusion union. Candidate need not contain a hard-carrier root title: inspect source ancestors and submit an affirmed OUT-starting root with its semantic exit. Narrow or retract the claim before retaining any descendant. After the derived hard projection, the Harness may expose exactly one continuous Candidate residual for outside-carrier precision: full-removal safety requires any Candidate hard exclusion, while a normal bounded patch additionally requires at least one hard-excluded REMOVE_REVIEW block. For operational_precision, omit every challenged block that should remain from outside_carrier_excluded_ranges. ADD_REVIEW is the Reviewer-proposed external subset. BOUNDARY_REVIEW is a separate content-blind, address-bounded external subset around Candidate run edges; accept it only when the complete immutable source proves that the entire authorized island is the same qualified body, table, list, continuation, or appendix needed to close an adjacent Candidate shell. It is not permission to search for unrelated omissions, and a partial body extending outside the authorized envelope must be rejected. Other OUT is unavailable. The Harness derives all hard projection, automatic restoration, and final ranges mechanically.",
 				schema: ReleaseDecisionSchema,
 				normalize: normalizeReleaseSubmission,
 				parse: (raw) =>
@@ -1356,12 +1435,12 @@ export async function runRequirementReview(
 
 const requirementReviewTool = defineTool({
 	name: "review_word_requirement_extraction_candidate",
-	label: "Review Word requirement extraction candidate",
+	label: "Review Word requirement extraction candidate (V1 legacy overlay)",
 	description:
-		"Run one candidate-protected residual review over an answer-free xique.word-requirement-review.packet.v1 packet. An empty-candidate pass uses one Doubao call. Every non-empty Candidate receives one independent GLM Release call: bounded patch review after a contract-valid challenge, or a protected terminal-or-hard veto audit after Reviewer pass/no-op/contract failure.",
-	promptSnippet: "Review a frozen Word requirement extraction candidate",
+		"Run the V1 legacy candidate-protected overlay baseline over an answer-free xique.word-requirement-review.packet.v1 packet. An empty-candidate pass uses one Doubao call. Every non-empty Candidate receives one independent GLM Release call: bounded patch review after a contract-valid challenge, or a protected terminal-or-hard veto audit after Reviewer pass/no-op/contract failure.",
+	promptSnippet: "Run the V1 legacy Word requirement overlay baseline",
 	promptGuidelines: [
-		"Call this tool once after the mature single-prompt candidate and complete immutable paragraph packet exist. Report degraded review without changing ranges when the capability fails closed.",
+		"Use only for V1 legacy comparison after the mature single-prompt candidate and complete immutable paragraph packet exist. Report degraded review without changing ranges when the capability fails closed.",
 	],
 	parameters: Type.Object({
 		packetPath: Type.String({
@@ -1444,6 +1523,95 @@ const requirementReviewTool = defineTool({
 	},
 });
 
+const piNativeRequirementReviewTool = defineTool({
+	name: "review_word_requirement_extraction_candidate_pi_native",
+	label: "Review Word requirement extraction candidate with Pi-native Finalizer/Witness",
+	description:
+		"Run the fixed three-call Pi-native review over an answer-free xique.word-requirement-review.packet.v1 packet: GLM provisional selection, Doubao 2.0 Pro bounded adversarial Witness, then the same GLM Finalizer context for one final selection. The Harness validates addresses and typed-claim consistency only; it never lets Witness or code override semantic membership.",
+	promptSnippet: "Review a frozen Word requirement candidate with the Pi-native Finalizer/Witness loop",
+	promptGuidelines: [
+		"Use this active route only with the same frozen packet used by the mature Candidate. A degraded result preserves Candidate unchanged and is not evidence of a successful review.",
+	],
+	parameters: Type.Object({
+		packetPath: Type.String({
+			minLength: 1,
+			description:
+				"Absolute path or cwd-relative path to an answer-free xique.word-requirement-review.packet.v1 JSON file",
+		}),
+	}),
+	executionMode: "sequential",
+	async execute(_toolCallId, params, signal, onUpdate, ctx) {
+		const loaded = await loadRequirementReviewPacket(params.packetPath, ctx.cwd);
+		const prompts = await loadRequirementReviewPrompts();
+		const witnessModel = ctx.modelRegistry.find(REVIEWER_PROVIDER, REVIEWER_MODEL_ID);
+		if (!witnessModel) {
+			throw new Error(
+				`registered Doubao requirement Witness model not found: ${REVIEWER_PROVIDER}/${REVIEWER_MODEL_ID}`,
+			);
+		}
+		const finalizerModel = ctx.modelRegistry.find(RELEASE_PROVIDER, RELEASE_MODEL_ID);
+		if (!finalizerModel) {
+			throw new Error(
+				`registered GLM requirement Finalizer model not found: ${RELEASE_PROVIDER}/${RELEASE_MODEL_ID}`,
+			);
+		}
+		const witnessAuth = await ctx.modelRegistry.getApiKeyAndHeaders(witnessModel);
+		if (!witnessAuth.ok) {
+			throw new Error(`Doubao requirement Witness auth failed: ${witnessAuth.error}`);
+		}
+		if (!witnessAuth.apiKey) {
+			throw new Error(
+				"Doubao requirement Witness requires PI_REQUIREMENT_REVIEWER_API_KEY or stored credentials",
+			);
+		}
+		const finalizerAuth = await ctx.modelRegistry.getApiKeyAndHeaders(finalizerModel);
+		if (!finalizerAuth.ok) {
+			throw new Error(`GLM requirement Finalizer auth failed: ${finalizerAuth.error}`);
+		}
+		if (!finalizerAuth.apiKey) {
+			throw new Error(
+				"GLM requirement Finalizer requires PI_REQUIREMENT_RELEASE_API_KEY or stored credentials",
+			);
+		}
+		const result = await runPiNativeRequirementReview({
+			packet: loaded.packet,
+			packetSha256: loaded.packetSha256,
+			prompts,
+			finalizerRuntime: {
+				model: finalizerModel,
+				streamFunction: piNativeFinalizerStreamFunction,
+				apiKey: finalizerAuth.apiKey,
+				headers: finalizerAuth.headers,
+				env: finalizerAuth.env,
+			},
+			witnessRuntime: {
+				model: witnessModel,
+				streamFunction: piNativeWitnessStreamFunction,
+				apiKey: witnessAuth.apiKey,
+				headers: witnessAuth.headers,
+				env: witnessAuth.env,
+			},
+			signal,
+			onProgress: (progress) => {
+				onUpdate?.({
+					content: [{ type: "text", text: `${progress.role}: ${progress.tool}` }],
+					details: progress,
+				});
+			},
+		});
+		const ranges = result.finalRanges.length > 0 ? result.finalRanges.join(", ") : "(null)";
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Pi-native Word requirement review ${result.status}. Final ranges: ${ranges}. Calls: ${result.budget.providerCalls}. Reason: ${result.reason}`,
+				},
+			],
+			details: result,
+		};
+	},
+});
+
 const openAiCompletionsStreamFunction: StreamFn = (model, context, options) => {
 	if (model.api !== "openai-completions") {
 		throw new Error(`Word requirement review requires openai-completions, received ${model.api}`);
@@ -1515,6 +1683,7 @@ export default function (pi: ExtensionAPI) {
 		],
 	});
 	pi.registerTool(requirementReviewTool);
+	pi.registerTool(piNativeRequirementReviewTool);
 }
 
 async function loadRequirementReviewPacket(
@@ -1799,7 +1968,6 @@ function normalizeReleaseSubmission(value: unknown): unknown {
 		...value,
 		hard_carrier_reason: normalizeBoundedReason(value.hard_carrier_reason, 1_200),
 		residual_reason: normalizeBoundedReason(value.residual_reason, 1_200),
-		hard_excluded_ranges: normalizeRangeArray(value.hard_excluded_ranges ?? []),
 		outside_carrier_excluded_ranges: normalizeRangeArray(
 			value.outside_carrier_excluded_ranges ?? [],
 		),
@@ -1903,7 +2071,6 @@ function validateReleaseDecision(
 	hardBoundaryResidualPrecisionMode: HardBoundaryResidualPrecisionMode,
 	allowReviewerNoChangeTerminalVeto: boolean,
 ): ReleaseDecision {
-	const submittedHardExclusions = parseStrictRanges(raw.hard_excluded_ranges, availableBlockIds);
 	const submittedOutsideCarrierExclusions = parseStrictRanges(
 		raw.outside_carrier_excluded_ranges,
 		availableBlockIds,
@@ -1914,16 +2081,68 @@ function validateReleaseDecision(
 	);
 	const candidate = new Set(candidateBlockIds);
 	const allowedAdd = new Set(allowedAddBlockIds);
+	const authorizedHardProjection = new Set([...candidateBlockIds, ...allowedAddBlockIds]);
+	const claimedHardBlockIds = new Set<number>();
+	const hardRootClaims: ReleaseHardRootClaim[] = [];
+	for (const [index, claim] of raw.hard_root_claims.entries()) {
+		if (!availableBlockIds.has(claim.root_block_id)) {
+			throw new Error(
+				`hard root claim validation failed at index ${index}: root block ${claim.root_block_id} is unavailable`,
+			);
+		}
+		if (
+			claim.exit_block_id_exclusive !== null &&
+			(!availableBlockIds.has(claim.exit_block_id_exclusive) ||
+				claim.exit_block_id_exclusive <= claim.root_block_id)
+		) {
+			throw new Error(
+				`hard root claim validation failed at index ${index}: invalid exclusive block span`,
+			);
+		}
+		const projectedBlockIds = [...authorizedHardProjection]
+			.filter(
+				(blockId) =>
+					blockId >= claim.root_block_id &&
+					(claim.exit_block_id_exclusive === null ||
+						blockId < claim.exit_block_id_exclusive),
+			)
+			.sort((left, right) => left - right);
+		if (projectedBlockIds.length === 0) {
+			throw new Error(
+				`hard root claim validation failed at index ${index}: claim has no authorized Candidate/add projection`,
+			);
+		}
+		for (const blockId of projectedBlockIds) {
+			if (claimedHardBlockIds.has(blockId)) {
+				throw new Error(
+					`hard root claim validation failed at index ${index}: projected block ${blockId} conflicts with another claim`,
+				);
+			}
+			claimedHardBlockIds.add(blockId);
+		}
+		hardRootClaims.push({
+			carrierType: claim.carrier_type,
+			rootBlockId: claim.root_block_id,
+			exitBlockIdExclusive: claim.exit_block_id_exclusive,
+			projectedRanges: compactBlockRanges(projectedBlockIds),
+		});
+	}
+	const hardExcludedBlockIds = [...claimedHardBlockIds].sort((left, right) => left - right);
 	const acceptedAddBlockIds = submittedAcceptedAdditions.blockIds.filter((blockId) =>
 		allowedAdd.has(blockId),
 	);
 	const acceptedAdd = new Set(acceptedAddBlockIds);
-	const hardExcludedBlockIds = submittedHardExclusions.blockIds.filter(
-		(blockId) =>
-			(candidate.has(blockId) || allowedAdd.has(blockId)) &&
-			!acceptedAdd.has(blockId),
-	);
+	if (hardExcludedBlockIds.some((blockId) => acceptedAdd.has(blockId))) {
+		throw new Error(
+			"hard root claim validation failed: hard exclusions conflict with accepted additions",
+		);
+	}
 	const hardExcluded = new Set(hardExcludedBlockIds);
+	if (submittedOutsideCarrierExclusions.blockIds.some((blockId) => hardExcluded.has(blockId))) {
+		throw new Error(
+			"hard root claim validation failed: hard exclusions conflict with outside-carrier exclusions",
+		);
+	}
 	const removeEnvelope = new Set(removeEnvelopeBlockIds);
 	const hardBoundaryResidualUnlocked =
 		hardBoundaryResidualPrecisionMode === "full_removal_safety" ||
@@ -1975,8 +2194,8 @@ function validateReleaseDecision(
 	return {
 		verdict: unchanged ? "reject" : "publish",
 		hardCarrierReason: raw.hard_carrier_reason,
+		hardRootClaims,
 		restoredRemoveRanges: compactBlockRanges(restoredRemoveBlockIds),
-		submittedHardExcludedRanges: submittedHardExclusions.ranges,
 		hardExcludedRanges: compactBlockRanges(hardExcludedBlockIds),
 		residualReason: raw.residual_reason,
 		submittedOutsideCarrierExcludedRanges: submittedOutsideCarrierExclusions.ranges,
@@ -2564,7 +2783,7 @@ function buildReviewerUserPrompt(
 		"# Terminal task card",
 		"Apply the system runtime and Reviewer contracts as the complete semantic authority. This card fixes execution order only and does not replace those contracts.",
 		"1. Read the complete source through its beginning, middle, and end. Settle current_acquisition_gate, source_role, and instantiation before local membership.",
-		"2. Audit every Candidate interval in candidateHardCarrierAuditOrder. Establish each source-proven four-carrier root through its semantic exit, then mentally subtract all affirmed hard ranges.",
+		"2. Audit every Candidate interval in candidateHardCarrierAuditOrder. Establish each source-proven four-carrier root through its semantic exit, then mentally subtract the Harness-derived projection of every affirmed root.",
 		"3. On every surviving Candidate island, execute the system residual gates at each peer subsection and addressable block. Run residual_island_completion and false_protection_counterexample_attack: split out the strongest safely removable counterexample and repeat until no system-defined non-requirement island remains. A parent title or representative positive block never proves the whole residual; an indivisible block with a surviving direct work duty remains.",
 		"3a. Before preserving any peer-rooted bill-of-quantities, quotation, pricing, measurement, settlement, or price-basis island, execute pricing_basis_role_attack and price_wrapper_empty_remainder_test at each child boundary. Drawings, standards, site facts, quantities, plans, and technical nouns used only to calculate, compile, fill, compare, validate, or allocate price do not survive. Preserve only exact children whose stripped remainder still states concrete current-project work scope, action, resource provision, quantity, safety, delivery, acceptance, or another direct non-price duty. A chapter that only explains how to price or points to an absent schedule is not the schedule itself.",
 		"4. Close source fidelity. Re-read literal IN/OUT for every proposed change; any affirmed qualified OUT body island must be in add_ranges, and no unproved OUT block may be added.",
@@ -2599,6 +2818,7 @@ function buildReviewerNoChangeReleaseUserPrompt(
 		"boundaryReviewRanges=[]",
 		`availableSourceRanges=${JSON.stringify(compactBlockRanges(blocks.map((block) => block.blockId)))}`,
 		`candidateRanges=${JSON.stringify(candidateRanges)}`,
+		`hardRootClaimProjectionUniverseRanges=${JSON.stringify(candidateRanges)}`,
 		`candidateHardCarrierAuditOrder=${JSON.stringify(candidateHardCarrierAuditOrder)}`,
 		`candidateBlockCount=${candidateBlockIds.size}`,
 		"auditContract=This is one independent veto audit after a Reviewer produced no executable net change. It is not a second extraction or an ordinary precision pass. Every Candidate block starts as protected BASE_KEEP. REMOVE_REVIEW, ADD_REVIEW, BOUNDARY_REVIEW, partial outside-carrier cleanup, residual precision, and ordinary OUT additions are unavailable.",
@@ -2610,19 +2830,19 @@ function buildReviewerNoChangeReleaseUserPrompt(
 		ANNOUNCEMENT_PREAMBLE_BOUNDARY_CONTRACT,
 		EXPLICIT_CHAPTER_HIERARCHY_CONTRACT,
 		"candidateAuditOrderingContract=Audit the continuous Candidate intervals in the exact descending-size address order. Reopen Owner at every source-proven peer root and use compact root->semantic-exit addresses. Range order and IN/OUT membership are navigation and authorization only, never semantic evidence.",
-		"releaseAuthorization=Choose only between two semantic veto authorities. First, an independently proven whole-source non-procurement, completed-supplier-response, contract-only, or uninstantiated-template identity may delete exactly the complete Candidate through outside_carrier_excluded_ranges. Otherwise, independently proven announcement/notice, bidder/supplier-instruction, bid/response/quotation-format, or contract-terms/format descendants may be deleted only through hard_excluded_ranges. If neither veto is proven, submit an empty delta. Partial outside-carrier Candidate deletion and all additions are unauthorized.",
-		"releaseTerminalContract=Write hard_carrier_reason and residual_reason before every range field. Use hard_carrier_reason for the Candidate-wide four-carrier root hypotheses, including roots whose starts are OUT ancestors of Candidate descendants. Use residual_reason to adversarially test those roots and to state whether the all-or-nothing whole-source terminal identity is proven. Then submit hard_excluded_ranges, outside_carrier_excluded_ranges, and accepted_add_ranges. The Harness derives automatic restoration and the final set mechanically and ignores unauthorized ranges.",
+		"releaseAuthorization=Choose only between two semantic veto authorities. First, an independently proven whole-source non-procurement, completed-supplier-response, contract-only, or uninstantiated-template identity may delete exactly the complete Candidate through outside_carrier_excluded_ranges. Otherwise, represent every independently proven announcement/notice, bidder/supplier-instruction, bid/response/quotation-format, or contract-terms/format root only through hard_root_claims. The Harness derives their complete Candidate hard exclusions. If neither veto is proven, submit an empty delta. Partial outside-carrier Candidate deletion and all additions are unauthorized.",
+		"releaseTerminalContract=Write hard_carrier_reason and residual_reason first. Use hard_carrier_reason for the Candidate-wide four-carrier root hypotheses, including roots whose starts are OUT ancestors of Candidate descendants. Use residual_reason to adversarially test those roots and to state whether the all-or-nothing whole-source terminal identity is proven. Then submit hard_root_claims, outside_carrier_excluded_ranges, and accepted_add_ranges. Every claim contains only carrier_type plus [root_block_id, exit_block_id_exclusive), with null exit meaning EOF. The Harness intersects each span with hardRootClaimProjectionUniverseRanges, rejects empty or overlapping projections, derives the hard exclusion union, and composes the final set mechanically. Never calculate or submit projected ranges.",
 		"# Complete immutable source with Candidate-only IN/OUT membership",
 		source,
 		"# Optional mechanically aligned Word structure map",
 		structureMap.source,
 		"# Final veto checklist after reading the complete source",
 		"1. Inspect the beginning, middle, and true end. A whole-source terminal identity requires affirmative authorship, use, and instantiation evidence plus whole_container_disconfirmation showing no boundary-independent buyer-issued requirement region. A title, completed tone, isolated supplier phrase, copied tender clause, technical density, or future duty is insufficient.",
-		"2. If that terminal identity is proven, set outside_carrier_excluded_ranges to exactly the complete Candidate and set hard_excluded_ranges=[] and accepted_add_ranges=[]. Do not run atom-level duty_survival_attack or preserve local technical-looking content.",
-		"3. If no terminal identity is proven, set outside_carrier_excluded_ranges=[]. Audit every Candidate interval for the four hard-excluded carriers. Put each independently proven root and every authorized Candidate descendant through its semantic exit in hard_excluded_ranges. Retract or narrow an overbroad root before omitting any descendant; never carve around useful or technical content inside an affirmed root.",
+		"2. If that terminal identity is proven, set outside_carrier_excluded_ranges to exactly the complete Candidate and set hard_root_claims=[] and accepted_add_ranges=[]. Do not run atom-level duty_survival_attack or preserve local technical-looking content.",
+		"3. If no terminal identity is proven, set outside_carrier_excluded_ranges=[]. Audit every Candidate interval for the four hard-excluded carriers. Write one hard_root_claim for each independently proven root using only carrier_type, root_block_id, and exit_block_id_exclusive; use null exit only for EOF. This projection universe is Candidate-only in this no-change audit. The Harness derives the complete intersection and rejects empty or overlapping claims. Retract or narrow an overbroad root before retaining any descendant; never carve around useful or technical content inside an affirmed root.",
 		"3a. Apply explicitChapterHierarchyContract first. If the source names an actual chapter-level hard-carrier root before a Candidate block and no same-or-higher different-Owner peer intervenes, multi-carrier file identity, useful project facts, technical detail, or a lower-rank numbered subsection cannot keep that descendant. The preamble reset is forbidden inside the named chapter.",
-		"4. If neither a whole-source terminal identity nor any four-carrier descendant is proven, submit hard_excluded_ranges=[], outside_carrier_excluded_ranges=[], and accepted_add_ranges=[]. Do not invent an ordinary cleanup to force a change.",
-		"5. TERMINAL_ACTION: Rewrite every draft into one complete five-field decision, then call submit_requirement_release exactly once as the first and only visible output. The tool arguments must contain hard_carrier_reason, residual_reason, hard_excluded_ranges, outside_carrier_excluded_ranges, and accepted_add_ranges together. Do not emit analysis, prose, Markdown, pseudo-tool syntax, or partial JSON before or after the tool call; end immediately after the call.",
+		"4. If neither a whole-source terminal identity nor any four-carrier descendant is proven, submit hard_root_claims=[], outside_carrier_excluded_ranges=[], and accepted_add_ranges=[]. Do not invent an ordinary cleanup to force a change.",
+		"5. TERMINAL_ACTION: Rewrite every draft into one complete five-field decision, then call submit_requirement_release exactly once as the first and only visible output. The tool arguments must contain hard_carrier_reason, residual_reason, hard_root_claims, outside_carrier_excluded_ranges, and accepted_add_ranges together. Do not emit analysis, prose, Markdown, pseudo-tool syntax, or partial JSON before or after the tool call; end immediately after the call.",
 	].join("\n\n");
 }
 
@@ -2645,6 +2865,11 @@ function buildReleaseUserPrompt(
 	structureMap: StructureMap,
 ): string {
 	const allowedAddBlockIds = new Set([...addBlockIds, ...boundaryReviewBlockIds]);
+	const hardRootClaimProjectionUniverseRanges = compactBlockRanges([
+		...candidateBlockIds,
+		...addBlockIds,
+		...boundaryReviewBlockIds,
+	]);
 	const candidateCharacterCount = blocks.reduce(
 		(sum, block) => sum + (candidateBlockIds.has(block.blockId) ? block.text.length : 0),
 		0,
@@ -2709,12 +2934,13 @@ function buildReleaseUserPrompt(
 		"reviewerNarrativeAndEvidenceVisibility=withheld",
 		"independentSourceContract=The complete source below carries only frozen Candidate IN/OUT membership. Reviewer REMOVE_REVIEW, BASE_KEEP, ADD_REVIEW, and BOUNDARY_REVIEW permissions are intentionally withheld from that source and appear only in the later bounded navigation views. Audit every continuous IN interval for later source-proven four-carrier peer roots before consulting those patch permissions.",
 		fullRemovalDemotedToHardBoundaryReview
-			? "challengeOverlay=The Reviewer full-Candidate ordinary removal proposal was mechanically demoted before Release. Every Candidate block starts as BASE_KEEP; ADD_REVIEW is the Reviewer-proposed Candidate-external subset. BOUNDARY_REVIEW is disabled in this safety mode; OUT is unavailable. hard_excluded_ranges may subtract source-proven four-class roots. Candidate outside-carrier deletion is available only when at least one Candidate block is hard-excluded and every remaining Candidate block forms exactly one non-empty continuous block-address run across the complete Candidate. Markers define authorization, not semantic truth, confidence, or votes."
+			? "challengeOverlay=The Reviewer full-Candidate ordinary removal proposal was mechanically demoted before Release. Every Candidate block starts as BASE_KEEP; ADD_REVIEW is the Reviewer-proposed Candidate-external subset. BOUNDARY_REVIEW is disabled in this safety mode; OUT is unavailable. hard_root_claims may identify source-proven four-class roots, whose projection union the Harness derives. Candidate outside-carrier deletion is available only when at least one Candidate block is hard-excluded and every remaining Candidate block forms exactly one non-empty continuous block-address run across the complete Candidate. Markers define authorization, not semantic truth, confidence, or votes."
 			: releaseHasRemoval
-			? "challengeOverlay=REMOVE_REVIEW means the exact Candidate subset the Reviewer proposes deleting, but it does not encode why or choose an exclusion field. Independently classify each proposed deletion: a four-carrier descendant goes only to hard_excluded_ranges, an authorized outside-carrier atom goes only to outside_carrier_excluded_ranges, and a final keep is omitted from both. BASE_KEEP means every other Candidate block is protected from ordinary deletion, except for the explicit candidate-wide four-carrier veto and one content-blind hard-boundary residual permission: only after at least one REMOVE_REVIEW Candidate block is independently hard-excluded may the Harness expose the sole remaining non-empty continuous Candidate run for outside-carrier precision. ADD_REVIEW is the Reviewer-proposed Candidate-external subset; BOUNDARY_REVIEW is a separate content-blind address window around Candidate run edges, authorized only for same-Owner selected-shell body closure; all other OUT is unavailable. Markers define authorization, not semantic truth, confidence, deletion type, or votes."
-			: "challengeOverlay=ADD_REVIEW means a Candidate-external block the Reviewer proposes adding; BOUNDARY_REVIEW is a separate content-blind address window around Candidate run edges, authorized only for same-Owner selected-shell body closure; BASE_KEEP means all Candidate content is protected from ordinary deletion, with only the explicit candidate-wide four-carrier veto able to override it through hard_excluded_ranges. All other OUT is unavailable. Markers define authorization, not semantic truth.",
+			? "challengeOverlay=REMOVE_REVIEW means the exact Candidate subset the Reviewer proposes deleting, but it does not encode why. Independently classify each proposed deletion: a four-carrier descendant must be covered by a hard_root_claim, an authorized outside-carrier atom goes only to outside_carrier_excluded_ranges, and a final keep is omitted from outside_carrier_excluded_ranges. BASE_KEEP means every other Candidate block is protected from ordinary deletion, except for the explicit candidate-wide four-carrier veto and one content-blind hard-boundary residual permission: only after at least one REMOVE_REVIEW Candidate block is independently hard-excluded by a derived claim projection may the Harness expose the sole remaining non-empty continuous Candidate run for outside-carrier precision. ADD_REVIEW is the Reviewer-proposed Candidate-external subset; BOUNDARY_REVIEW is a separate content-blind address window around Candidate run edges, authorized only for same-Owner selected-shell body closure; all other OUT is unavailable. Markers define authorization, not semantic truth, confidence, deletion type, or votes."
+			: "challengeOverlay=ADD_REVIEW means a Candidate-external block the Reviewer proposes adding; BOUNDARY_REVIEW is a separate content-blind address window around Candidate run edges, authorized only for same-Owner selected-shell body closure; BASE_KEEP means all Candidate content is protected from ordinary deletion, with only the explicit candidate-wide four-carrier veto able to override it through a submitted hard_root_claim and Harness-derived projection. All other OUT is unavailable. Markers define authorization, not semantic truth.",
 		`availableSourceRanges=${JSON.stringify(compactBlockRanges(blocks.map((block) => block.blockId)))}`,
 		`candidateRanges=${JSON.stringify(candidateRanges)}`,
+		`hardRootClaimProjectionUniverseRanges=${JSON.stringify(hardRootClaimProjectionUniverseRanges)}`,
 		`candidateHardCarrierAuditOrder=${JSON.stringify(candidateHardCarrierAuditOrder)}`,
 		"candidateAuditOrderingContract=The Harness orders continuous Candidate intervals by descending block count using addresses only. Audit them in this exact order before narrating any challenged range. Use compact root->semantic-exit addresses; do not spend the reason budget restating clause contents.",
 		`challengeIssueType=${JSON.stringify(issueType)}`,
@@ -2765,7 +2991,7 @@ function buildReleaseUserPrompt(
 		`permissionTransitionCoverage=${permissionTransitions.coverage}`,
 		"focusViewPurpose=Text-blind challenged-side atomic navigation only. The harness repeats only REMOVE_REVIEW, ADD_REVIEW, and BOUNDARY_REVIEW addresses plus deterministic immediate boundary context; oversized change sets use continuous-run boundary windows and recursively layered addresses. It never reads headings or keywords. ATOMIC_CHANGE_TARGET and ATOMIC_CONTEXT add no evidence, semantic label, vote, or permission; the complete source above remains the only truth source.",
 		"boundaryReviewContract=BOUNDARY_REVIEW is computed only from fixed address windows around Candidate run edges. It is not a Reviewer claim, confidence signal, semantic label, or general OUT search permission. Accept a BOUNDARY_REVIEW island only when the complete immutable source proves every accepted block is the same qualified body, table, list, continuation, or appendix needed to close an adjacent Candidate-selected shell through the source-proven peer exit, and the complete required island fits inside the authorized BOUNDARY_REVIEW envelope. Reject unrelated adjacent content, hard-excluded carriers, wrong project/package content, bare pointers, and any partial body whose remaining source-fidelity island extends into ordinary OUT.",
-		"markerPermissionBoundaryContract=The address-only REMOVE_REVIEW/BASE_KEEP transition list is mechanical navigation, not a semantic label, vote, or exit. For every listed transition, read the actual source before and after both runs. The marker change itself never ends an announcement, bidder-instruction, response-format, quotation-format, or contract-terms Owner. Follow a source-proven hard-carrier root across BASE_KEEP, OUT, attachments, tables, and later marker changes until the first different-Owner peer root or EOF. If residual_reason still affirms that root, every authorized BASE_KEEP descendant inside it must be written to hard_excluded_ranges. To retain any descendant, first retract or narrow the root or establish an earlier different-Owner exit; the marker itself is never that proof.",
+		"markerPermissionBoundaryContract=The address-only REMOVE_REVIEW/BASE_KEEP transition list is mechanical navigation, not a semantic label, vote, or exit. For every listed transition, read the actual source before and after both runs. The marker change itself never ends an announcement, bidder-instruction, response-format, quotation-format, or contract-terms Owner. Follow a source-proven hard-carrier root across BASE_KEEP, OUT, attachments, tables, and later marker changes until the first different-Owner peer root or EOF. If residual_reason still affirms that root, submit its complete root/exit claim; the Harness derives every authorized BASE_KEEP descendant inside it. To retain any descendant, first retract or narrow the root or establish an earlier different-Owner exit; the marker itself is never that proof.",
 		"wordStructureEvidenceContract=Optional structure is the same answer-free mechanical map seen by Reviewer: body order, paragraph/table form, style/outline, numbering, formatting, page-break, table-size, and outline-ancestry facts only. tx is a bounded exact prefix copied from the same canonical source after content-blind node selection, solely to join structure back to source addresses. It never carries Reviewer conclusions or semantic labels. Use it only to reconstruct true hierarchy and peer exits; complete source text remains authoritative.",
 		"outlineNavigationContract=For every S row with sc=node@parent~exit, node is the active mechanically observed outline scope, parent is its nearest shallower ancestor, and exit is the first later same-or-shallower outline node. These fields describe physical scope only. A structural exit never automatically ends Owner: read the exit node from source, and if it continues the same Owner, chain through its scope until the first different-Owner peer root. Before keeping any title, table, or ordinary paragraph inside a hard-excluded scope, require that different-Owner exit; otherwise the root and all nested or same-Owner continuation content remain excluded.",
 		"visualNavigationContract=For every S row with vc=node@parent~exit, formatting alone marks node as a non-outline visual heading candidate, parent as its mechanical enclosing candidate, and exit as the next equal-or-larger visual peer. vc is not a semantic heading or Owner label. Read node tx and complete source first; when source semantics confirms a carrier start, use exit as the bounded peer-exit hypothesis and keep descendants under that Owner until source proves otherwise. Ignore vc when source semantics does not confirm a carrier start.",
@@ -2787,7 +3013,7 @@ function buildReleaseUserPrompt(
 		"remedyTriggerSeparation=Quality error, misconduct, or false deliverables used only as a trigger for deduction, damages, disqualification, termination, replacement procedure, or legal pursuit do not create an independent quality requirement. Strip the remedy itself: if no deliverable accountability, measurable quality threshold, inspection/review/acceptance, correction duty, or work act remains, place that separable atom on the remove side.",
 		"prospectiveResponsibilityBoundary=An explicit requirement that the successful supplier bear responsibility for current-project design, construction, safety, quality, or deliverables is prospective performance governance and survives even when paired with economic-loss allocation. Distinguish it from a buyer-only after-the-fact right to deduct, terminate, replace, or pursue legal liability with no independent supplier responsibility or work act.",
 		"performanceGovernanceBoundary=Independence, professional-discipline, conflict-of-interest disclosure, and recusal duties that govern the successful supplier or its personnel while performing the current project are direct implementation and quality-governance facts. Treat them as qualification only when their primary effect is proving bidder or proposed-person eligibility before award.",
-		"preAwardStageGateContract=After hard_excluded_ranges settles the four carrier gate and before any outside-carrier block-level duty test, run pre_award_stage_gate. A rooted personnel or mandatory-response subsection with a peer exit is pre-award proof in full when multiple children collectively require credentials, social-insurance evidence, qualification material, commitments, or other proof and use invalid-response, ineligibility, or an equivalent pre-award consequence to define admissibility. Put the root and every child through the peer exit in outside_carrier_excluded_ranges; do not run duty_survival_attack inside merely because one child also describes future staffing. Only a subsection affirmatively proven to be primarily post-award staffing may be split around a separable proof note.",
+		"preAwardStageGateContract=After hard_root_claims settle the four-carrier gate and before any outside-carrier block-level duty test, run pre_award_stage_gate. A rooted personnel or mandatory-response subsection with a peer exit is pre-award proof in full when multiple children collectively require credentials, social-insurance evidence, qualification material, commitments, or other proof and use invalid-response, ineligibility, or an equivalent pre-award consequence to define admissibility. Put the root and every child through the peer exit in outside_carrier_excluded_ranges; do not run duty_survival_attack inside merely because one child also describes future staffing. Only a subsection affirmatively proven to be primarily post-award staffing may be split around a separable proof note.",
 		"nonFactShellClosureContract=For every rooted subsection with a peer exit, if the title and body contain only an explicit no-content marker, blanks, placeholders, a bare pointer to unavailable material, or a generic comply-with-law/catch-all wrapper that adds no concrete task, workflow, output, deadline, or result, put the root and body together in outside_carrier_excluded_ranges. Membership from a preceding technical table or performance subsection never crosses the peer boundary to preserve this empty shell.",
 		"headingMembershipIndependenceContract=Outside the four hard-excluded carriers, a subsection heading and its child blocks carry independent membership. A surviving child duty does not protect a separable heading whose own function is only price, payment, settlement, deduction, penalty, breach, remedy, termination, dispute, or another non-work consequence. Put that heading alone in outside_carrier_excluded_ranges when the child remains understandable; preserve a qualified technical, service, safety, or acceptance heading and any heading indispensable to the child's meaning. Isolated legal wording never creates a contract carrier, and this rule never carves inside an established four-class root.",
 		OUTSIDE_CARRIER_PRECISION_CLOSURE_CONTRACT,
@@ -2801,12 +3027,12 @@ function buildReleaseUserPrompt(
 			? "challengeAtom=Adjudicate REMOVE_REVIEW and ADD_REVIEW. For each proposed outside-carrier deletion, run over_deletion_attack and retain it when a qualified fact, direct duty, necessary heading, or source-fidelity dependency survives. Separately run one candidate-wide four-carrier root-and-exit sweep. If that sweep hard-excludes at least one REMOVE_REVIEW Candidate block and leaves exactly one non-empty continuous Candidate residual, precision-audit every peer subsection and addressable block in that derived residual; otherwise do not search BASE_KEEP for ordinary outside-carrier cleanup. Decide each ADD_REVIEW independently, then apply boundaryReviewContract once to the bounded BOUNDARY_REVIEW set."
 			: "challengeAtom=Independently approve or reject each ADD_REVIEW, then apply boundaryReviewContract once to the bounded BOUNDARY_REVIEW set, plus run one candidate-wide four-carrier root-and-exit sweep. BASE_KEEP remains mandatory for every outside-carrier decision.",
 		fullRemovalDemotedToHardBoundaryReview
-			? "releaseAuthorization=Every Candidate block starts as BASE_KEEP. hard_excluded_ranges may subtract any independently proven four-class root. After that typed hard delta, outside_carrier_excluded_ranges may subtract Candidate only when at least one Candidate block is hard-excluded and all remaining Candidate blocks form one Harness-derived non-empty continuous block-address run. The run may be a prefix, suffix, middle island, or one independent Candidate interval after every other Candidate interval is fully hard-excluded. Two residual runs, no Candidate hard exclusion, or no remaining Candidate grants no authority. accepted_add_ranges may add only ADD_REVIEW; BOUNDARY_REVIEW is disabled and other OUT remains unavailable."
+			? "releaseAuthorization=Every Candidate block starts as BASE_KEEP. hard_root_claims may identify any independently proven four-class root, and the Harness derives its exclusion projection. After that typed hard delta, outside_carrier_excluded_ranges may subtract Candidate only when at least one Candidate block is hard-excluded and all remaining Candidate blocks form one Harness-derived non-empty continuous block-address run. The run may be a prefix, suffix, middle island, or one independent Candidate interval after every other Candidate interval is fully hard-excluded. Two residual runs, no Candidate hard exclusion, or no remaining Candidate grants no authority. accepted_add_ranges may add only ADD_REVIEW; BOUNDARY_REVIEW is disabled and other OUT remains unavailable."
 			: releaseHasRemoval
-			? "releaseAuthorization=Every BASE_KEEP block is mechanically retained unless hard_excluded_ranges authorizes its four-carrier subtraction. outside_carrier_excluded_ranges may subtract REMOVE_REVIEW and, only after at least one REMOVE_REVIEW Candidate block is hard-excluded, exact atoms inside the sole non-empty continuous Candidate run left by all hard exclusions. A hard finding confined to BASE_KEEP does not unlock that run. accepted_add_ranges may add only ADD_REVIEW or BOUNDARY_REVIEW after their separate checks. Other OUT remains unavailable."
-			: "releaseAuthorization=Every BASE_KEEP block is mechanically retained unless hard_excluded_ranges authorizes its four-carrier subtraction. accepted_add_ranges may add only ADD_REVIEW or BOUNDARY_REVIEW after their separate checks; outside_carrier_excluded_ranges may only record rejected challenged additions. Other OUT remains unavailable.",
-		"releaseTerminalContract=Submit one phased semantic plan in fixed order: hard_carrier_reason -> residual_reason -> hard_excluded_ranges -> outside_carrier_excluded_ranges -> accepted_add_ranges. Phase 1 proposes only four-carrier roots across Candidate, including OUT-starting ancestor roots whose descendants intersect Candidate. Before any range field, Phase 2 must adversarially test that proposal, correct any overbroad or incomplete root/exit decision, and adjudicate every remaining authorized challenged block or runtime-declared hard-boundary residual. Every actual four-carrier root left affirmed by Phase 2 must project all authorized descendants through its semantic exit to hard_excluded_ranges; a partial projection is forbidden. The Harness deletes only explicitly authorized hard/outside exclusions, mechanically restores every other REMOVE_REVIEW block, and deterministically derives final = Candidate - authorized hard exclusions - authorized outside-carrier exclusions + accepted challenged additions.",
-		"terminalReasonBudget=Keep each phase reason under 900 characters. In hard_carrier_reason cover candidateHardCarrierAuditOrder using compact root->semantic-exit hypotheses only and end with hard_hypothesis=<ranges or none>. Before writing any range field, use residual_reason to attack Phase 1 for peer-root fractures and overbreadth, then end with one final_projection=hard:<ranges or none>;outside:<ranges or none>;add:<ranges or none> clause. Copy that projection into the three range fields without overlap or omission; do not spend the reason budget restating clauses.",
+			? "releaseAuthorization=Every BASE_KEEP block is mechanically retained unless a submitted hard_root_claim covers it through the Harness-derived projection. outside_carrier_excluded_ranges may subtract REMOVE_REVIEW and, only after at least one REMOVE_REVIEW Candidate block is hard-excluded, exact atoms inside the sole non-empty continuous Candidate run left by all hard exclusions. A hard finding confined to BASE_KEEP does not unlock that run. accepted_add_ranges may add only ADD_REVIEW or BOUNDARY_REVIEW after their separate checks. Other OUT remains unavailable."
+			: "releaseAuthorization=Every BASE_KEEP block is mechanically retained unless a submitted hard_root_claim covers it through the Harness-derived projection. accepted_add_ranges may add only ADD_REVIEW or BOUNDARY_REVIEW after their separate checks; outside_carrier_excluded_ranges may only record rejected challenged additions. Other OUT remains unavailable.",
+		"releaseTerminalContract=Submit one phased semantic plan in fixed order: hard_carrier_reason -> residual_reason -> hard_root_claims -> outside_carrier_excluded_ranges -> accepted_add_ranges. Phase 1 proposes only four-carrier roots across Candidate, including OUT-starting ancestor roots whose descendants intersect Candidate. Before any structural field, Phase 2 must adversarially test that proposal, correct any overbroad or incomplete root/exit decision, and adjudicate every remaining authorized challenged block or runtime-declared hard-boundary residual. Every actual four-carrier root left affirmed by Phase 2 must become one typed claim containing only carrier_type, root_block_id, and exit_block_id_exclusive; null exit means EOF. The Harness intersects each claim with hardRootClaimProjectionUniverseRanges, rejects empty or overlapping projections, derives the hard exclusion union, mechanically restores every other REMOVE_REVIEW block, and deterministically derives final = Candidate - derived hard exclusions - authorized outside-carrier exclusions + accepted challenged additions. Never calculate or submit projected ranges.",
+		"terminalReasonBudget=Keep each phase reason under 900 characters. In hard_carrier_reason cover candidateHardCarrierAuditOrder using compact root->semantic-exit hypotheses only and end with hard_hypothesis=<carrier:root->exit or none>. Before writing structural fields, use residual_reason to attack Phase 1 for peer-root fractures and overbreadth, then end with one final_plan=claims:<carrier:root->exit or none>;outside:<ranges or none>;add:<ranges or none> clause. Copy only those claims and the two explicit range arrays; do not restate Harness-derived projectedRanges or hardExcludedRanges.",
 		"Independently adjudicate only this exact envelope, then call submit_requirement_release exactly once.",
 		"# Complete immutable source with Candidate-only IN/OUT membership",
 		source,
@@ -2825,7 +3051,7 @@ function buildReleaseUserPrompt(
 		"0.7. Mandatory heading membership independence outside the four carrier gate: a surviving child duty does not protect a separable price/payment/settlement/deduction/penalty/breach/remedy/termination/dispute heading. Put the heading alone in outside_carrier_excluded_ranges when its removal leaves the child understandable; preserve qualified technical/service/safety/acceptance headings and indispensable context. Never use isolated legal wording to create a contract carrier.",
 		"1. Before consulting REMOVE_REVIEW, BASE_KEEP, or ADD_REVIEW permissions, audit the complete Candidate-only IN/OUT source in candidateHardCarrierAuditOrder. Finish the longest interval first. Scan each continuous IN interval from its first block through its last block and reopen Owner at every source-proven peer chapter, subsection, appendix, table root, or equivalent functional boundary. Record only compact root->semantic-exit decisions in reason; an interval is not cleared merely because its first region is qualified.",
 		fullRemovalDemotedToHardBoundaryReview
-			? "1b. Only after the independent Candidate audit, review the bounded ADD_REVIEW set and any hard-boundary residual. The raw full-Candidate ordinary removal proposal has no Release authority. Submit every true hard-carrier block across Candidate. Only when that hard delta removes at least one Candidate block and all remaining Candidate blocks form exactly one non-empty continuous address run can that residual receive outside-carrier exclusions. This includes one independent Candidate interval only when every other Candidate interval is fully hard-excluded."
+			? "1b. Only after the independent Candidate audit, review the bounded ADD_REVIEW set and any hard-boundary residual. The raw full-Candidate ordinary removal proposal has no Release authority. Submit one hard_root_claim for every true hard-carrier root intersecting Candidate; the Harness derives all affected blocks. Only when that derived hard delta removes at least one Candidate block and all remaining Candidate blocks form exactly one non-empty continuous address run can that residual receive outside-carrier exclusions. This includes one independent Candidate interval only when every other Candidate interval is fully hard-excluded."
 			: releaseHasRemoval
 			? "1b. Only after the independent Candidate audit, review REMOVE_REVIEW and ADD_REVIEW against the complete source. BASE_KEEP is outside ordinary deletion authority. Independently approve or restore each proposed removal; do not scan BASE_KEEP for any outside-carrier cleanup."
 			: "1b. Only after the independent Candidate audit, review the bounded add-only patch. BASE_KEEP remains mandatory for every outside-carrier decision.",
@@ -2833,14 +3059,14 @@ function buildReleaseUserPrompt(
 		"2. Keeping any disputed block needs affirmative proof that it is outside the four hard-excluded carriers. Current-project facts, unique scope, staffing, quality, service, acceptance, or technical wording inside an open announcement, bidder-instruction, response-format, or contract carrier are never protection evidence. An announcement need not carry an explicit title: a self-contained public-notice sequence covering project synopsis, participation eligibility, acquisition, submission, publication channel, and contacts remains announcement Owner until a source-proven exit. This notice-sequence pattern applies only inside one uninterrupted, functionally homogeneous notification region; never stitch those elements across peer response-format, contract, evaluation, technical-chapter, or detailed-technical-appendix boundaries to label the whole physical file a notice. When such heterogeneous peer carriers exist, first treat the file as a multi-carrier procurement container and reopen Owner at every boundary. Do not invent an invitation-body Owner spanning all numbered sections: invitation is the physical container, not a fifth hard-excluded carrier. A top-level functional shift into project scope, procurement content, execution quality or safety, warranty, technical standards, or a detailed technical appendix is itself a source-proven boundary and needs no explicit end-of-invitation sentence. Continuous numbering and later contact information do not erase that boundary. If retaining a project-summary island from a true notice sequence, state its actual regional boundary; otherwise omit it.",
 		"3. REMOVE_REVIEW interval boundaries are not carrier boundaries. A wide removal proposal can start inside a contract or format chapter and later cross into peer technical chapters before entering another excluded carrier. Reopen Owner judgment at every top-level heading, chapter transition, appendix, table heading, and short post-carrier island inside the interval; never inherit the first heading across the whole range.",
 		fullRemovalDemotedToHardBoundaryReview
-			? "3a. When structure navigation is available, use the challenged-side focus only as bounded navigation; use the complete source and full answer-free structure map for the candidate-wide four-carrier sweep. Structure is never an Owner label. BASE_KEEP remains mandatory unless Release submits the block in hard_excluded_ranges or it belongs to the one non-empty continuous Candidate address run mechanically left across the complete Candidate by the typed hard delta and is explicitly submitted in outside_carrier_excluded_ranges."
-			: "3a. When structure navigation is available, use the challenged-side focus only as bounded navigation; use the complete source and full answer-free structure map for the candidate-wide four-carrier sweep. Structure is never an Owner label. BASE_KEEP remains mandatory unless Release itself proves and submits the same block in hard_excluded_ranges.",
+			? "3a. When structure navigation is available, use the challenged-side focus only as bounded navigation; use the complete source and full answer-free structure map for the candidate-wide four-carrier sweep. Structure is never an Owner label. BASE_KEEP remains mandatory unless the Harness-derived projection of a submitted hard_root_claim covers the block or it belongs to the one non-empty continuous Candidate address run mechanically left across the complete Candidate by the typed hard delta and is explicitly submitted in outside_carrier_excluded_ranges."
+			: "3a. When structure navigation is available, use the challenged-side focus only as bounded navigation; use the complete source and full answer-free structure map for the candidate-wide four-carrier sweep. Structure is never an Owner label. BASE_KEEP remains mandatory unless Release proves the semantic root and submits its hard_root_claim.",
 		"3b. A source-proven carrier boundary does not require Word outline metadata. A numbered, bold, centered, or plain-text local subsection that establishes contract terms or formats, response/quotation format, bidder instructions, or an announcement/notice sequence starts a hard-excluded Owner even when nested under a broader chapter. Apply hardCarrierFunctionContract strictly: quotation format is a submitted response-artifact schema, not an ordinary price/quotation/cost subsection; bidder instruction is a rooted participation or submission procedure, not any bidder-addressed sentence; announcement is an uninterrupted notification sequence, not an invitation sentence plus project facts followed by peer requirements. A bounded bidder/supplier commitment, response-commitment, no-deviation commitment, or declaration section is a response-format root only when its boundary-complete operative function is to require the bidder before award to declare, confirm, guarantee, or commit future compliance. It remains root-closed even without blanks, signature fields, or a format/template label and even when child lines restate warranty, quality, service, staffing, or delivery duties. Isolated commitment or guarantee wording does not create that carrier; a buyer's direct post-award command outside it remains a work duty. Carry an actual Owner through all child clauses until the next peer exit. Do not apply primary direct effect to rescue service period, location, quality, acceptance, technical parameters, or unique project facts inside an actual carrier. A detailed technical table remains excluded while its active response or quotation-format scope is open.",
 		"3c. Contract-format containment requires an actual source-proven contract agreement, terms/format, performance-assessment template, or contract-appendix root. A local tender section whose stated function is to disclose the main terms of the future procurement contract is itself a contract-terms root; it does not need to be a complete bilateral contract, carry signatures, or make the whole source_role=contract. Isolated contract, breach, confidentiality, intellectual-property, approval, responsibility, or deduction wording does not create that carrier, and a later contract section never expands backward over earlier peer technical chapters. Once a local contract-terms root is source-proven, its embedded attachment, technical list, and detailed child rules inherit that carrier until a peer exit; an attachment label alone does not reopen membership. Within a qualified technical Owner, result/source-code delivery, confidentiality and data handling, cybersecurity, continued maintenance, reports, approval workflow, and replacement obligations remain subject to direct-duty review.",
 			"3d. For every four-carrier omission, state carrier_root_exit_attack=<actual four-class root address -> first different-Owner peer root address or EOF>. Apply it to challenged blocks and to any BASE_KEEP block proposed under the candidate-wide hard-carrier veto. A later carrier never expands backward; adjacent different Owners require separate roots and exits.",
-			"3d.1. Mandatory marker-transition closure: inspect every address-only REMOVE_REVIEW/BASE_KEEP transition listed above. A permission-marker switch is never a source-proven Owner exit. Start from the actual carrier root, read across both marker runs, and continue through any following OUT or marker change until the first different-Owner peer root or EOF. If residual_reason still affirms the same four-class root across the transition, put every authorized Candidate descendant through that semantic exit in hard_excluded_ranges. To retain any descendant, residual_reason must first retract or narrow the root or establish a different-Owner peer exit; never run duty_survival_attack inside an affirmed root.",
-		"3e. Mandatory mixed_container_root_sweep before atom review: a parent chapter combining technical, service, contract, business, or other requirements is only a mixed container. Classify every child heading candidate from source. A tentative final that drops payment, guarantee, breach, or other commercial/legal children but keeps service period, location, quality, acceptance, personnel, or technical children after the same local four-class root is a forbidden holey selection; either disprove the root or put its complete root-to-semantic-exit interval in hard_excluded_ranges.",
-		"3f. Mandatory peer_root_fracture_attack inside every continuous Candidate interval: enumerate each source-proven peer root rather than inheriting the first Owner across the address range. When a qualified requirement island reaches a new announcement/notice, bidder/supplier-instruction, response/quotation-format, or contract-terms peer root, put that root through its semantic exit in hard_excluded_ranges even when it begins inside BASE_KEEP. A later qualified peer root remains retained. Never use markers, numbering, formatting, keywords, or range continuity alone to establish the root.",
+			"3d.1. Mandatory marker-transition closure: inspect every address-only REMOVE_REVIEW/BASE_KEEP transition listed above. A permission-marker switch is never a source-proven Owner exit. Start from the actual carrier root, read across both marker runs, and continue through any following OUT or marker change until the first different-Owner peer root or EOF. If residual_reason still affirms the same four-class root across the transition, submit that complete root/exit claim; the Harness derives every authorized Candidate descendant. To retain any descendant, residual_reason must first retract or narrow the root or establish a different-Owner peer exit; never run duty_survival_attack inside an affirmed root.",
+		"3e. Mandatory mixed_container_root_sweep before atom review: a parent chapter combining technical, service, contract, business, or other requirements is only a mixed container. Classify every child heading candidate from source. A tentative final that drops payment, guarantee, breach, or other commercial/legal children but keeps service period, location, quality, acceptance, personnel, or technical children after the same local four-class root is a forbidden holey selection; either disprove the root or submit its complete root-to-semantic-exit claim.",
+		"3f. Mandatory peer_root_fracture_attack inside every continuous Candidate interval: enumerate each source-proven peer root rather than inheriting the first Owner across the address range. When a qualified requirement island reaches a new announcement/notice, bidder/supplier-instruction, response/quotation-format, or contract-terms peer root, submit that root and its semantic exit in hard_root_claims even when it begins inside BASE_KEEP. A later qualified peer root remains retained. Never use markers, numbering, formatting, keywords, or range continuity alone to establish the root.",
 		"3g. Mandatory preamble_peer_reset_test: run this reset only when no source-proven announcement/notice chapter or boundary-complete notification root encloses both regions. A commission/open-invitation/welcome sentence inside a tender-book, requirement, specification, or technical chapter is then at most a local preamble unless an uninterrupted outward-notification sequence continues. Reopen Owner at the next numbered peer root; procurement content, object, scope, site, schedule, quality, specification, drawing, list, or technical requirements can end that tentative preamble Owner without an explicit notice-ending sentence. Once an actual notice root is proven, disable this reset inside it: numbered project synopsis, procurement scope, period, location, standard, and technical-summary children remain notice descendants until a same-or-higher different-Owner peer outside the root. Repetition of the same facts in an earlier separate announcement is not local Owner evidence for a later root.",
 		"4. Whole-source terminal identities outrank local technical content. If affirmative source evidence establishes one completed supplier-authored response/proposal/deliverable, one non-procurement document, one uninstantiated template/form, or one actual hard-excluded carrier through its true end, and no boundary-independent buyer-issued qualified region exists, the mechanically derived final is null when every Candidate block is covered by an authorized exclusion and accepted_add_ranges is empty. A supplier response does not become buyer requirement because it copies tender clauses, describes the same project, or contains detailed future duties. Before making that terminal decision, whole_container_disconfirmation must inspect every later top-level boundary and short island; for a four-class carrier, carrier_root_exit_attack must also establish its real root through EOF. Multiple heterogeneous peer roots prove a mixed or multi-carrier source, not a terminal whole-source identity; that finding never cancels any local four-class root or its hard projection. A physical-file title, invitation act, attachment relationship, or notice elements scattered across separate chapters is insufficient evidence for null; completed tone or isolated supplier wording is likewise insufficient.",
 		"5. Before a broad removal or null result, inspect every later top-level boundary and short island for independent technical standards, requirements, specifications, drawings, lists, or appendices. Outer containment ends only at a source-proven boundary, not at a local technical label.",
@@ -2853,20 +3079,20 @@ function buildReleaseUserPrompt(
 		"8a. Stage Owner outranks future-tense wording. A complete bid/response mandatory-requirements section or mandatory response table remains pre-award proof/commitment Owner even when it lists future roles, headcount, certificates, or mobilization dates. First close personnel Stage Owner at subsection level: when a subsection has its own root and peer exit, and multiple child items collectively require credentials, social-insurance proof, commitments, or invalid-response consequences to establish pre-award admissibility, put the root and every child through that exit in outside_carrier_excluded_ranges. Do not carve out one child merely because it also describes future staffing. Only when source proves the subsection is primarily post-award staffing may a separable note whose operative act tells the response document to fill, attach, or provide personnel names, credentials, certificates, screenshots, social-insurance evidence, or commitments be excluded locally without deleting the staffing duties around it. Outside those proof Owners, a direct requirement on the successful supplier's post-award staffing, resources, submission, review, approval, filing, records, or data handling is performance content. Confidentiality rules governing project-data storage, processing, transmission, copying, disclosure, retention, return, or destruction are direct data-control duties; a platform-execution command remains direct when termination is only the stated consequence.",
 		"8d. Mandatory subject_predicate_remainder_test: outside a proven response-format or pre-award proof root, strip only the performative respond/state/confirm/guarantee/commit wrapper and bidder addressee. Preserve the indivisible block when actual offered work, service, product, quality, safety, acceptance, warranty, or result remains the grammatical subject of a requirement to meet, satisfy, or at least reach a substantive baseline; no separate implementation verb or project parameter is required, and it reopens a keep island between commercial or proof blocks. Delete only when stripping leaves an orphaned general-compliance, response, no-deviation, or acceptance phrase that merely serves as the object of a bidder declaration or commitment and predicates no independent property, action, or result of actual work.",
 		fullRemovalDemotedToHardBoundaryReview
-			? "9. Envelope size and prior-role agreement are not semantic votes. The raw full-Candidate removal envelope has been withdrawn. Candidate-wide hard deletion still requires hard_excluded_ranges; outside-carrier Candidate deletion is limited to the one mechanically derived non-empty continuous address run left across the complete Candidate after at least one Candidate block is hard-excluded."
-			: "9. Envelope size and prior-role agreement are not semantic votes. Outside-carrier deletion starts bounded to REMOVE_REVIEW. After hard_excluded_ranges independently confirms at least one REMOVE_REVIEW Candidate block as a four-carrier descendant, the Harness may additionally expose exactly one non-empty continuous Candidate residual left by all hard exclusions. No confirmed REMOVE_REVIEW hard block, two residual runs, or no residual leaves every other BASE_KEEP mandatory.",
+			? "9. Envelope size and prior-role agreement are not semantic votes. The raw full-Candidate removal envelope has been withdrawn. Candidate-wide hard deletion still requires semantic hard_root_claims; outside-carrier Candidate deletion is limited to the one mechanically derived non-empty continuous address run left across the complete Candidate after at least one Candidate block is hard-excluded."
+			: "9. Envelope size and prior-role agreement are not semantic votes. Outside-carrier deletion starts bounded to REMOVE_REVIEW. After the Harness-derived projection of hard_root_claims independently covers at least one REMOVE_REVIEW Candidate block, the Harness may additionally expose exactly one non-empty continuous Candidate residual left by all hard exclusions. No confirmed REMOVE_REVIEW hard block, two residual runs, or no residual leaves every other BASE_KEEP mandatory.",
 		"9a. Phase 1 hypothesis: write hard_carrier_reason, scanning each continuous Candidate interval from first through last in candidateHardCarrierAuditOrder and naming only decisive four-class roots with semantic exits. Do not let the interval's first qualified Owner hide a later contract, response-format, bidder-instruction, or announcement root. Do not write any range field yet.",
-		"10. Phase 2 adversarial residual gate: before any range field, test the Phase 1 hypothesis against every peer root and every authorized challenged block. residual_reason must explicitly correct any Phase 1 root that expands backward over an earlier qualified chapter, crosses a different-Owner peer exit, or absorbs a later qualified peer root. Every Phase 1 hard range must then either remain in the final hard projection or be explicitly retracted or narrowed with that source-proven correction; it cannot disappear silently. Then adjudicate the remaining outside-carrier remove/add envelope. A non-empty residual cannot be called already covered.",
+		"10. Phase 2 adversarial residual gate: before hard_root_claims or either range array, test the Phase 1 hypothesis against every peer root and every authorized challenged block. residual_reason must explicitly correct any Phase 1 root that expands backward over an earlier qualified chapter, crosses a different-Owner peer exit, or absorbs a later qualified peer root. Every Phase 1 root hypothesis must then either remain as a corrected hard_root_claim or be explicitly retracted or narrowed with that source-proven correction; it cannot disappear silently. Then adjudicate the remaining outside-carrier remove/add envelope. A non-empty residual cannot be called already covered.",
 		"10a. Before compressing any multi-block outside-carrier deletion, run counterexample_first_duty_attack on the exact proposed interval. Every canonical paragraph/table block is independently addressable despite a shared commercial or legal heading. Find the strongest block whose operative remainder still imposes post-award work after stripping incidental price/payment/settlement/audit/proof/remedy language; restore its complete source-fidelity island, split around it, and repeat only on the remaining subranges. Record compact survivor islands or none, never representative sample addresses or a block ledger.",
 		"10a.1. For every authorized project-overview or equivalent current-project-summary residual, execute projectFactAttackClosureContract before compression. residual_reason must include one project_fact_membership_attack=scope:<ranges>;remove:<ranges or none>;survive:<ranges or none> clause whose remove and survive islands cover every address in scope exactly once. A blanket project-facts or parent-heading keep verdict, or omission of a drafting/filling instruction before the first filled fact, is unfinished. This is a compact island closure, not a block ledger.",
 		"10a.2. Before restoring any challenged heading, list, appendix, or source-provided-materials island, execute selected_shell_body_closure and non_fact_shell_closure against the current immutable source. Names of drawings, schedules, lists, specifications, or other materials are not body when their actual content is absent. If stripping the heading and external-reference wrapper leaves no present work fact, duty, parameter, or embedded body before the peer exit, exclude the complete shell; source fidelity never protects a bare pointer.",
-		"10b. Only after both reasons converge, treat omission from both exclusion fields as the sole final-keep expression for a REMOVE_REVIEW island. The Harness mechanically restores every such block. Do not submit a separate keep override or representative keep list; if a block remains a four-carrier descendant, put it in hard_excluded_ranges, and if it remains an authorized outside-carrier deletion, put it in outside_carrier_excluded_ranges.",
-		"11. Exactly project the corrected four-carrier plan into hard_excluded_ranges. Compare hard_hypothesis with the explicit Phase 2 corrections before submission: every still-affirmed Candidate intersection must appear in this field, and mixed or multi-carrier is never an omission reason. Candidate need not contain the root title: inspect source before the first Candidate block, and when the actual root starts in OUT, include every Candidate descendant through the semantic exit. For every actual root still affirmed by residual_reason, include every authorized Candidate or ADD_REVIEW block from root through semantic exit regardless of REMOVE_REVIEW or BASE_KEEP. A partial descendant subset is an invalid holey projection; technical duties or duty_survival_attack cannot preserve content inside the affirmed root. To omit a descendant, first correct the root or exit in residual_reason. This field can never include unchallenged OUT.",
+		"10b. Only after both reasons converge, treat omission from outside_carrier_excluded_ranges as the final-keep expression for a REMOVE_REVIEW island not covered by a hard_root_claim. The Harness mechanically restores every such block. Do not submit a separate keep override or representative keep list; if a block remains a four-carrier descendant, submit its semantic root/exit claim, and if it remains an authorized outside-carrier deletion, put it in outside_carrier_excluded_ranges.",
+		"11. Encode the corrected four-carrier plan in hard_root_claims before either range array. For each still-affirmed root, submit exactly one carrier_type, inclusive root_block_id, and exclusive semantic exit; use exit_block_id_exclusive=null only when the same Owner continues through EOF. Do not calculate projected ranges. The Harness intersects every claim with hardRootClaimProjectionUniverseRanges, including Candidate, ADD_REVIEW, and BOUNDARY_REVIEW markers whether or not an add is later accepted; it rejects empty projections and overlap across claims, then derives the hard exclusion union. Technical duties or duty_survival_attack cannot preserve content inside an affirmed root. To retain any descendant, first correct the root or exit in residual_reason. Never submit an ordinary OUT root whose span has no authorized projection.",
 		fullRemovalDemotedToHardBoundaryReview
 			? "11a. Project the corrected residual plan into outside_carrier_excluded_ranges. Candidate authority exists only when the typed hard delta removes at least one Candidate block and all remaining Candidate blocks form exactly one non-empty continuous address run. The run may be a prefix, suffix, middle island, or the sole surviving Candidate interval after every other Candidate interval is fully hard-excluded. Within that mechanically bounded residual, record compact counterexample-first survivor islands in residual_reason and submit only exact pure budget, pre-award proof/procedure, price/payment/settlement/guarantee, pure legal remedy, or bare-pointer atoms that remain safely separable after duty_survival_attack. Direct implementation, resources, plans/reports, records, data control, delivery, transitions, replacement, response, platform execution, staffing, quality, safety, acceptance, warranty, or result duties survive. Never place a four-carrier, restored block, a second residual run, or OUT here."
 			: "11a. Project the corrected residual plan into outside_carrier_excluded_ranges. If whole_source_identity_veto applies, write every authorized challenged Candidate block covered by that terminal identity and do not run duty_survival_attack. Otherwise write exact outside-carrier atoms from REMOVE_REVIEW plus the sole continuous Candidate residual only when the hard delta includes at least one REMOVE_REVIEW Candidate block. In that residual, run peer-level outside_carrier_precision_closure and counterexample-first survival tests before compression; do not protect the range from a parent title or representative positive examples. Pure budget, pre-award proof/procedure, price/payment/settlement/guarantee, pure legal remedy, and bare pointers may be excluded when separable; direct implementation, resources, plans/reports, records, data control, delivery, transitions, replacement, response, platform execution, staffing, quality, safety, acceptance, warranty, or result duties survive. Never place a four-carrier, restored block, a second residual run, or OUT here. When the unlock conditions fail, do not run a global false-protection sweep over BASE_KEEP.",
-		"12. Write accepted_add_ranges only for independently approved ADD_REVIEW or BOUNDARY_REVIEW blocks. Apply boundaryReviewContract before accepting any BOUNDARY_REVIEW address; never accept a partial selected-shell body whose remaining required island lies in ordinary OUT. Do not repeat Candidate keep ranges. Recheck that every deletion is explicitly authorized in the correct hard or outside-carrier field; accepted additions stay inside the two bounded add markers and other OUT stays absent. Any REMOVE_REVIEW block omitted from both exclusion fields is restored by the Harness. The Harness, not this model, composes the final set.",
-		"13. TERMINAL_ACTION: Rewrite every draft into one complete five-field decision, then call submit_requirement_release exactly once as the first and only visible output. The tool arguments must contain hard_carrier_reason, residual_reason, hard_excluded_ranges, outside_carrier_excluded_ranges, and accepted_add_ranges together. Do not emit analysis, prose, Markdown, pseudo-tool syntax, or partial JSON before or after the tool call; end immediately after the call.",
+		"12. Write accepted_add_ranges only for independently approved ADD_REVIEW or BOUNDARY_REVIEW blocks. Apply boundaryReviewContract before accepting any BOUNDARY_REVIEW address; never accept a partial selected-shell body whose remaining required island lies in ordinary OUT. Do not repeat Candidate keep ranges. Recheck that every deletion is authorized by the correct hard_root_claim or outside-carrier field; accepted additions stay inside the two bounded add markers and other OUT stays absent. Any REMOVE_REVIEW block covered by neither a Harness-derived hard projection nor outside_carrier_excluded_ranges is restored by the Harness. The Harness, not this model, composes the final set.",
+		"13. TERMINAL_ACTION: Rewrite every draft into one complete five-field decision, then call submit_requirement_release exactly once as the first and only visible output. The tool arguments must contain hard_carrier_reason, residual_reason, hard_root_claims, outside_carrier_excluded_ranges, and accepted_add_ranges together. Do not emit analysis, prose, Markdown, pseudo-tool syntax, or partial JSON before or after the tool call; end immediately after the call.",
 	].join("\n\n");
 }
 

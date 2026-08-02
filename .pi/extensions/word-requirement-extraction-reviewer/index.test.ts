@@ -36,6 +36,23 @@ const buyerIssuedReviewFields = {
 	source_role: "buyer_issued" as const,
 	instantiation: "present" as const,
 };
+type TestHardCarrierType =
+	| "announcement"
+	| "bidder_instruction"
+	| "response_format"
+	| "contract_terms";
+
+function hardRootClaim(
+	carrierType: TestHardCarrierType,
+	rootBlockId: number,
+	exitBlockIdExclusive: number | null,
+): Record<string, unknown> {
+	return {
+		carrier_type: carrierType,
+		root_block_id: rootBlockId,
+		exit_block_id_exclusive: exitBlockIdExclusive,
+	};
+}
 
 function sha256(value: string): string {
 	return createHash("sha256").update(value).digest("hex");
@@ -111,7 +128,7 @@ function tool(name: string, args: Record<string, unknown>, id: string): Assistan
 function release(
 	deltas: {
 		hardCarrierReason?: string;
-		hardExcludedRanges?: string[];
+		hardRootClaims?: Record<string, unknown>[];
 		outsideCarrierExcludedRanges?: string[];
 		acceptedAddRanges?: string[];
 	},
@@ -121,7 +138,7 @@ function release(
 		hard_carrier_reason:
 			deltas.hardCarrierReason ?? "The candidate-wide four-carrier audit is complete.",
 		residual_reason: reason,
-		hard_excluded_ranges: deltas.hardExcludedRanges ?? [],
+		hard_root_claims: deltas.hardRootClaims ?? [],
 		outside_carrier_excluded_ranges: deltas.outsideCarrierExcludedRanges ?? [],
 		accepted_add_ranges: deltas.acceptedAddRanges ?? [],
 	};
@@ -190,7 +207,7 @@ function roleRuntime(streamFunction: StreamFn, runtimeModel = model) {
 	return { model: runtimeModel, streamFunction, apiKey: "test-key" };
 }
 
-test("uses medium Reviewer thinking and low Release thinking", async () => {
+test("uses medium Reviewer thinking and disables Release thinking", async () => {
 	const reasoningModel: Model<"openai-completions"> = {
 		...model,
 		id: "reasoning-faux",
@@ -217,7 +234,9 @@ test("uses medium Reviewer thinking and low Release thinking", async () => {
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落0"] },
+				{
+					hardRootClaims: [hardRootClaim("response_format", 0, null)],
+				},
 				"The challenged block is safely excluded.",
 			),
 				"thinking-release",
@@ -234,7 +253,7 @@ test("uses medium Reviewer thinking and low Release thinking", async () => {
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(scripted.thinkingLevels).toEqual(["medium", "low"]);
+	expect(scripted.thinkingLevels).toEqual(["medium", "off"]);
 	expect(scripted.userPrompts[0]).toMatch(
 		/# Terminal task card[\s\S]*6\. TERMINAL_ACTION: Call submit_requirement_residual_review exactly once[\s\S]*end immediately after the call\.$/u,
 	);
@@ -243,7 +262,7 @@ test("uses medium Reviewer thinking and low Release thinking", async () => {
 	);
 	expect(result.context).toMatchObject({
 		reviewerThinkingLevel: "medium",
-		releaseThinkingLevel: "low",
+		releaseThinkingLevel: "off",
 	});
 });
 
@@ -331,7 +350,11 @@ test("provides the same answer-free Word structure map to Reviewer and Release",
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落3-段落4"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("response_format", 3, null),
+					],
+				},
 				"The independent source and structure review approves the removal.",
 			),
 			"release-structure-map",
@@ -479,7 +502,11 @@ test("derives content-blind visual peer navigation for non-outline headings", as
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落3-段落5"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("response_format", 3, 6),
+					],
+				},
 				"The visual boundary hypothesis is source-confirmed.",
 			),
 			"release-visual-navigation",
@@ -660,7 +687,11 @@ test("audits a non-empty Reviewer no-change decision with terminal-or-hard veto 
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落0-段落1"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, 2),
+					],
+				},
 				"The selected blocks are descendants of one source-proven announcement root.",
 			),
 			"release-hard-carrier-audit-after-pass",
@@ -692,6 +723,9 @@ test("audits a non-empty Reviewer no-change decision with terminal-or-hard veto 
 	expect(scripted.userPrompts[1]).toContain("reviewerNoChangeHardCarrierAudit=true");
 	expect(scripted.userPrompts[1]).toContain("releaseRemoveEnvelopeRanges=[]");
 	expect(scripted.userPrompts[1]).toContain("boundaryReviewRanges=[]");
+	expect(scripted.userPrompts[1]).toContain(
+		'hardRootClaimProjectionUniverseRanges=["段落0-段落1"]',
+	);
 	expect(scripted.userPrompts[1]).toContain(
 		"It is not a second extraction or an ordinary precision pass.",
 	);
@@ -727,7 +761,12 @@ test("discards a contract-invalid Reviewer patch and runs only the protected ter
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落1", "段落3"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, 2),
+						hardRootClaim("response_format", 2, null),
+					],
+				},
 				"Both Candidate blocks are descendants of independently proven hard-carrier roots.",
 			),
 			"release-hard-carrier-audit-after-reviewer-contract-failure",
@@ -900,7 +939,11 @@ test("audits a mechanically normalized no-op challenge when the Candidate remain
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落0-段落1"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, null),
+					],
+				},
 				"The independent hard-carrier audit excludes the complete selected root.",
 			),
 			"release-after-mechanical-noop",
@@ -1124,7 +1167,7 @@ test("publishes a source-proven completed supplier response as a terminal null",
 			"submit_requirement_release",
 			{
 				hard_carrier_reason: "No four-class carrier is present in the authorized envelope.",
-				hard_excluded_ranges: [],
+				hard_root_claims: [],
 				residual_reason:
 					"Whole-source authorship is a completed supplier response, so its copied duties cannot reopen requirement membership.",
 				outside_carrier_excluded_ranges: ["段落0-段落2"],
@@ -1462,8 +1505,8 @@ test("preserves the candidate when the independent Release rejects a challenge",
 	expect(result.release).toEqual({
 		verdict: "reject",
 		hardCarrierReason: "The candidate-wide four-carrier audit is complete.",
+		hardRootClaims: [],
 		restoredRemoveRanges: [],
-		submittedHardExcludedRanges: [],
 		hardExcludedRanges: [],
 		residualReason: "The challenged block is independently owned by scoring.",
 		submittedOutsideCarrierExcludedRanges: [],
@@ -1568,7 +1611,6 @@ test("derives final ranges mechanically from typed Release deltas", async () => 
 	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.release).toMatchObject({
 		verdict: "publish",
-		submittedHardExcludedRanges: [],
 		hardExcludedRanges: [],
 		submittedAcceptedAddRanges: ["段落2"],
 		acceptedAddRanges: ["段落2"],
@@ -1578,9 +1620,301 @@ test("derives final ranges mechanically from typed Release deltas", async () => 
 	expect(scripted.toolParameterKeys[1]).toEqual([
 		"hard_carrier_reason",
 		"residual_reason",
-		"hard_excluded_ranges",
+		"hard_root_claims",
 		"outside_carrier_excluded_ranges",
 		"accepted_add_ranges",
+	]);
+});
+
+test.each([
+	{
+		name: "empty derived projection",
+		hardRootClaims: [hardRootClaim("announcement", 0, 1)],
+		error: "claim has no authorized Candidate/add projection",
+	},
+	{
+		name: "overlapping claim projections",
+		hardRootClaims: [
+			hardRootClaim("announcement", 1, 3),
+			hardRootClaim("bidder_instruction", 2, null),
+		],
+		error: "projected block 2 conflicts with another claim",
+	},
+	{
+		name: "unavailable claim root",
+		hardRootClaims: [hardRootClaim("contract_terms", 9, null)],
+		error: "root block 9 is unavailable",
+	},
+	{
+		name: "reversed claim span",
+		hardRootClaims: [hardRootClaim("contract_terms", 2, 1)],
+		error: "invalid exclusive block span",
+	},
+])("fails closed for $name", async ({ name, hardRootClaims, error }) => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "OUT hard carrier root." },
+				{ blockId: 1, text: "Candidate child one." },
+				{ blockId: 2, text: "Candidate child two." },
+				{ blockId: 3, text: "Candidate child three." },
+			],
+			["段落1-段落3"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "pass",
+				...buyerIssuedReviewFields,
+				reason: "The Reviewer found no executable residual change.",
+			},
+			`reviewer-before-${name}`,
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{ hardRootClaims },
+				"The Release submission exercises typed hard-root mechanical validation.",
+			),
+			`release-invalid-${name}`,
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "6".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+		auditNonEmptyReviewerNoChange: true,
+	});
+
+	expect(result.status).toBe("degraded");
+	expect(result.resolution).toBe("review_incomplete");
+	expect(result.finalRanges).toEqual(["段落1-段落3"]);
+	expect(result.release).toBeNull();
+	expect(result.failure).toMatchObject({ role: "release", code: "contract_error" });
+	expect(result.failure?.message).toContain(error);
+});
+
+test("fails closed when a hard-root projection conflicts with an accepted addition", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "OUT response-format root." },
+				{ blockId: 1, text: "Candidate response-format child." },
+				{ blockId: 2, text: "Challenged response-format child." },
+			],
+			["段落1"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "material_omission",
+				add_ranges: ["段落2"],
+				remove_ranges: [],
+				reason: "The Reviewer challenges one adjacent addition.",
+			},
+			"reviewer-before-hard-add-conflict",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardRootClaims: [
+						hardRootClaim("response_format", 0, null),
+					],
+					acceptedAddRanges: ["段落2"],
+				},
+				"The Release submission cannot both exclude and accept the challenged block.",
+			),
+			"release-hard-add-conflict",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "9".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("degraded");
+	expect(result.resolution).toBe("review_incomplete");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.release).toBeNull();
+	expect(result.failure).toMatchObject({ role: "release", code: "contract_error" });
+	expect(result.failure?.message).toContain(
+		"hard exclusions conflict with accepted additions",
+	);
+});
+
+test("fails closed when a derived hard exclusion conflicts with an outside-carrier exclusion", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "Independent technical requirement." },
+				{ blockId: 1, text: "Response-format root and body." },
+			],
+			["段落0-段落1"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "challenge",
+				...buyerIssuedReviewFields,
+				issue_type: "boundary",
+				add_ranges: [],
+				remove_ranges: ["段落1"],
+				reason: "The Reviewer challenges one response-format block.",
+			},
+			"reviewer-before-hard-outside-conflict",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardRootClaims: [hardRootClaim("response_format", 1, null)],
+					outsideCarrierExcludedRanges: ["段落1"],
+				},
+				"The same block cannot use both deletion authorities.",
+			),
+			"release-hard-outside-conflict",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "a".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+	});
+
+	expect(result.status).toBe("degraded");
+	expect(result.resolution).toBe("review_incomplete");
+	expect(result.finalRanges).toEqual(["段落0-段落1"]);
+	expect(result.release).toBeNull();
+	expect(result.failure).toMatchObject({ role: "release", code: "contract_error" });
+	expect(result.failure?.message).toContain(
+		"hard exclusions conflict with outside-carrier exclusions",
+	);
+});
+
+test("accepts an OUT-starting hard root with the exact Candidate projection", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "OUT announcement root." },
+				{ blockId: 1, text: "Candidate announcement child one." },
+				{ blockId: 2, text: "Candidate announcement child two." },
+				{ blockId: 3, text: "Different-Owner peer root." },
+			],
+			["段落1-段落2"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "pass",
+				...buyerIssuedReviewFields,
+				reason: "The Reviewer found no executable residual change.",
+			},
+			"reviewer-before-out-root-claim",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, 3),
+					],
+				},
+				"The OUT root owns both authorized Candidate descendants through the peer exit.",
+			),
+			"release-valid-out-root-claim",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "7".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+		auditNonEmptyReviewerNoChange: true,
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.release?.hardRootClaims).toEqual([
+		{
+			carrierType: "announcement",
+			rootBlockId: 0,
+			exitBlockIdExclusive: 3,
+			projectedRanges: ["段落1-段落2"],
+		},
+	]);
+});
+
+test("accepts a null hard-root exit as EOF and records the claim in the result trace", async () => {
+	const packet = parseRequirementReviewPacket(
+		packetValue(
+			[
+				{ blockId: 0, text: "OUT contract root." },
+				{ blockId: 1, text: "Candidate contract child one." },
+				{ blockId: 2, text: "Candidate contract child two through EOF." },
+			],
+			["段落1-段落2"],
+		),
+	);
+	const scripted = scriptedStream([
+		tool(
+			"submit_requirement_residual_review",
+			{
+				verdict: "pass",
+				...buyerIssuedReviewFields,
+				reason: "The Reviewer found no executable residual change.",
+			},
+			"reviewer-before-null-exit-claim",
+		),
+		tool(
+			"submit_requirement_release",
+			release(
+				{
+					hardRootClaims: [
+						hardRootClaim("contract_terms", 0, null),
+					],
+				},
+				"The OUT contract root continues through EOF.",
+			),
+			"release-valid-null-exit-claim",
+		),
+	]);
+	const result = await runRequirementReview({
+		packet,
+		packetSha256: "8".repeat(64),
+		prompts,
+		reviewerRuntime: roleRuntime(scripted.streamFunction),
+		releaseRuntime: roleRuntime(scripted.streamFunction),
+		auditNonEmptyReviewerNoChange: true,
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.release?.hardRootClaims).toEqual([
+		{
+			carrierType: "contract_terms",
+			rootBlockId: 0,
+			exitBlockIdExclusive: null,
+			projectedRanges: ["段落1-段落2"],
+		},
 	]);
 });
 
@@ -1613,7 +1947,12 @@ test("requires precise exclusions and mechanically restores every omitted REMOVE
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落0", "段落3"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("response_format", 0, 1),
+						hardRootClaim("contract_terms", 3, 4),
+					],
+				},
 				"Only the two source-proven carrier blocks remain in the corrected exclusion projection.",
 			),
 			"release-precise-exclusions",
@@ -1631,7 +1970,6 @@ test("requires precise exclusions and mechanically restores every omitted REMOVE
 	expect(result.finalRanges).toEqual(["段落1-段落2", "段落4"]);
 	expect(result.release).toMatchObject({
 		restoredRemoveRanges: ["段落1-段落2"],
-		submittedHardExcludedRanges: ["段落0", "段落3"],
 		hardExcludedRanges: ["段落0", "段落3"],
 	});
 });
@@ -1832,7 +2170,9 @@ test("retains hard-carrier deletion authority after full-removal demotion", asyn
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落0-段落1"],
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, 2),
+					],
 				},
 				"The announcement is hard-excluded; the independent technical chapter remains protected.",
 			),
@@ -1887,7 +2227,9 @@ test("allows precision deletion on a unique residual after a Reviewer-confirmed 
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落3-段落4"],
+					hardRootClaims: [
+						hardRootClaim("contract_terms", 3, null),
+					],
 					outsideCarrierExcludedRanges: ["段落1"],
 				},
 				"The hard contract suffix exposes a bounded residual with one separable payment atom.",
@@ -1950,7 +2292,9 @@ test("does not unlock residual precision from a hard hit outside REMOVE_REVIEW",
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落3-段落4"],
+					hardRootClaims: [
+						hardRootClaim("contract_terms", 3, null),
+					],
 					outsideCarrierExcludedRanges: ["段落1"],
 				},
 				"The hard hit is outside REMOVE_REVIEW, so it cannot unlock residual precision.",
@@ -2006,7 +2350,10 @@ test("allows precision deletion on the unique residual between complete hard bou
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落0-段落1", "段落4-段落5"],
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, 2),
+						hardRootClaim("contract_terms", 4, null),
+					],
 					outsideCarrierExcludedRanges: ["段落2-段落3"],
 				},
 				"The hard boundary roots expose one continuous middle residual containing only a non-fact shell.",
@@ -2064,7 +2411,10 @@ test("allows precision deletion on the sole surviving Candidate interval", async
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落0-段落1", "段落6-段落7"],
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, 2),
+						hardRootClaim("contract_terms", 6, null),
+					],
 					outsideCarrierExcludedRanges: ["段落3-段落4"],
 				},
 				"Every other Candidate interval is hard-excluded, leaving one continuous residual.",
@@ -2120,7 +2470,9 @@ test("does not open residual precision when two Candidate address runs remain", 
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落0-段落1"],
+					hardRootClaims: [
+						hardRootClaim("announcement", 0, 2),
+					],
 					outsideCarrierExcludedRanges: ["段落3", "段落5"],
 				},
 				"Two discontinuous Candidate runs remain after the hard delta.",
@@ -2172,7 +2524,7 @@ test("does not open residual precision when a hard exclusion is internal to a Ca
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落2"],
+					hardRootClaims: [hardRootClaim("contract_terms", 2, 3)],
 					outsideCarrierExcludedRanges: ["段落0-段落1", "段落3-段落4"],
 				},
 				"An internal hard island cannot authorize Candidate-wide precision cleanup.",
@@ -2252,7 +2604,7 @@ test.each([
 	expect(scripted.userPrompts[1]).toContain("REMOVE_REVIEW|段落0：");
 });
 
-test("requires every approved four-carrier deletion to use the hard field", async () => {
+test("requires every approved four-carrier deletion to use a hard-root claim", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -2278,7 +2630,11 @@ test("requires every approved four-carrier deletion to use the hard field", asyn
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落0-段落1"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("response_format", 0, null),
+					],
+				},
 				"The source-proven response-format root also governs the protected descendant.",
 			),
 			"release-hard-field-mandatory",
@@ -2295,7 +2651,7 @@ test("requires every approved four-carrier deletion to use the hard field", asyn
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual([]);
 	expect(scripted.userPrompts[1]).toContain(
-		"Every four-carrier deletion uses hard_excluded_ranges regardless of marker",
+		"submit one hard_root_claim for every actual announcement/notice",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"outside_carrier_excluded_ranges is never an alternative encoding for a hard carrier",
@@ -2331,7 +2687,7 @@ test("clips unauthorized Release exclusions before deriving final ranges", async
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落2"],
+					hardRootClaims: [hardRootClaim("contract_terms", 2, 3)],
 					outsideCarrierExcludedRanges: ["段落1"],
 				},
 				"The hard carrier is excluded; the unchallenged outside-carrier range is unauthorized.",
@@ -2350,7 +2706,6 @@ test("clips unauthorized Release exclusions before deriving final ranges", async
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual(["段落0-段落1", "段落3"]);
 	expect(result.release).toMatchObject({
-		submittedHardExcludedRanges: ["段落2"],
 		hardExcludedRanges: ["段落2"],
 		submittedOutsideCarrierExcludedRanges: ["段落1"],
 		outsideCarrierExcludedRanges: [],
@@ -2358,7 +2713,7 @@ test("clips unauthorized Release exclusions before deriving final ranges", async
 	});
 });
 
-test("mechanically normalizes a singleton stringified empty Release range array", async () => {
+test("mechanically normalizes a singleton stringified empty accepted-add range array", async () => {
 	const packet = parseRequirementReviewPacket(
 		packetValue(
 			[
@@ -2385,10 +2740,10 @@ test("mechanically normalizes a singleton stringified empty Release range array"
 			"submit_requirement_release",
 			{
 				hard_carrier_reason: "No four-class carrier is present in the authorized envelope.",
-				hard_excluded_ranges: ["[]"],
+				hard_root_claims: [],
 				residual_reason: "The settlement atom is removable after the residual duty test.",
 				outside_carrier_excluded_ranges: ["段落1"],
-				accepted_add_ranges: [],
+				accepted_add_ranges: ["[]"],
 			},
 			"release-stringified-empty-release-range",
 		),
@@ -2404,7 +2759,6 @@ test("mechanically normalizes a singleton stringified empty Release range array"
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual(["段落0"]);
 	expect(result.release).toMatchObject({
-		submittedHardExcludedRanges: [],
 		hardExcludedRanges: [],
 		submittedOutsideCarrierExcludedRanges: ["段落1"],
 		outsideCarrierExcludedRanges: ["段落1"],
@@ -2573,7 +2927,7 @@ test("uses a narrative-blind Release to apply a bounded repair", async () => {
 		"candidateAuditOrderingContract=The Harness orders continuous Candidate intervals by descending block count using addresses only",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"releaseTerminalContract=Submit one phased semantic plan in fixed order: hard_carrier_reason -> residual_reason -> hard_excluded_ranges -> outside_carrier_excluded_ranges -> accepted_add_ranges",
+		"releaseTerminalContract=Submit one phased semantic plan in fixed order: hard_carrier_reason -> residual_reason -> hard_root_claims -> outside_carrier_excluded_ranges -> accepted_add_ranges",
 	);
 	expect(scripted.userPrompts[1].lastIndexOf("# Final release checklist")).toBeGreaterThan(
 		scripted.userPrompts[1].lastIndexOf("OUT|段落3："),
@@ -2845,7 +3199,11 @@ test("mechanically applies an independently approved operational precision remov
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落2-段落3"] },
+				{
+					hardRootClaims: [
+						hardRootClaim("response_format", 2, null),
+					],
+				},
 				"The exact range is independently safe and materially reduces the evidence pool.",
 			),
 			"release-operational-precision",
@@ -3169,7 +3527,7 @@ test("lets Release independently close a Candidate shell from the bounded bounda
 			"submit_requirement_release",
 			release(
 				{
-					hardExcludedRanges: ["段落3"],
+					hardRootClaims: [hardRootClaim("response_format", 3, null)],
 					acceptedAddRanges: ["段落1"],
 				},
 				"The bounded adjacent table is the complete qualified body of the selected shell.",
@@ -3190,6 +3548,9 @@ test("lets Release independently close a Candidate shell from the bounded bounda
 	expect(result.patch).toEqual({ addRanges: ["段落1"], removeRanges: ["段落3"] });
 	expect(result.context.releaseBoundaryReviewRanges).toEqual(["段落1-段落2"]);
 	expect(scripted.userPrompts[1]).toContain('boundaryReviewRanges=["段落1-段落2"]');
+	expect(scripted.userPrompts[1]).toContain(
+		'hardRootClaimProjectionUniverseRanges=["段落0-段落3"]',
+	);
 	expect(scripted.userPrompts[1]).toContain("BOUNDARY_REVIEW|段落1：");
 	expect(result.release).toMatchObject({
 		acceptedAddRanges: ["段落1"],
@@ -3321,13 +3682,13 @@ test("mechanically expands a broad Candidate complement around preserved technic
 		"a heading such as business, fulfillment, delivery, or after-sales requirements is not a pure-commerce verdict",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"Every BASE_KEEP block is mechanically retained unless hard_excluded_ranges authorizes its four-carrier subtraction",
+		"Every BASE_KEEP block is mechanically retained unless a submitted hard_root_claim covers it through the Harness-derived projection",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"A corrected root with a partial hard delta is an invalid holey projection",
+		"The Harness derives every hard projection and the final set mechanically",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"To omit a descendant, first correct the root or exit in residual_reason",
+		"To retain any descendant, first correct the root or exit in residual_reason",
 	);
 	expect(scripted.userPrompts[0]).toContain("# Run metadata");
 	expect(scripted.userPrompts[0]).toContain("# Terminal task card");
@@ -3416,10 +3777,10 @@ test("mechanically expands a broad Candidate complement around preserved technic
 		"A non-empty residual cannot be called already covered",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"Every Phase 1 hard range must then either remain in the final hard projection",
+		"Every Phase 1 root hypothesis must then either remain as a corrected hard_root_claim",
 	);
 	expect(scripted.userPrompts[1]).toContain(
-		"every still-affirmed Candidate intersection must appear in this field",
+		"Do not calculate projected ranges. The Harness intersects every claim with hardRootClaimProjectionUniverseRanges",
 	);
 	expect(scripted.userPrompts[1]).toContain(
 		"scanning each continuous Candidate interval from first through last in candidateHardCarrierAuditOrder",
@@ -3669,7 +4030,10 @@ test("lets Release close a Reviewer-missed hard carrier without opening ordinary
 			{
 				hard_carrier_reason:
 					"Both preserved children remain inside source-proven announcement or bidder-instruction roots.",
-				hard_excluded_ranges: ["段落0-段落3"],
+				hard_root_claims: [
+					hardRootClaim("announcement", 0, 2),
+					hardRootClaim("bidder_instruction", 2, null),
+				],
 				residual_reason: "No authorized outside-carrier residual remains after Phase 1.",
 				outside_carrier_excluded_ranges: [],
 				accepted_add_ranges: [],
@@ -3689,13 +4053,12 @@ test("lets Release close a Reviewer-missed hard carrier without opening ordinary
 	expect(result.finalRanges).toEqual([]);
 	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落0-段落3"] });
 	expect(result.release).toMatchObject({
-		submittedHardExcludedRanges: ["段落0-段落3"],
 		hardExcludedRanges: ["段落0-段落3"],
 		finalRanges: [],
 	});
 	expect(scripted.userPrompts[1]).toContain("hardCarrierVetoContract=");
 	expect(scripted.userPrompts[1]).toContain(
-		"The Harness deletes only explicitly authorized hard/outside exclusions, mechanically restores every other REMOVE_REVIEW block",
+		"The Harness intersects each claim with hardRootClaimProjectionUniverseRanges",
 	);
 });
 
@@ -3727,7 +4090,9 @@ test("renders address-only permission transitions for hard-carrier root closure"
 			{
 				hard_carrier_reason:
 					"One source-proven hard carrier crosses both permission transitions.",
-				hard_excluded_ranges: ["段落0-段落6"],
+				hard_root_claims: [
+					hardRootClaim("response_format", 0, null),
+				],
 				residual_reason: "No authorized outside-carrier residual remains after Phase 1.",
 				outside_carrier_excluded_ranges: [],
 				accepted_add_ranges: [],
@@ -3942,7 +4307,9 @@ test("infers exact mode from a remove-only Reviewer challenge", async () => {
 		tool(
 			"submit_requirement_release",
 			release(
-				{ hardExcludedRanges: ["段落2"] },
+				{
+					hardRootClaims: [hardRootClaim("response_format", 2, null)],
+				},
 				"The exact excluded block is independently safe to remove.",
 			),
 			"release-inferred-exact",

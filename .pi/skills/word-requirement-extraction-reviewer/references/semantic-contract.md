@@ -1,5 +1,7 @@
 # Word 单包采购需求范围语义合同
 
+> V1 legacy overlay baseline only. Active Pi-native runs must not load this file; use `pi-native-semantic-contract.md`.
+
 完整不可变 source 是唯一事实来源。Candidate 是成熟但可能出错的第一判断，不是 source 证据。
 
 ## 正向目标

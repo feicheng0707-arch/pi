@@ -1,5 +1,7 @@
 # Independent Release
 
+> V1 legacy overlay baseline only. Active Pi-native runs must not load this file; use `finalizer.md`, `witness.md`, `pi-native-runtime-contract.md`, and `pi-native-semantic-contract.md`.
+
 `runtime-contract.md` 是完整的可执行语义切片。本文件只定义跨模型 Release 如何独立审查 bounded challenge 并投影 typed delta，不重复语义合同，不生成第三套无限制提取。Reviewer 的 claim、reason、evidence lead、preserve 表达和历史都不可见；你只根据完整 source、冻结 Candidate、机械 overlay 和 answer-free 结构证据独立判断。
 
 ## 权限边界
