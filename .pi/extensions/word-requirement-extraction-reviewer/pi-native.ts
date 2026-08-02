@@ -55,11 +55,13 @@ const MAX_WITNESS_SELECT_CARDS = 1;
 const MAX_CANONICAL_WITNESS_CHALLENGES =
 	(MAX_WITNESS_EXCLUDE_CARDS + MAX_WITNESS_SELECT_CARDS) * 2;
 const MAX_FINALIZER_OWNER_REASON_CHARACTERS = 1_200;
-const MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS = 2_400;
+const TARGET_FINALIZER_RESIDUAL_REASON_CHARACTERS = 2_400;
+const MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS = 8_000;
+const WITNESS_RESPONSE_FORMAT = "json_object";
 const FINALIZER_REVIEW_PACKET_TOKEN_RESERVE = 120_000;
 const WITNESS_STATIC_TOKEN_RESERVE = 32_000;
 const PI_NATIVE_RUNTIME_VERSION =
-	"pi-native-finalizer-witness-v28-bounded-cards-reason-budgets";
+	"pi-native-finalizer-witness-v29-json-object-symmetric-fixed-point";
 
 type RunKind = "AUDIT_ISLAND" | "AUDIT_UNIVERSE";
 type HardCarrierType =
@@ -215,6 +217,7 @@ export interface PiNativeWitnessResult {
 	error: string | null;
 	trace: {
 		model: { provider: string; id: string; contextWindow: number };
+		responseFormat: typeof WITNESS_RESPONSE_FORMAT;
 		inputSha256: string;
 		focusBlockCount: number;
 		focusCharacterCount: number;
@@ -264,7 +267,7 @@ export interface RunPiNativeRequirementReviewOptions {
 }
 
 export interface PiNativeRequirementReviewResult {
-	schemaVersion: "xique.word-requirement-review.pi-native-result.v2";
+	schemaVersion: "xique.word-requirement-review.pi-native-result.v3";
 	architecture: "pi_native_finalizer_witness";
 	status: "preserved" | "repaired" | "degraded";
 	resolution: "pi_native_preserved" | "pi_native_applied_repair" | "review_incomplete";
@@ -387,10 +390,13 @@ export const PiNativeFinalSelectionSchema = Type.Object(
 		owner_reason: Type.String({
 			minLength: 1,
 			maxLength: MAX_FINALIZER_OWNER_REASON_CHARACTERS,
+			description: "Compact Owner root-to-exit summary; hard maximum 1200 characters.",
 		}),
 		residual_reason: Type.String({
 			minLength: 1,
 			maxLength: MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS,
+			description:
+				"Compact residual summary. Target at most 2400 characters; hard maximum 8000 characters. Do not emit a block ledger.",
 		}),
 		hard_root_claims: Type.Array(HardRootClaimSchema, { maxItems: 64 }),
 		run_selections: Type.Array(RunSelectionSchema, { maxItems: 128 }),
@@ -476,14 +482,7 @@ export function buildDoubaoWitnessPayload(payload: unknown): unknown {
 	delete next.tool_choice;
 	delete next.parallel_tool_calls;
 	delete next.reasoning_effort;
-	next.response_format = {
-		type: "json_schema",
-		json_schema: {
-			name: "word_requirement_semantic_witness",
-			strict: true,
-			schema: PiNativeSemanticWitnessSchema,
-		},
-	};
+	next.response_format = { type: WITNESS_RESPONSE_FORMAT };
 	next.thinking = { type: "disabled" };
 	return next;
 }
@@ -570,6 +569,10 @@ export async function runPiNativeRequirementReview(
 	const capabilitySha256 = sha256(
 		JSON.stringify({
 			runtimeVersion: PI_NATIVE_RUNTIME_VERSION,
+			witnessTransport: {
+				responseFormat: WITNESS_RESPONSE_FORMAT,
+				localValidation: "native-json-parse+typebox+cross-field",
+			},
 			prompts: activePromptHashes,
 			models: {
 				finalizer: modelIdentity(options.finalizerRuntime.model),
@@ -602,6 +605,8 @@ export async function runPiNativeRequirementReview(
 				maxWitnessSelectCards: MAX_WITNESS_SELECT_CARDS,
 				maxCanonicalWitnessChallenges: MAX_CANONICAL_WITNESS_CHALLENGES,
 				maxFinalizerOwnerReasonCharacters: MAX_FINALIZER_OWNER_REASON_CHARACTERS,
+				targetFinalizerResidualReasonCharacters:
+					TARGET_FINALIZER_RESIDUAL_REASON_CHARACTERS,
 				maxFinalizerResidualReasonCharacters:
 					MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS,
 			},
@@ -652,7 +657,7 @@ export async function runPiNativeRequirementReview(
 				| "failure"
 			>,
 		): PiNativeRequirementReviewResult => ({
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v2",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v3",
 			architecture: "pi_native_finalizer_witness",
 			packetSha256: options.packetSha256,
 			capabilitySha256,
@@ -993,7 +998,7 @@ export async function runPiNativeRequirementReview(
 			options.packet.blocks,
 		);
 		return {
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v2",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v3",
 			architecture: "pi_native_finalizer_witness",
 			status: "degraded",
 			resolution: "review_incomplete",
@@ -1974,6 +1979,7 @@ REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}`;
 			error,
 			trace: {
 				model: modelIdentity(runtime.model),
+				responseFormat: WITNESS_RESPONSE_FORMAT,
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
@@ -2004,7 +2010,7 @@ REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}`;
 		try {
 			parsed = JSON.parse(rawText);
 		} catch (error) {
-			return contractFailure(`Witness strict JSON parse failed: ${errorMessage(error)}`);
+			return contractFailure(`Witness JSON parse failed: ${errorMessage(error)}`);
 		}
 		normalizedArguments.push(parsed);
 		if (!Value.Check(PiNativeSemanticWitnessSchema, parsed)) {
@@ -2038,6 +2044,7 @@ REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}`;
 			error: null,
 			trace: {
 				model: modelIdentity(runtime.model),
+				responseFormat: WITNESS_RESPONSE_FORMAT,
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
@@ -2069,6 +2076,7 @@ REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}`;
 			error: errorMessage(error),
 			trace: {
 				model: modelIdentity(runtime.model),
+				responseFormat: WITNESS_RESPONSE_FORMAT,
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,

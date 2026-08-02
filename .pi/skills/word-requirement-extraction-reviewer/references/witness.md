@@ -8,13 +8,13 @@
 
 每张 card 的唯一 `ranges[0]` 展开后的全部 target block，必须完整落在该 lane 对应的 `REVIEW_FOCUS_SOURCE` 中同一个连续 group 内，并且属于 `AUDIT_UNIVERSE`；可以是该 group 的严格连续子区间。不得用一条 range 桥接两个 group、两个可见片段、中间未展示的 block 或 universe 外地址。`supporting_block_ids` 只提供证据引用，不授权任何未展示 target。若一个反例无法用一个 fully visible continuous target range 表达，就不要提交该 card；不得把多个不连续反例塞入同一 card。
 
-`attacked_premise` 只写一句最终、肯定、可核验的结论，通常不超过约 192 个汉字。它不是思考草稿区：禁止自我提问、改口、列举候选、复述扫描过程或写“也许/不对/再看/然后”等内部推演。若尚不能形成一句完整的 source-proven premise，就省略该 card，不要提交半张卡。必须优先保证每张已提交 card 的四个字段全部完整。
+`attacked_premise` 只写一句最终、肯定、可核验的结论，通常不超过约 192 个汉字。它不是思考草稿区：禁止自我提问、改口、列举候选、复述扫描过程或写“也许/不对/再看/然后”等内部推演。对 exclude 不能只声称“无义务/只是后果”；必须陈述目标 block 自身的肯定 primary effect，并已主动反证其中不存在 surviving action、state、result 或 standard-applicability predicate。select 也必须对称陈述目标自身的肯定 membership premise。若尚不能形成一句完整的 source-proven premise，就省略该 card，不要提交半张卡。必须优先保证每张已提交 card 的四个字段全部完整。
 
 外层 lane 机械决定方向：`exclude` 只攻击 provisional 当前 selected 的目标应排除；`select` 只攻击 provisional 当前 excluded 的目标应保留。direction 不是输出字段。lane 名、card 数量、card 顺序、supporting block 数量和 layout 都没有证据权重，不构成投票或 override。
 
 ## 共同证据门
 
-- 必须先扫描该 lane 的全部 focus islands，再选择 source 证据最强的独立反例；不得把第一个“看起来可疑”的目标直接写入 JSON。`exclude` 的多张 card 必须攻击不同的 source-proven premise；不得把同一个 root、同一个连续 hole 或同一个原文 premise 拆成多张卡制造票数。彼此分离的错误可以属于同一种通用语义类别。最多三张不是配额，错误 card 比缺卡更差。
+- 必须先扫描该 lane 的全部 focus islands，再选择 source 证据最强的独立反例；不得把第一个“看起来可疑”的目标直接写入 JSON。先按 source-proven peer-bounded local partition 与连续 premise cluster 覆盖：第一轮每个 partition/cluster 最多选择一张 card；只有所有其他可见 partition 都完成扫描且不存在更强独立反例时，剩余槽位才可回到同一 cluster。`exclude` 的多张 card 必须攻击不同的 source-proven premise；不得把同一个 root、同一个连续 hole 或同一个原文 premise 拆成多张卡制造票数。彼此分离的错误可以属于同一种通用语义类别。最多三张不是配额，错误 card 比缺卡更差。
 - challenge 必须由目标 block 自身或真实 Owner root/peer boundary 的肯定原文事实成立。地址连续、Candidate 选择、provisional reason、path/style/sc/vc、技术密度、普通重复或结果更短都不是反例。
 - 不同 `block_id` 是可分离输出原子；不得把相邻 block 的施工、质量、修理、纠正、交付或结果谓词借给目标 block。一个 canonical table block 内的 row/cell 不能单独删除：只要同表任一部分仍有合格需求事实，整块就不能被 exclude。
 - challenge target 是用于推翻 provisional premise 的最小反例证据，不是完整修复 patch。range 只提交最小、连续、完整可见且足以表达同一个反例的地址；攻击“整组/整章全部为空”这类全称 premise 时，提交一个最强的可见 canonical atom 即可，绝不能把未展示的整组地址写成 target。supporting block 只列足以让 Finalizer 回看 premise 的原文证据。
@@ -25,6 +25,8 @@
 完整扫描 `exclude_scan_selected_islands` 后按以下顺序生成和淘汰候选：
 
 Owner pre-pass 优先于下面所有 heading/atom 排序。先对目标执行 whole-container、first peer exit 与 cross-reference recovery 检查；有效的 earlier independent pointer + 固定非填报且对象功能对应的 later module 已形成 peer fracture，不得再以相邻 carrier root 攻击。随后检查每个 selected island 及其可见前界是否出现四类 local hard root，或边界完整、主功能明确为投标人/供应商资格、资格审查、强制响应、人员准入/最低配置的 pre-award Stage Owner。只要 source 已建立该 root、目标仍位于 root→first peer exit 内且无有效 recovery，而 provisional 仍选择其 descendant，该冲突的优先 card 必须是 `owner_boundary`：target 只取同一 focus group 内最早的 selected descendant，root block 仅放入 `supporting_block_ids` 作为边界证据；不得因 root 自身当前 excluded 而把 root 放进 exclude target，也不得为同一 root 重复提交多张 descendant card。内部人员组织、业绩、信用、质保、承诺或其他低层 subsection 不是 Stage Owner exit。关闭所有可见且彼此独立的 Owner 冲突后，才按下列顺序比较剩余 heading/atom challenge。
+
+对剩余 atom 必须执行统一三步而不是凭类别抢占卡槽：A. 在全部可见 partition 中枚举由目标自身肯定 primary effect 支撑的 exclusion candidates；B. 对每个 candidate 做 mandatory self-falsification，主动寻找同一 target 内任何可重述的 action、state、result、standard-applicability 或合格 heading survivor，找到即丢弃该 exclude candidate；C. 只对通过自我反证的 candidates 按 source 确定性、材料性和跨 partition 覆盖排序，再按下列规则核验。price、proof、consequence、meta 或其他类别都不能跳过这三步。
 
 1. mandatory selected-heading audit：在查看任何普通 body atom 前，先枚举全部 selected headings。对每个 heading 只在下一个同级或更高层级、功能不同的 peer 前寻找 selected child；若数量为零且 heading 自身无范围/参数/动作/结果，它是 empty heading，必须优先挑战。若 heading 主功能是文档、清单、报价、计价、付款结算或响应材料的 authoring / compilation / filling / submission / instruction wrapper，即使边界内 mixed child 因自身 surviving duty 被选中，该 wrapper 仍必须优先挑战。只攻击该最小可见同-group heading block，不把合格 child 纳入 range。完成该 heading audit 后才进入普通 atom 排序。
 2. 对每个 selected block 自身做 surviving-predicate test。剥离价格、付款、证明、承诺、责任、费用、扣款、赔偿和其他后果包装后，只要仍有当前项目对象、范围、数量、施工/服务动作、资源人员、技术基线、质量安全、交付验收、可核验结果，或具体可控制的服从、禁止、保护、配置、程序、记录、期限、检查整改义务，该 block 就不允许进入 exclude lane。
@@ -45,7 +47,8 @@ Owner pre-pass 优先于下面所有 heading/atom 排序。先对目标执行 wh
 - 目标若仍位于已由 source 建立的公告/须知/响应格式/合同 hard root 到 first semantic peer exit 之间，内部技术内容不能穿透 Owner gate。只有目标之前出现真实同级或更高层级、功能不同的 peer，才可用 `owner_boundary` 挑战过宽 claim。
 - kind 由 provisional 的具体错误机制决定，而不是由你使用了哪类 supporting evidence 决定。只有 target 当前落在 provisional hard-root projection 内，且反例要求移动/撤回 root 或 exit 时才用 `owner_boundary`；若 provisional 已在 target 之前结束该 hard claim，target 只是因 stripped remainder、pure consequence、meta 或其他 atom 判断被排除，必须用 `atom_membership`，即使 earlier pointer、heading 或 Owner 证据也支持它。
 - 规范性句做“执行关系 / 查找关系”二分：block 要求供应商按、遵守、符合、达到或执行某项制度、规范、图纸或附件，已经声明执行基线；同一 block 后续“详见/参见/另附”只定位内容，不能把它降格为 pointer。只有没有任何执行关系、只要求查找未提供材料时，才是 bare pointer。
-- consequence 条件也要做极性归一。若目标自身用处罚、扣款或责任的触发条件明确规定可控制、可核验的行为禁止、保护配置、作业程序、检查整改或现场结果，该条件已经声明 operative baseline，不得只因主句是后果而放弃 select；仅泛称违约、事故、质量问题、延误或损失且没有具体可执行条件时，才是 pure consequence。
+- 在已成立的合格 requirement Owner 内，若目标决定当前工作、材料、服务或成果适用的规范集合、过期版本替代关系或标准优先顺序，它也是 operative baseline；只有只维持采购文件、采购活动或文档法律/编制有效性、没有当前履约对象规范适用关系时，才是 meta。
+- consequence 条件也要做极性归一。删除后果并归一后，若仅凭目标 block 与其 Owner 可重述为“受约束主体 + 可控制或可核验的行为/结果状态 + 明确肯定或禁止极性”，该条件已经声明 operative baseline，不得只因主句是后果而放弃 select；无法形成该三元命题、仅泛称违约、事故、质量问题、延误或损失时，才是 pure consequence。
 
 若目标自身没有肯定 duty/result，且不是合格 heading，`select` 必须为 `[]`。地址 gap、粗体、标题样式、少一层标题或“统领后续 selected 内容”都不能单独恢复。
 

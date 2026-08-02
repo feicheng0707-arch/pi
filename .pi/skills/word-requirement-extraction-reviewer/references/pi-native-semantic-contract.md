@@ -45,7 +45,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 必须用“执行关系 / 查找关系”二分测试区分规范性纳入与裸外部指针。四类 carrier 外，只要 block 自身要求供应商按、按照、依照、遵守、符合、达到或执行某项制度、标准、规范、图纸或附件，就已声明当前项目的 operative baseline；同一 block 后续“详见/参见/另附”只定位被纳入内容，不能抹掉前面的执行关系。边界独立的技术章节 heading 和完整 source 可以补足省略的当前项目主语，不要求重复项目名称、数字参数、标准编号或外部全文。只有 block 没有任何遵守/符合/执行关系，只告诉读者去查找未提供材料时，才是 bare pointer。
 
-只说明已引用政策/标准过期时采用最新版本、纠正引用或维持采购文件/采购活动有效性的版本治理注释，不等于要求供应商、材料、施工、服务或成果执行该标准；没有实际“遵守/符合/达到/按其实施”关系时，它是 document-governance meta，应排除。
+版本适用规则必须按实际效力判断。在已经成立的合格 requirement Owner 内，若 block 决定当前工作、材料、施工、服务或成果所适用的规范集合、过期版本替代关系或标准优先顺序，它就是 operative baseline；完整章节可以补足省略的当前项目主语，不要求同一 block 再出现显式“供应商应遵守”。只有剥离版本说明后只剩采购文件、采购活动或文档法律/编制有效性，而没有任何当前履约对象的规范适用关系时，才是 document-governance meta。
 
 ## 强制反例攻击
 
@@ -58,7 +58,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 - selected boundary-gap attack：对同一 run 内 selected island 前最多两个 excluded block，以及两个 selected islands 之间最多两个 excluded block，必须判断它是真实 hole 还是遗漏的 heading/body/table closure。地址位置不能自动带回；真实统领 selected body 的合格 heading 必须进入 selection，meta、价格、程序、资格、法律、hard-carrier wrapper 和裸 pointer 仍保持 excluded。
 - removable-tail 对每个 selected island 的末 block 独立执行；前文已自足时，纯报价/填报包装、外部指针、空壳或 meta tail 必须留在范围外。
 - consequence、legal-event、payment、settlement 和 remedy cluster 必须对其中每个可独立寻址的 canonical sibling 分别寻找剥离后仍存活的实施、资源、质量、安全、交付、恢复、应急或结果义务；不得用组标题或连续编号把整组概括为“质量责任”或“工期与质量”后批量保留。该 sweep 覆盖 selected island 的内部 block，不只是首 block、末 block 或 singleton。仅在因果或损害触发条件中出现“工期延误、质量问题、交付损失、第三方影响”等泛化结果名词，不等于存在 result duty：删除违约/事故事件、责任承担、费用、扣款、赔偿和损失分配后，若只剩该泛化标签且无独立履行、修理、更换、纠正、恢复、交付或达标谓词，必须排除。反之，否定式条件若自身已经明确一个供应商可控制且可独立核验的交付状态、完整性、阈值、合规标准或验收基线，例如“资料不完整”“未达到明确标准/指标”，应做极性归一并把它识别为“资料应完整”“结果应达到该标准/指标”的 surviving result duty；附带不计价、扣款、责任或费用后果不能抹掉该同 block 基线。
-- condition-encoded conduct baseline 必须执行 `remove_consequence_then_normalize_condition`：逐 canonical block 只删除罚款、扣款、赔偿、责任承担等后果，保留并归一触发条件。归一后若仍有供应商可控制、可核验的具体行为禁止、保护配置、作业程序、记录、期限、检查整改或现场结果，就是 surviving operative baseline，不要求另有独立祈使主句；只有仅余违约、事故、质量问题、延误或损失等泛化事件标签时才是 pure consequence。“主句是处罚”或“各条都以处罚结尾”不能建立 module-level zero remainder；一个具体 survivor 即推翻整章全空前提，必须重扫全部 siblings、保留所有 survivors 与真实 heading/body closure，并继续排除可分离的纯后果或 meta blocks。内部完成该重扫，不输出 ledger。
+- condition-encoded conduct baseline 必须执行 `remove_consequence_then_normalize_condition`：逐 canonical block 只删除罚款、扣款、赔偿、责任承担等后果，保留并归一触发条件。归一后若仅凭目标 block 与其已成立 Owner 就能重述为“受约束主体 + 可控制或可核验的行为/结果状态 + 明确肯定或禁止极性”，它就是 surviving operative baseline，不要求另有独立祈使主句；只有无法形成该三元命题、仅余违约、事故、质量问题、延误或损失等未定义事件标签时才是 pure consequence。“主句是处罚”或“各条都以处罚结尾”不能覆盖该测试，也不能建立 module-level zero remainder；一个具体 survivor 即推翻整章全空前提，必须重扫全部 siblings、保留所有 survivors 与真实 heading/body closure，并继续排除可分离的纯后果或 meta blocks。内部完成该重扫，不输出 ledger。
 - explicit threshold invariant：触发条件中明确的数值误差、时限、完整率、合格状态或其他可测边界，不是“质量问题/违约”等泛化事件标签。即使只写“超过/低于/未达到 X 时扣款或担责”，也必须归一为“结果不得超过/低于 X”或“必须达到 X”的 surviving baseline；不能因没有单独祈使句而排除。
 - open-ended enforcement meta：只说明制度并不穷尽、未列情形可参照处罚尺度、由管理方酌情处罚或解释的兜底句，治理的是处罚权限与适用范围；若自身没有具体行为禁止、配置、程序、阈值或结果基线，必须排除，不能因位于有效制度末尾被 closure 带回。
 - current-project declarative sentence 若仍明确采购/建设/实施对象、工作包、包段数量、地点、期限、质量或技术事实，具有正向 membership；纯标题、封面标识和名称标签才是 identity shell。
@@ -71,7 +71,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 ## Evidence-preserving revision
 
-第二轮可以推翻 provisional，但保护的是证据负担，不是首轮结论。Witness 的 exclude/select lane 名、非空 lane 数和 supporting block 数量都没有证据权重，不构成投票。若 provisional 已写出具体 source premise，final 反转时必须指出哪项 premise 被 immutable source 的肯定反证推翻，不能只因某个 lane 请求相反方向、Word path/style、物理位置、EOF、另一种可能解释或缺少细节而静默反转。把 selected 改为 excluded 时，必须在 source 中确认真实的 hard Owner、程序/价格/证明/法律/meta/shell 功能，或明确的“另见/详见”查找关系等正向 exclusion predicate；缺少项目名、数字参数、标准编号、展开程度或外部全文不是反证。找不到肯定反证时必须拒绝该 Witness challenge。
+第二轮可以推翻 provisional，但保护的是证据负担，不是首轮结论。Witness 的 exclude/select lane 名、非空 lane 数和 supporting block 数量都没有证据权重，不构成投票。若 provisional 已写出具体 source premise，final 反转时必须指出哪项 premise 被 immutable source 的肯定反证推翻，不能只因某个 lane 请求相反方向、Word path/style、物理位置、EOF、另一种可能解释或缺少细节而静默反转。把 selected 改为 excluded 时，必须在 source 中确认真实的 hard Owner、程序/价格/证明/法律/meta/shell 功能，或明确的“另见/详见”查找关系等正向 exclusion predicate；缺少项目名、数字参数、标准编号、展开程度或外部全文不是反证。找不到肯定反证时必须拒绝该 Witness challenge。这个证据负担同样适用于 Witness 未挑中的 provisional→final delta；neutral replay 允许重审，不允许无肯定 source predicate 的自由漂移。
 
 把 excluded 改为 selected 也承担对称负担：必须用目标 block 自身的肯定 source 事实推翻 provisional 的具体 exclusion premise，或证明它是真实统领合格 descendants 的合格需求 heading。若目标 heading 自身实际命名报价、计价、付款、程序、资格、法律救济、文档编制或 hard-carrier 功能，它就是 wrapper stop；后续存在 selected 施工、资源、质量或其他 survivor children 不能反向给该 wrapper membership。“它统领后续 selected 内容”“删掉会少一层标题”或地址连续本身都不是 source 反证。找不到肯定反证时必须拒绝 select challenge。
 
@@ -81,7 +81,7 @@ Heading/body closure 是 relational membership。每个准备 selected 的 headi
 
 `hard_root_claims` 是 Finalizer 自己提交的 Owner 断言，不是第二套答案。最终 selected 地址不得仍落在任何 final claim 投影内。Finalizer 不得为了保留 descendant，把已经 source-proven 的 hard-root exit 收窄到 root 内部低层 subsection；若 selected 地址位于已承认的 root→first peer exit span，必须取消 selection，除非 source 证明该地址之前已出现真实同级或更高层级、功能不同的 peer，此时才可据此纠正 exit 或撤回错误 claim。Witness 不产生 override，Harness 不做语义选择。
 
-最终 ranges 只由每个 `RUN_REGISTRY` 的正向 `final_selected_ranges` 机械并集得到。先冻结 selected block-ID 集合，逐 ID 减去 reason 已确认的所有 hole，并阻止独立程序、价格、付款、证明、法律、hard carrier、meta、pointer、shell 或其他 wrapper heading 借用相邻 survivor；最后才压缩。提交前必须重新展开 compact ranges，确认没有把任何已确认 hole 带回。
+最终 ranges 只由每个 `RUN_REGISTRY` 的正向 `final_selected_ranges` 机械并集得到。提交前必须执行 `symmetric_partition_fixed_point`：每个准备 selected 的 compact range 都是“其中每个 canonical block 均有 membership”的全称命题，必须主动寻找 target-own 肯定 exclusion 反例并拆出所有 hole；每个准备 excluded 的 gap 都是“其中每个 canonical block 均无 membership”的全称命题，必须主动寻找 target-own survivor 或真实 heading/body/table closure 反例并恢复。宽 range、组标签、端点或相邻正例都不能替内部 block 证明。反复执行双向攻击直到两侧都无新反例，最后且仅最后压缩；提交前重新展开 compact ranges，确认没有把任何已确认 hole 带回或再次漏掉 survivor。该固定点只在模型内部完成，不输出 ledger。
 
 ## 通用性与禁止作弊
 

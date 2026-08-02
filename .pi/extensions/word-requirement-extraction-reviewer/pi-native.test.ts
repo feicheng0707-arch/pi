@@ -291,7 +291,8 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	]);
 
 	expect(result.status).toBe("preserved");
-	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v2");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v3");
+	expect(result.witness?.trace.responseFormat).toBe("json_object");
 	expect(result.reviewDegraded).toBe(false);
 	expect(result.budget.providerCalls).toBe(3);
 	expect(result.budget.roles.finalizer.providerCalls).toBe(2);
@@ -337,6 +338,13 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 		"每张 Witness card 的唯一 target range 展开后的每个 block",
 	);
 	expect(scripted.observed[0].systemPrompt).toContain("`owner_reason` 最多 1200 个字符");
+	expect(scripted.observed[0].systemPrompt).toContain(
+		"`residual_reason` 以 2400 个字符为压缩目标、8000 个字符为协议硬上限",
+	);
+	expect(scripted.observed[0].systemPrompt).toContain("symmetric_partition_fixed_point");
+	expect(scripted.observed[0].systemPrompt).not.toContain(
+		'response_format={"type":"json_schema"',
+	);
 	expect(scripted.observed[1].systemPrompt).toContain("独立、窄职责对抗证人");
 	expect(scripted.observed[1].systemPrompt).toContain(
 		"select lane 有对称证据硬门",
@@ -350,9 +358,11 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[1].systemPrompt).toContain(
 		"只攻击该最小可见同-group heading block",
 	);
+	expect(scripted.observed[1].systemPrompt).toContain("mandatory self-falsification");
 	expect(scripted.observed[1].systemPrompt).not.toContain("Pi-native Word 采购需求语义合同");
 	expect(scripted.observed[1].systemPrompt).not.toContain("Pi-native Runtime Contract");
 	expect(scripted.observed[1].systemPrompt).not.toContain("submit_requirement_release");
+	expect(scripted.observed[1].userPrompt).toContain("WITNESS_JSON_SCHEMA=");
 	expect(scripted.observed[1].userPrompt).not.toContain("PROVISIONAL_OWNER_REASON");
 	expect(scripted.observed[1].userPrompt).not.toContain("PROVISIONAL_RESIDUAL_REASON");
 	expect(scripted.observed[1].userPrompt).not.toContain(
@@ -960,13 +970,31 @@ test("normalizes terminalBlockId plus one to an EOF hard-root exit", async () =>
 	expect(result.decision?.hardRootClaims).toEqual(result.provisionalDecision?.hardRootClaims);
 });
 
-test("fails closed when Finalizer reasons exceed their schema budgets", async () => {
-	const longOwnerReason = "O".repeat(2_000);
-	const longResidualReason = "R".repeat(3_000);
+test.each([2_401, 7_033, 8_000])(
+	"accepts a %i-character residual reason above the soft target without truncation",
+	async (reasonLength) => {
+		const residualReason = "R".repeat(reasonLength);
+		const provisional = selection(["段落0-段落2"], [], residualReason);
+		const final = selection(["段落0-段落2"], [], residualReason);
+		const { result, scripted } = await runScenario([
+			{ role: "finalizer", response: toolSelection(provisional, "bounded-provisional") },
+			{ role: "witness", response: toolWitness(witnessSubmission()) },
+			{ role: "finalizer", response: toolSelection(final, "bounded-final") },
+		]);
+
+		expect(scripted.callCount()).toBe(3);
+		expect(result.status).toBe("preserved");
+		expect(result.provisionalDecision?.residualReason).toBe(residualReason);
+		expect(result.decision?.residualReason).toBe(residualReason);
+		expect(result.reason.endsWith(residualReason)).toBe(true);
+	},
+);
+
+test("fails closed when the Finalizer owner reason exceeds its hard budget", async () => {
+	const longOwnerReason = "O".repeat(1_201);
 	const longSelection = {
 		...selection(["段落0-段落2"]),
 		owner_reason: longOwnerReason,
-		residual_reason: longResidualReason,
 	};
 	const { result, scripted } = await runScenario([
 		{ role: "finalizer", response: toolSelection(longSelection, "bounded-provisional") },
@@ -974,22 +1002,37 @@ test("fails closed when Finalizer reasons exceed their schema budgets", async ()
 
 	expect(scripted.callCount()).toBe(1);
 	expect(result.status).toBe("degraded");
-	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v2");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v3");
 	expect(result.trace.rawSubmissions).toEqual([longSelection]);
 	expect(result.trace.normalizedSubmissions).toEqual([longSelection]);
 	expect(result.provisionalDecision).toBeNull();
 	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
 	expect(result.failure?.message).toContain("1200");
 	expect(scripted.observed[0].serializedContext).toContain('"maxLength":1200');
-	expect(scripted.observed[0].serializedContext).toContain('"maxLength":2400');
+	expect(scripted.observed[0].serializedContext).toContain('"maxLength":8000');
 });
 
-test("fails closed when final-turn reasons exceed their schema budgets", async () => {
+test("fails closed when the provisional residual reason exceeds its hard budget", async () => {
+	const overlongProvisional = selection(["段落0-段落2"], [], "R".repeat(8_001));
+	const { result, scripted } = await runScenario([
+		{
+			role: "finalizer",
+			response: toolSelection(overlongProvisional, "overlong-provisional"),
+		},
+	]);
+
+	expect(scripted.callCount()).toBe(1);
+	expect(result.status).toBe("degraded");
+	expect(result.provisionalDecision).toBeNull();
+	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
+	expect(result.failure?.message).toContain("8000");
+});
+
+test("fails closed when the final residual reason exceeds its hard budget", async () => {
 	const validProvisional = selection(["段落0-段落2"]);
 	const overlongFinal = {
 		...selection(["段落0-段落2"]),
-		owner_reason: "O".repeat(2_000),
-		residual_reason: "R".repeat(3_000),
+		residual_reason: "R".repeat(8_001),
 	};
 	const { result, scripted } = await runScenario([
 		{ role: "finalizer", response: toolSelection(validProvisional, "valid-provisional") },
@@ -1006,7 +1049,7 @@ test("fails closed when final-turn reasons exceed their schema budgets", async (
 	expect(result.trace.rawSubmissions).toEqual([validProvisional, overlongFinal]);
 	expect(result.trace.normalizedSubmissions).toEqual([validProvisional, overlongFinal]);
 	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
-	expect(result.failure?.message).toContain("1200");
+	expect(result.failure?.message).toContain("8000");
 });
 
 test("fails closed when final selection still intersects its hard-root claim", async () => {
@@ -1043,7 +1086,7 @@ test("fails closed when final selection still intersects its hard-root claim", a
 	expect(result.trace).not.toHaveProperty("owner_claim_enforced_exclude_ranges");
 });
 
-test("does not retry malformed Witness tool arguments or apply the Finalizer repair", async () => {
+test("does not retry a schema-invalid Witness JSON object or apply the Finalizer repair", async () => {
 	const { result, scripted } = await runScenario([
 		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
 		{
@@ -1062,6 +1105,7 @@ test("does not retry malformed Witness tool arguments or apply the Finalizer rep
 	expect(result.patch).toBeNull();
 	expect(result.decision).toBeNull();
 	expect(result.witness).toMatchObject({ status: "contract_failure" });
+	expect(result.witness?.trace.responseFormat).toBe("json_object");
 	expect(result.witness?.error).toContain("additional");
 	expect(result.failure).toMatchObject({ role: "witness", code: "contract_error" });
 	expect(result.budget.roles.finalizer.providerCalls).toBe(2);
@@ -1883,6 +1927,7 @@ test("rejects every non-pure Witness JSON response shape without retrying", asyn
 		expect(result.status, invalid.name).toBe("degraded");
 		expect(result.finalRanges, invalid.name).toEqual(["段落0-段落2"]);
 		expect(result.witness, invalid.name).toMatchObject({ status: "contract_failure" });
+		expect(result.witness?.trace.responseFormat, invalid.name).toBe("json_object");
 		expect(result.witness?.trace.structuredTerminal, invalid.name).toBe(false);
 	}
 });
@@ -2077,6 +2122,50 @@ test.each(["throw", "reject"] as const)(
 			message: `injected ${failureMode} provider failure`,
 		});
 		expect(result.budget.roles.finalizer.providerCalls).toBe(1);
+	},
+);
+
+test.each(["throw", "reject"] as const)(
+	"records json_object transport when the production Witness StreamFn %s fails",
+	async (failureMode) => {
+		compatStreamMock.mockReset();
+		const error = new Error(`injected Witness ${failureMode} failure`);
+		if (failureMode === "throw") compatStreamMock.mockImplementationOnce(() => { throw error; });
+		else compatStreamMock.mockRejectedValueOnce(error);
+		const scripted = scriptedScenario([
+			{
+				role: "finalizer",
+				response: toolSelection(selection(["段落0-段落2"]), "provisional"),
+			},
+			{
+				role: "finalizer",
+				response: toolSelection(selection(["段落0-段落2"]), "final"),
+			},
+		]);
+		const result = await runPiNativeRequirementReview({
+			packet: packet(),
+			packetSha256: "0".repeat(64),
+			prompts,
+			finalizerRuntime: {
+				model: finalizerModel,
+				streamFunction: scripted.finalizerStream,
+				apiKey: "test-key",
+			},
+			witnessRuntime: {
+				model: witnessModel,
+				streamFunction: piNativeWitnessStreamFunction,
+				apiKey: "test-key",
+			},
+		});
+
+		expect(compatStreamMock).toHaveBeenCalledTimes(1);
+		expect(scripted.callCount()).toBe(2);
+		expect(result.status).toBe("degraded");
+		expect(result.witness).toMatchObject({
+			status: "runner_failure",
+			trace: { responseFormat: "json_object", providerCalls: 1 },
+		});
+		expect(result.failure).toMatchObject({ role: "witness", code: "contract_error" });
 	},
 );
 
@@ -2292,7 +2381,7 @@ test("keeps the capability hash stable across packet identities", async () => {
 	]);
 });
 
-test("builds the no-tools Doubao strict JSON-schema payload", () => {
+test("builds the no-tools Doubao JSON-object payload", () => {
 	const payload = buildDoubaoWitnessPayload({
 		model: witnessModel.id,
 		tools: [
@@ -2311,25 +2400,19 @@ test("builds the no-tools Doubao strict JSON-schema payload", () => {
 		response_format: { type: "json_schema" },
 	});
 
-	expect(payload).toMatchObject({
+	expect(payload).toEqual({
 		model: witnessModel.id,
 		thinking: { type: "disabled" },
-		response_format: {
-			type: "json_schema",
-			json_schema: {
-				name: "word_requirement_semantic_witness",
-				strict: true,
-				schema: PiNativeSemanticWitnessSchema,
-			},
-		},
+		response_format: { type: "json_object" },
 	});
+	expect(payload).not.toHaveProperty("response_format.json_schema");
 	expect(payload).not.toHaveProperty("tools");
 	expect(payload).not.toHaveProperty("tool_choice");
 	expect(payload).not.toHaveProperty("parallel_tool_calls");
 	expect(payload).not.toHaveProperty("reasoning_effort");
 });
 
-test("wires the no-tools strict JSON-schema transformer into the production Witness stream", async () => {
+test("wires the no-tools JSON-object transformer into the production Witness stream", async () => {
 	compatStreamMock.mockReset();
 	const inner = createAssistantMessageEventStream();
 	compatStreamMock.mockReturnValueOnce(inner);
@@ -2362,17 +2445,11 @@ test("wires the no-tools strict JSON-schema transformer into the production Witn
 		],
 		response_format: { type: "json_schema" },
 	});
-	expect(transformed).toMatchObject({
+	expect(transformed).toEqual({
 		thinking: { type: "disabled" },
-		response_format: {
-			type: "json_schema",
-			json_schema: {
-				name: "word_requirement_semantic_witness",
-				strict: true,
-				schema: PiNativeSemanticWitnessSchema,
-			},
-		},
+		response_format: { type: "json_object" },
 	});
+	expect(transformed).not.toHaveProperty("response_format.json_schema");
 	expect(transformed).not.toHaveProperty("tools");
 	expect(transformed).not.toHaveProperty("tool_choice");
 	const response = toolWitness(witnessSubmission());
