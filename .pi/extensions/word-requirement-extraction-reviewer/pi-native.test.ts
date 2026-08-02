@@ -280,7 +280,7 @@ function witnessReviewPacket(observed: { userPrompt: string }) {
 	return packet.review_evidence.independent_semantic_witness;
 }
 
-test("loads the v37 exact-set and adversarial semantic adjudication contracts", () => {
+test("loads the v38 proposition-complete exact-set adjudication contracts", () => {
 	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
 	expect(prompts.finalizer).toContain("exact target-own predicate");
 	expect(prompts.finalizer).toContain(
@@ -316,26 +316,25 @@ test("loads the v37 exact-set and adversarial semantic adjudication contracts", 
 		expect(prompt).toContain("monetary formula operand");
 		expect(prompt).toContain("supplier-side baseline");
 		expect(prompt).toContain("`D(h)`");
-		expect(prompt).toContain("较低层级的编号或 source-function subheading");
+		expect(prompt).toContain("首个 source-proven 同级或更高层级 sibling/root");
 		expect(prompt).toContain("applicability ATOM");
+		expect(prompt).toContain("`trigger completeness checksum`");
+		expect(prompt).toContain("`target-own survivor tuple");
+		expect(prompt).toContain("不能终止对后续句、分号后 clause 或 tail 的扫描");
+		expect(prompt).toContain("覆盖 proposition-level 判断");
+		expect(prompt).toContain("负面后果 antecedent 中");
+		expect(prompt).toContain("current-project fact");
+		expect(prompt).toContain("不要求伪造供应商主体");
+		expect(prompt).toContain("source end");
 	}
 	expect(prompts.finalizer).toContain(
-		"后果条件含并列或选择性 trigger 时逐 proposition 判断",
+		"编号深度、Word style、字号或 outline path 任一单独信号都不能建立层级",
 	);
 	expect(prompts.piNativeSemanticContract).toContain(
-		"后果条件含并列或选择性 trigger 时，逐 proposition 检查每个 trigger",
+		"编号深度、Word style、字号或 outline path 任一单独信号都不能建立层级",
 	);
 	expect(prompts.witness).toContain(
-		"后果条件含并列或选择性 trigger 时逐 proposition 判断",
-	);
-	expect(prompts.finalizer).toContain(
-		"Word style、字号或 outline path 相同不能把 child 自动升级为 peer",
-	);
-	expect(prompts.piNativeSemanticContract).toContain(
-		"Word style、字号或 outline path 与父 heading 相同也不能自动升级为 peer",
-	);
-	expect(prompts.witness).toContain(
-		"Word style/outline 相同不能把 child 自动升级为 peer",
+		"编号深度或 Word style/outline 任一单独信号都不能建立层级",
 	);
 	expect(prompts.finalizer).toContain("nested hard-root sweep");
 	expect(prompts.finalizer).toContain("`ATOM|HEADING` admission invariant");
@@ -348,7 +347,10 @@ test("loads the v37 exact-set and adversarial semantic adjudication contracts", 
 	);
 	expect(prompts.finalizer).toContain("每个 selected island 的末 block 单独重跑 shared gate");
 	expect(prompts.finalizer).toContain(
-		"c) 每个 excluded gap 的 target-own survivor、履约侧具体 threshold 与 heading/table closure",
+		"c) 每个 excluded gap 的 target-own survivor、履约侧具体 threshold、全部 coordinate alternatives、block tail 与 heading/table closure",
+	);
+	expect(prompts.finalizer).toContain(
+		"任何复合 block 的 exclusion 必须能解释其每个 alternative 和 tail proposition",
 	);
 	expect(prompts.finalizer).toContain(
 		"卡错误、缺卡或卡槽不足都不能缩小 selected/excluded closure",
@@ -358,6 +360,25 @@ test("loads the v37 exact-set and adversarial semantic adjudication contracts", 
 		"Owner recovery 必须先于 later module 的 atom membership",
 	);
 	expect(prompts.witness).toContain("Owner recovery 先于 atom gate");
+	expect(prompts.finalizer).toContain(
+		"任何仍把 recovered module 起点投影为前置 carrier descendant 的 hard-root claim",
+	);
+	expect(prompts.piNativeSemanticContract).toContain(
+		"任何仍把 `R` 投影为前置 carrier descendant 的 hard-root claim",
+	);
+	for (const prompt of [prompts.finalizer, prompts.piNativeSemanticContract]) {
+		expect(prompt).toContain("不限制");
+		expect(prompt).toContain("由新 source root 独立建立的 hard-root claim");
+	}
+	expect(prompts.finalizer).toContain(
+		"任一未被反驳的 tuple 继续触发 whole-block survivor veto",
+	);
+	expect(prompts.finalizer).toContain(
+		"peer exit 与 cross-reference recovery 只能撤销错误 Owner projection并重开同一 gate，不能单独加入 target",
+	);
+	expect(prompts.finalizer).toContain(
+		"boundary recovery 只撤销错误 projection并重开该判断",
+	);
 	for (const prompt of [
 		prompts.finalizer,
 		prompts.piNativeSemanticContract,
@@ -396,7 +417,7 @@ test("loads the v37 exact-set and adversarial semantic adjudication contracts", 
 		"同一 remedy/price/proof cluster",
 		"`select owner_boundary` 必须有真实 boundary evidence",
 		"source-determinate empty-heading candidate",
-		"供应商履约侧主体 + 可控制或可核验的行为/结果状态 + 明确肯定或禁止极性",
+		"显式或由本 proposition 句法确定的履约侧主体 + 可控制或可核验的行为/结果状态 + 明确肯定或禁止极性",
 	]) {
 		expect(prompts.witness).toContain(invariant);
 	}
@@ -405,7 +426,19 @@ test("loads the v37 exact-set and adversarial semantic adjudication contracts", 
 	expect(prompts.witness).toContain("边界独立、可定位的 distinct root/module");
 	expect(prompts.witness).toContain("embedded clause 当作 Owner root");
 	expect(prompts.witness).toContain(
-		"`核心/主要/dominant` 不是 atomic exclusion 证据",
+		"内部 eligibility 必须覆盖 target 的全部 sentence、alternative 和 tail proposition",
+	);
+	expect(prompts.witness).toContain(
+		"输出 premise 只写最终肯定 exclusion predicate，不复述扫描过程",
+	);
+	expect(prompts.witness).toContain(
+		"若 target 的 focus record 中 `provisional_root_block_ids` 非空，`atom_membership` select 直接淘汰",
+	);
+	expect(prompts.witness).toContain(
+		"不得用 hard root 内部的 atom 内容例外浪费唯一 select card",
+	);
+	expect(prompts.witness).toContain(
+		"peer exit/recovery 只撤销错误 projection并重开该判断，不能单独赋予 membership",
 	);
 	expect(prompts.witness).toContain(
 		"全文只有单一肯定 excluded effect 的短 target 优先于长 mixed block",
