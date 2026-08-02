@@ -101,15 +101,53 @@ function selection(
 	reason = "The source supports this bounded selection.",
 ) {
 	return {
+		submission_kind: "provisional_selection" as const,
 		owner_reason: "The source Owner boundaries were inspected.",
 		residual_reason: reason,
 		hard_root_claims: hardRootClaims,
 		run_selections: [{ run_index: 0, final_selected_ranges: ranges }],
+		run_deltas: [],
 	};
 }
 
+type RunDeltaFixture = {
+	run_index: number;
+	remove_ranges: string[];
+	add_ranges: string[];
+};
+
+function finalDeltas(
+	runDeltas: RunDeltaFixture[] = [],
+	hardRootClaims: Array<ReturnType<typeof hardRootClaim>> = [],
+	reason = "The source supports this bounded final delta.",
+) {
+	return {
+		submission_kind: "final_delta" as const,
+		owner_reason: "The source Owner boundaries were inspected again.",
+		residual_reason: reason,
+		hard_root_claims: hardRootClaims,
+		run_selections: [],
+		run_deltas: runDeltas,
+	};
+}
+
+function finalDelta(
+	removeRanges: string[] = [],
+	addRanges: string[] = [],
+	hardRootClaims: Array<ReturnType<typeof hardRootClaim>> = [],
+	reason = "The source supports this bounded final delta.",
+) {
+	return finalDeltas(
+		removeRanges.length === 0 && addRanges.length === 0
+			? []
+			: [{ run_index: 0, remove_ranges: removeRanges, add_ranges: addRanges }],
+		hardRootClaims,
+		reason,
+	);
+}
+
 function toolSelection(
-	value: ReturnType<typeof selection>,
+	value: Record<string, unknown>,
 	id: string,
 ): AssistantMessage {
 	return fauxAssistantMessage(fauxToolCall("submit_final_selection", value, { id }), {
@@ -280,11 +318,11 @@ function witnessReviewPacket(observed: { userPrompt: string }) {
 	return packet.review_evidence.independent_semantic_witness;
 }
 
-test("loads the v39 proposition-complete compact-output adjudication contracts", () => {
+test("loads the v40 typed-delta proposition-complete adjudication contracts", () => {
 	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
 	expect(prompts.finalizer).toContain("exact target-own predicate");
 	expect(prompts.finalizer).toContain(
-		"先冻结 exact `S` 并从它生成 typed ranges，再据 `S` 写 reason",
+		"先冻结 exact `S` 与 delta，再据 `S` 写 reason",
 	);
 	expect(prompts.finalizer).toContain(
 		"任何 reason 已判 excluded 却仍在 `F`、或已判 selected 却不在 `F` 的地址",
@@ -476,11 +514,11 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 			role: "witness",
 			response: toolWitness(witnessSubmission([])),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(result.status).toBe("preserved");
-	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v3");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v4");
 	expect(result.witness?.trace.responseFormat).toBe("json_object");
 	expect(result.reviewDegraded).toBe(false);
 	expect(result.budget.providerCalls).toBe(3);
@@ -509,6 +547,10 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	);
 	expect(scripted.observed[2].serializedContext).toContain("HARNESS_REVIEW_PACKET");
 	expect(scripted.observed[2].serializedContext).toContain("review_available");
+	expect(scripted.observed[2].userPrompt).toContain(
+		'"required_next_submission_kind":"final_delta"',
+	);
+	expect(scripted.observed[2].serializedContext).toContain("mechanical_delta_contract");
 	expect(scripted.observed[2].serializedContext).toContain("mechanical_contract_blockers");
 	expect(scripted.observed[2].serializedContext).toContain("review_evidence");
 	expect(scripted.observed[2].serializedContext).not.toContain("repair_required");
@@ -583,6 +625,149 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(result.witness?.trace.normalizedArguments).toEqual([emptyWitness]);
 });
 
+test("applies the sparse typed final delta mechanically against the frozen provisional set", async () => {
+	const submittedDelta = finalDelta(["段落0"], ["段落1"]);
+	const { result } = await runScenario([
+		{
+			role: "finalizer",
+			response: toolSelection(selection(["段落0", "段落2"]), "provisional"),
+		},
+		{ role: "witness", response: toolWitness(witnessSubmission([])) },
+		{ role: "finalizer", response: toolSelection(submittedDelta, "final") },
+	]);
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.decision).toMatchObject({
+		submissionKind: "final_delta",
+		removeFromProvisionalBlockIds: [0],
+		removeFromProvisionalRanges: ["段落0"],
+		addToProvisionalBlockIds: [1],
+		addToProvisionalRanges: ["段落1"],
+		finalBlockIds: [1, 2],
+		finalRanges: ["段落1-段落2"],
+	});
+	expect(result.trace.rawSubmissions[1]).toEqual(submittedDelta);
+	expect(result.trace.normalizedSubmissions[1]).toEqual(submittedDelta);
+});
+
+test.each([
+	{
+		name: "legacy full selection",
+		finalSubmission: selection(["段落0"]),
+		expectedFailure: "second Finalizer submission must use final_delta",
+	},
+	{
+		name: "non-empty final run_selections",
+		finalSubmission: {
+			...finalDelta(),
+			run_selections: [{ run_index: 0, final_selected_ranges: ["段落0"] }],
+		},
+		expectedFailure: "final_delta must submit run_selections=[]",
+	},
+	{
+		name: "empty run delta",
+		finalSubmission: finalDeltas([
+			{ run_index: 0, remove_ranges: [], add_ranges: [] },
+		]),
+		expectedFailure: "must contain a non-empty remove or add delta",
+	},
+	{
+		name: "removing a provisional-excluded block",
+		finalSubmission: finalDelta(["段落1"]),
+		expectedFailure: "remove_ranges references provisional-excluded block 1",
+	},
+	{
+		name: "adding a provisional-selected block",
+		finalSubmission: finalDelta([], ["段落0"]),
+		expectedFailure: "add_ranges references provisional-selected block 0",
+	},
+	{
+		name: "duplicating a delta block",
+		finalSubmission: finalDeltas([
+			{ run_index: 0, remove_ranges: ["段落0", "段落0"], add_ranges: [] },
+		]),
+		expectedFailure: "remove_ranges duplicates block 0",
+	},
+	{
+		name: "duplicating a run delta",
+		finalSubmission: finalDeltas([
+			{ run_index: 0, remove_ranges: ["段落0"], add_ranges: [] },
+			{ run_index: 0, remove_ranges: [], add_ranges: ["段落1"] },
+		]),
+		expectedFailure: "run_deltas duplicates run_index 0",
+	},
+])("fails closed for $name", async ({ finalSubmission, expectedFailure }) => {
+	const { result, scripted } = await runScenario([
+		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
+		{ role: "witness", response: toolWitness(witnessSubmission([])) },
+		{ role: "finalizer", response: toolSelection(finalSubmission, "invalid-final") },
+	]);
+
+	expect(scripted.callCount()).toBe(3);
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落0-段落2"]);
+	expect(result.decision).toBeNull();
+	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
+	expect(result.failure?.message).toContain(expectedFailure);
+});
+
+test("rejects typed final delta OUT spill instead of trimming it", async () => {
+	const { result, scripted } = await runScenario(
+		[
+			{
+				role: "finalizer",
+				response: toolSelection(selection(["段落1-段落2"]), "provisional"),
+			},
+			{ role: "witness", response: toolWitness(witnessSubmission([])) },
+			{
+				role: "finalizer",
+				response: toolSelection(finalDelta(["段落0-段落1"]), "escaped-final"),
+			},
+		],
+		["段落1-段落2"],
+	);
+
+	expect(scripted.callCount()).toBe(3);
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.decision).toBeNull();
+	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
+	expect(result.failure?.message).toContain("remove_ranges escapes run 0 at block 0");
+});
+
+test("rejects a typed final delta that crosses into another declared run", async () => {
+	const provisional = {
+		submission_kind: "provisional_selection" as const,
+		owner_reason: "The source Owner boundaries were inspected.",
+		residual_reason: "Both authorized islands are provisionally selected.",
+		hard_root_claims: [],
+		run_selections: [
+			{ run_index: 0, final_selected_ranges: ["段落0"] },
+			{ run_index: 1, final_selected_ranges: ["段落2"] },
+		],
+		run_deltas: [],
+	};
+	const crossRunDelta = finalDeltas([
+		{ run_index: 0, remove_ranges: ["段落0", "段落2"], add_ranges: [] },
+	]);
+	const { result, scripted } = await runScenario(
+		[
+			{ role: "finalizer", response: toolSelection(provisional, "provisional") },
+			{ role: "witness", response: toolWitness(witnessSubmission([])) },
+			{ role: "finalizer", response: toolSelection(crossRunDelta, "cross-run-final") },
+		],
+		["段落0", "段落2"],
+	);
+
+	expect(scripted.callCount()).toBe(3);
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落0", "段落2"]);
+	expect(result.decision).toBeNull();
+	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
+	expect(result.failure?.message).toContain("remove_ranges escapes run 0 at block 2");
+});
+
 test("stops before the third provider call when cumulative measured and projected usage exceeds the run budget", async () => {
 	const { result, scripted } = await runScenario([
 		{
@@ -598,7 +783,7 @@ test("stops before the third provider call when cumulative measured and projecte
 		},
 		{
 			role: "finalizer",
-			response: toolSelection(selection(["段落0-段落2"]), "must-not-run"),
+			response: toolSelection(finalDelta(), "must-not-run"),
 		},
 	]);
 
@@ -625,7 +810,7 @@ test("attributes nested Witness elapsed time exactly once", async () => {
 			{ role: "witness", response: toolWitness(witnessSubmission([])) },
 			{
 				role: "finalizer",
-				response: toolSelection(selection(["段落0-段落2"]), "final"),
+				response: toolSelection(finalDelta(), "final"),
 			},
 		],
 		(_role, callIndex) => {
@@ -725,7 +910,7 @@ test.each([5, 6, 7, 8])(
 						]),
 					),
 				},
-				{ role: "finalizer", response: toolSelection(selection([]), "final") },
+				{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 			],
 			undefined,
 			undefined,
@@ -775,7 +960,7 @@ test("rejects nine Witness supporting block IDs", async () => {
 					]),
 				),
 			},
-			{ role: "finalizer", response: toolSelection(selection([]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		],
 		undefined,
 		undefined,
@@ -798,10 +983,7 @@ test("surfaces short selected boundary gaps to both Witness and final reconcilia
 			role: "witness",
 			response: toolWitness(witnessSubmission([])),
 		},
-		{
-			role: "finalizer",
-			response: toolSelection(selection(["段落0", "段落2"]), "final"),
-		},
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(result.status).toBe("repaired");
@@ -854,7 +1036,7 @@ test("prioritizes provisional-empty addresses outside hard-root projections", as
 		},
 		{
 			role: "finalizer",
-			response: toolSelection(selection([], [hardRootClaim(0, 2)]), "final"),
+			response: toolSelection(finalDelta([], [], [hardRootClaim(0, 2)]), "final"),
 		},
 	]);
 
@@ -889,6 +1071,7 @@ test("includes fixed edge windows for every provisional hard-claim projection is
 		blocks,
 	});
 	const provisional = {
+		submission_kind: "provisional_selection" as const,
 		owner_reason: "The source Owner boundaries were inspected.",
 		residual_reason: "The projected second island is excluded by the provisional claim.",
 		hard_root_claims: [hardRootClaim(0, 60)],
@@ -896,16 +1079,13 @@ test("includes fixed edge windows for every provisional hard-claim projection is
 			{ run_index: 0, final_selected_ranges: ["段落10"] },
 			{ run_index: 1, final_selected_ranges: [] },
 		],
+		run_deltas: [],
 	};
-	const final = {
-		owner_reason: "The source Owner boundaries were inspected again.",
-		residual_reason: "The source rebuts the provisional claim for block 40.",
-		hard_root_claims: [],
-		run_selections: [
-			{ run_index: 0, final_selected_ranges: ["段落10"] },
-			{ run_index: 1, final_selected_ranges: ["段落40"] },
-		],
-	};
+	const final = finalDeltas(
+		[{ run_index: 1, remove_ranges: [], add_ranges: ["段落40"] }],
+		[],
+		"The source rebuts the provisional claim for block 40.",
+	);
 	const { result, scripted } = await runScenario(
 		[
 			{ role: "finalizer", response: toolSelection(provisional, "provisional") },
@@ -950,7 +1130,12 @@ test("partitions mixed Witness ranges and does not grant an override", async () 
 		{
 			role: "finalizer",
 			response: toolSelection(
-				selection(["段落2"], [hardRootClaim(0, 2)], "The Witness is rebutted for block 2."),
+				finalDelta(
+					["段落1"],
+					[],
+					[hardRootClaim(0, 2)],
+					"The Witness is rebutted for block 2.",
+				),
 				"final",
 			),
 		},
@@ -1017,7 +1202,7 @@ test("rejects a select card when its target mixes provisional states", async () 
 		{
 			role: "finalizer",
 			response: toolSelection(
-				selection(["段落2"], [hardRootClaim(0, 2)]),
+				finalDelta(["段落1"], ["段落2"], [hardRootClaim(0, 2)]),
 				"final",
 			),
 		},
@@ -1074,7 +1259,7 @@ test("allows the Finalizer to rebut a Witness select challenge without an overri
 		{
 			role: "finalizer",
 			response: toolSelection(
-				selection([], [hardRootClaim(0, null)], "The source rebuts the Witness."),
+				finalDelta([], [], [hardRootClaim(0, null)], "The source rebuts the Witness."),
 				"final",
 			),
 		},
@@ -1110,7 +1295,8 @@ test("accepts selection after the Finalizer narrows its hard-root claim", async 
 		{
 			role: "finalizer",
 			response: toolSelection(
-				selection(
+				finalDelta(
+					[],
 					["段落2"],
 					[hardRootClaim(0, 2)],
 					"The source proves block 2 begins after the corrected peer exit.",
@@ -1136,7 +1322,7 @@ test("accepts selection after the Finalizer narrows its hard-root claim", async 
 
 test("normalizes terminalBlockId plus one to an EOF hard-root exit", async () => {
 	const rawProvisional = selection([], [hardRootClaim(0, 3)], "Provisional EOF claim.");
-	const rawFinal = selection([], [hardRootClaim(0, 3)], "Final EOF claim.");
+	const rawFinal = finalDelta([], [], [hardRootClaim(0, 3)], "Final EOF claim.");
 	const { result } = await runScenario([
 		{ role: "finalizer", response: toolSelection(rawProvisional, "eof-provisional") },
 		{ role: "witness", response: toolWitness(witnessSubmission([])) },
@@ -1148,7 +1334,7 @@ test("normalizes terminalBlockId plus one to an EOF hard-root exit", async () =>
 	expect(result.trace.rawSubmissions).toEqual([rawProvisional, rawFinal]);
 	expect(result.trace.normalizedSubmissions).toEqual([
 		selection([], [hardRootClaim(0, null)], "Provisional EOF claim."),
-		selection([], [hardRootClaim(0, null)], "Final EOF claim."),
+		finalDelta([], [], [hardRootClaim(0, null)], "Final EOF claim."),
 	]);
 	expect(result.provisionalDecision?.hardRootClaims).toEqual([
 		{
@@ -1166,7 +1352,7 @@ test.each([2_401, 7_033, 8_000])(
 	async (reasonLength) => {
 		const residualReason = "R".repeat(reasonLength);
 		const provisional = selection(["段落0-段落2"], [], residualReason);
-		const final = selection(["段落0-段落2"], [], residualReason);
+		const final = finalDelta([], [], [], residualReason);
 		const { result, scripted } = await runScenario([
 			{ role: "finalizer", response: toolSelection(provisional, "bounded-provisional") },
 			{ role: "witness", response: toolWitness(witnessSubmission()) },
@@ -1193,7 +1379,7 @@ test("fails closed when the Finalizer owner reason exceeds its hard budget", asy
 
 	expect(scripted.callCount()).toBe(1);
 	expect(result.status).toBe("degraded");
-	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v3");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v4");
 	expect(result.trace.rawSubmissions).toEqual([longSelection]);
 	expect(result.trace.normalizedSubmissions).toEqual([longSelection]);
 	expect(result.provisionalDecision).toBeNull();
@@ -1222,7 +1408,7 @@ test("fails closed when the provisional residual reason exceeds its hard budget"
 test("fails closed when the final residual reason exceeds its hard budget", async () => {
 	const validProvisional = selection(["段落0-段落2"]);
 	const overlongFinal = {
-		...selection(["段落0-段落2"]),
+		...finalDelta(),
 		residual_reason: "R".repeat(8_001),
 	};
 	const { result, scripted } = await runScenario([
@@ -1259,7 +1445,10 @@ test("fails closed when final selection still intersects its hard-root claim", a
 		},
 		{
 			role: "finalizer",
-			response: toolSelection(selection(["段落2"], [hardRootClaim(0, null)]), "final"),
+			response: toolSelection(
+				finalDelta([], ["段落2"], [hardRootClaim(0, null)]),
+				"final",
+			),
 		},
 	]);
 
@@ -1287,7 +1476,7 @@ test("does not retry a schema-invalid Witness JSON object or apply the Finalizer
 				summary: "extra field is forbidden",
 			}),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -1315,7 +1504,10 @@ test("accepts one Witness challenge in each direction", async () => {
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落1-段落2"]), "final") },
+		{
+			role: "finalizer",
+			response: toolSelection(finalDelta(["段落0"], ["段落1-段落2"]), "final"),
+		},
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -1357,7 +1549,7 @@ test("accepts three exclude cards and one select card in one Witness call", asyn
 		[
 			{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
 			{ role: "witness", response: toolWitness(submission) },
-			{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		],
 		undefined,
 		undefined,
@@ -1397,7 +1589,7 @@ test("rejects more than three exclude cards or one select card", async () => {
 		const { result, scripted } = await runScenario([
 			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
 			{ role: "witness", response: toolWitness(invalidSubmission) },
-			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		]);
 
 		expect(scripted.callCount()).toBe(3);
@@ -1425,7 +1617,7 @@ test("preserves a complete long Witness premise without contract failure", async
 	const { result, scripted } = await runScenario([
 		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
 		{ role: "witness", response: toolWitness(submission) },
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(longPremise.length).toBeGreaterThanOrEqual(239);
@@ -1450,7 +1642,7 @@ test("rejects a whitespace-only Witness premise", async () => {
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -1472,7 +1664,7 @@ test("rejects a legacy verdict field inside a Witness card", async () => {
 				exclude: [{ ...valid.exclude[0], verdict: "exclude" }],
 			}),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -1488,7 +1680,7 @@ test("rejects a missing Witness lane", async () => {
 			role: "witness",
 			response: toolWitness({ exclude: [] }),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -1522,7 +1714,7 @@ test("rejects null, string null, empty objects, old slots, and direction fields"
 				role: "witness",
 				response: toolWitness(invalidWitness),
 			},
-			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		]);
 
 		expect(result.status).toBe("degraded");
@@ -1560,7 +1752,7 @@ test("enforces every Witness card field invariant", async () => {
 		const { result, scripted } = await runScenario([
 			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
 			{ role: "witness", response: toolWitness(invalidWitness) },
-			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		]);
 
 		expect(scripted.callCount()).toBe(3);
@@ -1580,7 +1772,7 @@ test("rejects the entire exclude lane when its target is already excluded", asyn
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(result.witness).toMatchObject({
@@ -1608,7 +1800,7 @@ test("rejects a Witness challenge that bundles disjoint ranges", async () => {
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -1629,7 +1821,7 @@ test("rejects Witness evidence outside its bounded source focus", async () => {
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -1675,7 +1867,7 @@ test("authorizes a Witness target when the bounded focus can include the full se
 			},
 			{
 				role: "finalizer",
-				response: toolSelection(selection(["段落0-段落99"]), "final"),
+				response: toolSelection(finalDelta(), "final"),
 			},
 		],
 		undefined,
@@ -1736,7 +1928,8 @@ test("samples oversized selected islands uniformly with deterministic midpoint r
 		initialRanges: ["段落0-段落299", "段落500-段落799"],
 		blocks,
 	});
-	const decision = {
+	const provisionalDecision = {
+		submission_kind: "provisional_selection" as const,
 		owner_reason: "The source Owner boundaries were inspected.",
 		residual_reason: "Both source islands remain selected.",
 		hard_root_claims: [],
@@ -1744,13 +1937,17 @@ test("samples oversized selected islands uniformly with deterministic midpoint r
 			{ run_index: 0, final_selected_ranges: ["段落0-段落299"] },
 			{ run_index: 1, final_selected_ranges: ["段落500-段落799"] },
 		],
+		run_deltas: [],
 	};
 	const run = async () =>
 		runScenario(
 			[
-				{ role: "finalizer", response: toolSelection(decision, "provisional") },
+				{
+					role: "finalizer",
+					response: toolSelection(provisionalDecision, "provisional"),
+				},
 				{ role: "witness", response: toolWitness(witnessSubmission([])) },
-				{ role: "finalizer", response: toolSelection(decision, "final") },
+				{ role: "finalizer", response: toolSelection(finalDeltas(), "final") },
 			],
 			undefined,
 			undefined,
@@ -1799,7 +1996,7 @@ test("rejects a visible Witness target outside the audit universe", async () => 
 					]),
 				),
 			},
-			{ role: "finalizer", response: toolSelection(selection(["段落1"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		],
 		["段落1"],
 	);
@@ -1862,7 +2059,7 @@ test("abstains one lane when supporting source exists but was not visible in foc
 					]),
 				),
 			},
-			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		],
 		undefined,
 		undefined,
@@ -1923,7 +2120,10 @@ test("forwards one valid lane while the other lane mechanically abstains", async
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落1"]), "final") },
+		{
+			role: "finalizer",
+			response: toolSelection(finalDelta(["段落0"], ["段落1"]), "final"),
+		},
 	]);
 
 	expect(result.status).toBe("repaired");
@@ -1975,7 +2175,7 @@ test("forwards valid cards when another card in the same lane is rejected", asyn
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落2"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(["段落0"]), "final") },
 	]);
 
 	expect(result.status).toBe("repaired");
@@ -2025,7 +2225,7 @@ test("fails closed only when both source-focus lanes mechanically abstain", asyn
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -2077,7 +2277,7 @@ test("records target state and group violations without trimming the rejected ca
 		},
 		{
 			role: "finalizer",
-			response: toolSelection(selection(["段落0", "段落2"]), "final"),
+			response: toolSelection(finalDelta(), "final"),
 		},
 	]);
 
@@ -2116,7 +2316,7 @@ test("applies global source validation before either lane can abstain", async ()
 				]),
 			),
 		},
-		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
 
 	expect(scripted.callCount()).toBe(3);
@@ -2177,7 +2377,7 @@ test("rejects every non-pure Witness JSON response shape without retrying", asyn
 		const { result, scripted } = await runScenario([
 			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
 			{ role: "witness", response: invalid.response },
-			{ role: "finalizer", response: toolSelection(selection(["段落0"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		]);
 
 		expect(scripted.callCount(), invalid.name).toBe(3);
@@ -2221,7 +2421,7 @@ test("mechanically trims ordinary OUT spill while preserving one authorized isla
 			},
 			{
 				role: "finalizer",
-				response: toolSelection(selection(["段落0-段落2"]), "projected-final"),
+				response: toolSelection(finalDelta(), "projected-final"),
 			},
 		],
 		["段落1-段落2"],
@@ -2231,12 +2431,13 @@ test("mechanically trims ordinary OUT spill while preserving one authorized isla
 	expect(result.status).toBe("preserved");
 	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.provisionalDecision?.trimmedOutOfRunRanges).toEqual(["段落0"]);
-	expect(result.decision?.trimmedOutOfRunRanges).toEqual(["段落0"]);
+	expect(result.decision?.trimmedOutOfRunRanges).toEqual([]);
 	expect(scripted.observed[2].serializedContext).toContain("trimmed_out_of_run_ranges");
 });
 
 test("fails closed when one submitted range crosses another declared run", async () => {
 	const crossRunSelection = {
+		submission_kind: "provisional_selection" as const,
 		owner_reason: "The source Owner boundaries were inspected.",
 		residual_reason: "The submitted range crosses two run permissions.",
 		hard_root_claims: [],
@@ -2244,6 +2445,7 @@ test("fails closed when one submitted range crosses another declared run", async
 			{ run_index: 0, final_selected_ranges: ["段落0-段落2"] },
 			{ run_index: 1, final_selected_ranges: ["段落2"] },
 		],
+		run_deltas: [],
 	};
 	const { result, scripted } = await runScenario(
 		[{ role: "finalizer", response: toolSelection(crossRunSelection, "cross-run") }],
@@ -2298,7 +2500,7 @@ test("rejects one wide range across collapsed islands but accepts explicit islan
 		[
 			{ role: "finalizer", response: toolSelection(explicitSelection, "collapsed-provisional") },
 			{ role: "witness", response: toolWitness(witnessSubmission([])) },
-			{ role: "finalizer", response: toolSelection(explicitSelection, "collapsed-final") },
+			{ role: "finalizer", response: toolSelection(finalDeltas(), "collapsed-final") },
 		],
 		undefined,
 		undefined,
@@ -2322,7 +2524,7 @@ test("expands an empty Candidate to the complete source for false-null review", 
 				role: "witness",
 				response: toolWitness(witnessSubmission([])),
 			},
-			{ role: "finalizer", response: toolSelection(selection(["段落1"]), "final") },
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 		],
 		[],
 	);
@@ -2396,7 +2598,7 @@ test.each(["throw", "reject"] as const)(
 			},
 			{
 				role: "finalizer",
-				response: toolSelection(selection(["段落0-段落2"]), "final"),
+				response: toolSelection(finalDelta(), "final"),
 			},
 		]);
 		const result = await runPiNativeRequirementReview({
@@ -2497,7 +2699,7 @@ test("treats Finalizer text as trace-only auxiliary output", async () => {
 			role: "finalizer",
 			response: fauxAssistantMessage(
 				[
-					fauxToolCall("submit_final_selection", selection(["段落0-段落2"]), {
+					fauxToolCall("submit_final_selection", finalDelta(), {
 						id: "mixed-final",
 					}),
 					fauxText(finalText),
@@ -2581,7 +2783,11 @@ test("fails closed when one final hard root declares conflicting exits across ca
 		{
 			role: "finalizer",
 			response: toolSelection(
-				selection([], [hardRootClaim(0, 2), hardRootClaim(0, null, "announcement")]),
+				finalDelta(
+					[],
+					[],
+					[hardRootClaim(0, 2), hardRootClaim(0, null, "announcement")],
+				),
 				"final",
 			),
 		},
@@ -2624,7 +2830,7 @@ test("keeps the capability hash stable across packet identities", async () => {
 			role: "witness" as const,
 			response: toolWitness(witnessSubmission([])),
 		},
-		{ role: "finalizer" as const, response: toolSelection(selection(["段落0-段落2"]), "f") },
+		{ role: "finalizer" as const, response: toolSelection(finalDelta(), "f") },
 	];
 	const first = await runScenario(scenario(), undefined, undefined, "1".repeat(64));
 	const second = await runScenario(scenario(), undefined, undefined, "2".repeat(64));

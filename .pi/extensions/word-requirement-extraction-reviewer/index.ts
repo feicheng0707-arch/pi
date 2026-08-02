@@ -1527,7 +1527,7 @@ const piNativeRequirementReviewTool = defineTool({
 	name: "review_word_requirement_extraction_candidate_pi_native",
 	label: "Review Word requirement extraction candidate with Pi-native Finalizer/Witness",
 	description:
-		"Run the fixed three-call Pi-native review over an answer-free xique.word-requirement-review.packet.v1 packet: GLM provisional selection, Doubao 2.0 Pro bounded adversarial Witness, then the same GLM Finalizer context for one final selection. The Harness validates addresses and typed-claim consistency only; it never lets Witness or code override semantic membership.",
+		"Run the fixed three-call Pi-native review over an answer-free xique.word-requirement-review.packet.v1 packet: GLM provisional selection, Doubao 2.0 Pro bounded adversarial Witness, then the same GLM Finalizer context for one sparse typed final_delta. The Harness alone derives final ranges from provisional S0 plus submitted remove/add deltas, validates addresses and typed-claim consistency, and never lets Witness or code override semantic membership.",
 	promptSnippet: "Review a frozen Word requirement candidate with the Pi-native Finalizer/Witness loop",
 	promptGuidelines: [
 		"Use this active route only with the same frozen packet used by the mature Candidate. A degraded result preserves Candidate unchanged and is not evidence of a successful review.",

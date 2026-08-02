@@ -34,7 +34,7 @@
 5. 跨 block 指代不得借入 antecedent。`上述人员`、`前述要求`、`上述规定` 只定位别处命题，不把 antecedent 的 requirement predicate 复制到当前 block。当前条件只有自身明写具体行为、状态、结果、标准或阈值时才能归一；泛称违约、严重差错、措施不到位、损失或违反上述规定不足以形成 survivor。
 6. 具体 threshold antecedent 与 monetary/legal consequent 分开分类。先判断数值衡量对象：直接衡量供应商工作或成果的准确性、及时性、完整性、合格性或其他性能边界时，它是 performance threshold，即使随后用于扣费/救济也不能被改写成 price operand；只有仅计算价款、费率、收费或扣款金额且不定义履约质量边界的数值，才是 monetary formula operand。采购人、评审程序或法律机制施加的金额、比例、期间、顺序、取消、终止或救济状态即使具体，仍是 remedy-side consequent，不能倒推成 supplier-side baseline。
 7. 后果条件含并列或选择性 trigger 时必须执行 `trigger completeness checksum`：穷尽拆出每个 alternative，逐项移除 consequent 后独立归一。具体履约行为或可控制、可核验的履约状态不要求另有“应/不得”情态词；在负面后果 antecedent 中，它的极性归一为供应商必须避免。只有全部 alternatives 都无 target-own requirement proposition，整个 block 才能作为 pure remedy。
-8. 对每个拟从后果 antecedent 或 mixed block 中保留的履约 proposition，形成 `target-own survivor tuple = (履约侧主体, 具体行为/状态/结果/标准, 肯定或禁止极性)`。主体可以由该 proposition 自身的省略主语、被动或规范句式确定，但不得从相邻 block、前述要求或父标题补入缺失的行为、状态、结果或标准。明确项目对象、地点、数量、期限等 target-own current-project fact 与合法 heading 不要求伪造供应商主体。价格、付款或救济位于 block 开头，不能终止对后续句、分号后 clause 或 tail 的扫描；把条文概括为“处罚规则”“付款条款”或“反向列举既有规范”不是删除 tuple 的理由。
+8. 对每个拟从后果 antecedent 或 mixed block 中保留的履约 proposition，形成 `target-own survivor tuple = (当前供应商或其履约侧主体, 具体行为/状态/结果/标准, 肯定或禁止极性)`。主体可以由该 proposition 自身的省略主语、被动或规范句式确定，但不得从相邻 block、前述要求或父标题补入缺失的行为、状态、结果或标准，也不得把采购人、监理、评审人、其他承包人或第三方的独立义务继承给当前供应商。明确项目对象、地点、数量、期限等 target-own current-project fact 与合法 heading 不要求伪造供应商主体。价格、付款或救济位于 block 开头，不能终止对后续句、分号后 clause 或 tail 的扫描；把条文概括为“处罚规则”“付款条款”或“反向列举既有规范”不是删除 tuple 的理由。
 9. 任一 target-own requirement proposition 存活时，whole-block survivor veto 立即淘汰 exclude candidate；否则才可用目标自身的肯定 excluded role 建立 exclude premise。对每个 exclude candidate，必须先内部剥离全部 excluded-role propositions并重读剩余 target；只要仍有独立履约对象、动作、资源、标准、状态或结果，card 就无资格。内部 eligibility 必须覆盖 target 的全部 sentence、alternative 和 tail proposition；使用“仅、核心、主要或 dominant”不能替代该检查。输出 premise 只写最终肯定 exclusion predicate，不复述扫描过程。不得以 heading、占比、dominant topic 或主要后果覆盖独立 proposition，也不得用“其余范围均合格”之类组摘要、相邻 survivor、父标题、普通重复或更短结果替目标证明。
 
 一个 canonical table block 内的 row/cell 不是独立地址；任一 row 的 target-own requirement proposition 存活即淘汰整块 exclude。不同 block_id 可分离，其他 block 的谓词不能借入。
@@ -57,6 +57,8 @@ Heading closure 必须 bottom-up，并与 hard-carrier Owner exit 分开判断�
 Owner exclude card 的 target 取该 focus group 内最早的 selected descendant singleton；root/peer 只放 supporting IDs。不得 target 当前 excluded root，也不得为同一 root 提交多个 descendants。
 
 Atom exclude card 必须写出目标自身肯定的 price/proof/procedure/legal/meta/shell/pointer primary effect，并已反证 whole block 无 requirement survivor。普通重复、语义冗余、别处已覆盖或删除后更整齐永远不合格。
+
+人员类 target 也必须按 block 原子判断：响应填写、人员表、简历、证书、社保、承诺或成交前证明若可与岗位、人数、职责、进场、驻场和持续配置义务分离，就是独立 proof candidate；不得让相邻履约配置反向救回 proof block，也不得用 proof 包装删除同一不可分 block 内仍存活的履约 tuple。
 
 Select card 的 target 必须是一个实际误排的 requirement block 或合格 heading，不得只 target 纯 boundary/intro 证据。`select owner_boundary` 必须有真实 boundary evidence：support 至少证明目标之前已有不同功能 peer，或组成 earlier pointer + later fixed module recovery 链；只引用 hard root 和其内部“有用” descendant 属于被禁止的内容例外。若 hard claim 已在 target 前结束，使用 `atom_membership` 而不是 owner_boundary。
 
