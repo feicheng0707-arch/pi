@@ -20,7 +20,11 @@ import {
 } from "./pi-native.ts";
 
 const compatStreamMock = vi.hoisted(() => vi.fn());
-vi.mock("@earendil-works/pi-ai/compat", () => ({ stream: compatStreamMock }));
+const compatStreamSimpleMock = vi.hoisted(() => vi.fn());
+vi.mock("@earendil-works/pi-ai/compat", () => ({
+	stream: compatStreamMock,
+	streamSimple: compatStreamSimpleMock,
+}));
 
 const finalizerModel: Model<"openai-completions"> = {
 	id: "glm-5.2",
