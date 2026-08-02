@@ -341,7 +341,26 @@ function witnessProvisionalRationale(observed: { userPrompt: string }) {
 	};
 }
 
-test("loads the v43 phase-specific adversarial typed-delta contracts", () => {
+type WitnessFocusSourceFixture = {
+	source_ordered_blocks: Array<{
+		block_id: number;
+		target_lane: "exclude" | "select" | null;
+		text: string;
+	}>;
+	authorized_target_groups: {
+		exclude: Array<{ ranges: string[] }>;
+		select: Array<{ ranges: string[] }>;
+	};
+};
+
+function witnessFocusSource(observed: { userPrompt: string }): WitnessFocusSourceFixture {
+	const marker = "REVIEW_FOCUS_SOURCE=";
+	const focusLine = observed.userPrompt.split("\n").find((line) => line.startsWith(marker));
+	if (focusLine === undefined) throw new Error("missing REVIEW_FOCUS_SOURCE in Witness input");
+	return JSON.parse(focusLine.slice(marker.length)) as WitnessFocusSourceFixture;
+}
+
+test("loads the v44 source-ordered adversarial typed-delta contracts", () => {
 	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
 	expect(prompts.finalizer).toContain("exact target-own predicate");
 	expect(prompts.finalizer).toContain(
@@ -552,6 +571,9 @@ test("loads the v43 phase-specific adversarial typed-delta contracts", () => {
 	expect(prompts.witness).toContain("`target-alone counterfactual`");
 	expect(prompts.witness).toContain("`similar-content removal counterfactual`");
 	expect(prompts.witness).toContain("约 192 个汉字以内");
+	expect(prompts.witness).toContain("`source_ordered_blocks`");
+	expect(prompts.witness).toContain("`authorized_target_groups`");
+	expect(prompts.witness).toContain("`target_lane=null`");
 	expect(prompts.witness).not.toContain("96 个汉字");
 	expect(prompts.piNativeRuntimeContract).toContain(
 		"唯一 target 必须是 singleton canonical block",
@@ -559,6 +581,9 @@ test("loads the v43 phase-specific adversarial typed-delta contracts", () => {
 	expect(prompts.piNativeRuntimeContract).toContain(
 		"不得拆分或复制 card",
 	);
+	expect(prompts.piNativeRuntimeContract).toContain("`source_ordered_blocks`");
+	expect(prompts.piNativeRuntimeContract).toContain("`authorized_target_groups`");
+	expect(prompts.piNativeRuntimeContract).toContain("`target_lane=null`");
 });
 
 test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () => {
@@ -685,6 +710,9 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	);
 	expect(scripted.observed[1].userPrompt).toContain(
 		"Re-verify every claim only against REVIEW_FOCUS_SOURCE and the typed provisional fields",
+	);
+	expect(scripted.observed[1].userPrompt.indexOf("REVIEW_FOCUS_SOURCE=")).toBeLessThan(
+		scripted.observed[1].userPrompt.indexOf("UNTRUSTED_PROVISIONAL_RATIONALE="),
 	);
 	expect(scripted.observed[2].systemPrompt).toBe(scripted.observed[0].systemPrompt);
 	expect(witnessProvisionalRationale(scripted.observed[1])).toEqual({
@@ -1175,31 +1203,20 @@ test("surfaces short selected boundary gaps to both Witness and final reconcilia
 	expect(scripted.observed[1].userPrompt).toContain(
 		'SELECTED_BOUNDARY_GAPS=[{"run_index":0,"gap_ranges":["段落1"],"left_selected_ranges":["段落0"],"right_selected_ranges":["段落2"]}]',
 	);
-	const focus = JSON.parse(
-		scripted.observed[1].userPrompt.split("REVIEW_FOCUS_SOURCE=")[1] ?? "null",
-	) as {
-		exclude_scan_selected_islands: Array<{
-			ranges: string[];
-			blocks: Array<{ block_id: number; text: string }>;
-		}>;
-		select_scan_excluded_islands: Array<{
-			ranges: string[];
-			blocks: Array<{ block_id: number; text: string }>;
-		}>;
-	};
-	expect(focus.exclude_scan_selected_islands.map((group) => group.ranges)).toEqual([
+	const focus = witnessFocusSource(scripted.observed[1]);
+	expect(focus.authorized_target_groups.exclude.map((group) => group.ranges)).toEqual([
 		["段落0"],
 		["段落2"],
 	]);
-	expect(focus.select_scan_excluded_islands.map((group) => group.ranges)).toEqual([
+	expect(focus.authorized_target_groups.select.map((group) => group.ranges)).toEqual([
 		["段落1"],
 	]);
-	const focusBlocks = [
-		...focus.exclude_scan_selected_islands,
-		...focus.select_scan_excluded_islands,
-	].flatMap((group) => group.blocks);
-	expect(focusBlocks.map((block) => block.block_id).sort((left, right) => left - right)).toEqual([
-		0, 1, 2,
+	const focusBlocks = focus.source_ordered_blocks;
+	expect(focusBlocks.map((block) => block.block_id)).toEqual([0, 1, 2]);
+	expect(focusBlocks.map((block) => block.target_lane)).toEqual([
+		"exclude",
+		"select",
+		"exclude",
 	]);
 	expect(new Set(focusBlocks.map((block) => block.block_id)).size).toBe(focusBlocks.length);
 	for (const sourceText of ["第一段。", "第二段。", "第三段。"]) {
@@ -1207,6 +1224,64 @@ test("surfaces short selected boundary gaps to both Witness and final reconcilia
 	}
 	expect(scripted.observed[2].serializedContext).toContain("selected_boundary_gaps");
 	expect(scripted.observed[2].serializedContext).toContain("段落1");
+});
+
+test("keeps OUT focus blocks source-ordered and support-only", async () => {
+	const { result, scripted } = await runScenario(
+		[
+			{
+				role: "finalizer",
+				response: toolSelection(selection(["段落1"]), "provisional"),
+			},
+			{
+				role: "witness",
+				response: toolWitness(
+					witnessSubmission([
+						witnessChallenge("owner_boundary", "exclude", ["段落1"], [0]),
+						witnessChallenge("atom_membership", "select", ["段落0"], [0]),
+					]),
+				),
+			},
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+		],
+		["段落1"],
+	);
+
+	const focus = witnessFocusSource(scripted.observed[1]);
+	expect(focus.source_ordered_blocks.map((block) => block.block_id)).toEqual([0, 1, 2]);
+	expect(focus.source_ordered_blocks.map((block) => block.target_lane)).toEqual([
+		null,
+		"exclude",
+		null,
+	]);
+	expect(focus.authorized_target_groups).toEqual({
+		exclude: [{ ranges: ["段落1"] }],
+		select: [],
+	});
+	expect(result.witness).toMatchObject({
+		status: "accepted",
+		coverage: "partial",
+		challenges: [
+			{
+				cardSlot: "exclude",
+				cardIndex: 0,
+				ranges: ["段落1"],
+				supportingBlockIds: [0],
+			},
+		],
+		trace: {
+			rejectedCards: [
+				{
+					lane: "select",
+					cardIndex: 0,
+					reason: {
+						outOfGroupTargetBlockIds: [0],
+						outOfAuditUniverseTargetBlockIds: [0],
+					},
+				},
+			],
+		},
+	});
 });
 
 test("prioritizes provisional-empty addresses outside hard-root projections", async () => {
@@ -2142,16 +2217,7 @@ test("samples oversized selected islands uniformly with deterministic midpoint r
 	const first = await run();
 	const second = await run();
 	const focusBlockIds = (observed: { userPrompt: string }): number[] => {
-		const focus = JSON.parse(observed.userPrompt.split("REVIEW_FOCUS_SOURCE=")[1] ?? "null") as {
-			exclude_scan_selected_islands: Array<{ blocks: Array<{ block_id: number }> }>;
-			select_scan_excluded_islands: Array<{ blocks: Array<{ block_id: number }> }>;
-		};
-		return [
-			...focus.exclude_scan_selected_islands,
-			...focus.select_scan_excluded_islands,
-		]
-			.flatMap((group) => group.blocks.map((block) => block.block_id))
-			.sort((left, right) => left - right);
+		return witnessFocusSource(observed).source_ordered_blocks.map((block) => block.block_id);
 	};
 	const firstFocusBlockIds = focusBlockIds(first.scripted.observed[1]);
 	const secondFocusBlockIds = focusBlockIds(second.scripted.observed[1]);
