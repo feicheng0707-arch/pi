@@ -79,6 +79,7 @@ function packet(options: {
 
 function emptyChallenge(): PiNativeCandidateS0ChallengeSubmission {
 	return {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [],
 		remove_audit_partitions: [],
 		add_partitions: [],
@@ -87,6 +88,7 @@ function emptyChallenge(): PiNativeCandidateS0ChallengeSubmission {
 
 function boundedChallenge(): PiNativeCandidateS0ChallengeSubmission {
 	return {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [
 			{
 				target_ranges: ["段落2"],
@@ -107,6 +109,7 @@ function boundedChallenge(): PiNativeCandidateS0ChallengeSubmission {
 
 function auditChallenge(): PiNativeCandidateS0ChallengeSubmission {
 	return {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [],
 		remove_audit_partitions: [
 			{
@@ -194,20 +197,35 @@ async function runReview(
 	});
 }
 
-test("keeps the v11 flat-projection and orthogonal hard-root prompts aligned", () => {
+test("keeps the v12 flat-projection and orthogonal hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
+	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
+	expect(challengerPrompt).toContain(
+		"顶层恰有 `hard_carrier_root_challenges`、`remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 四个 non-nullable arrays",
+	);
 	expect(challengerPrompt).toContain("先裁决全部 singleton");
 	expect(challengerPrompt).toContain("首 block与末 block");
-	expect(challengerPrompt).toContain("任何 descendant 都必须保持完全沉默");
-	expect(challengerPrompt).toContain("不得进入 exact remove、任何 neutral audit、add");
+	expect(challengerPrompt).toContain(
+		"其 source-proven descendants 必须对 exact remove、neutral audit 和 add 完全沉默",
+	);
 	expect(challengerPrompt).not.toContain("sentinel");
 	expect(challengerPrompt).toContain("heading/pointer/consequence residue fixed-point");
 	expect(challengerPrompt).not.toContain("SOURCE_PROJECTION_JSON.runs");
 	expect(candidateS0RuntimeContract).toContain(
-		"Challenger envelope 只是普通审查地址授权，不是 keep 票",
+		"把完整 `S0` 统一作为 ordinary remove 的机械 authorization",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		"exact partition 在 canonical 合并前按原始 submitted range 拆成独立 group",
 	);
 	expect(finalizerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON");
+	expect(finalizerPrompt).toContain("未挑战 `S0` 仍可删除");
+	expect(finalizerPrompt).toContain(
+		"Root challenge 只是 attention/navigation，不是 veto授权或双钥匙",
+	);
+	expect(finalizerPrompt).toContain("`Δ-⊆S0`");
+	expect(finalizerPrompt).toContain("`Δ+⊆ADD_ENVELOPE");
+	expect(finalizerPrompt).not.toContain("`Δ-⊆S0∩REMOVE_ENVELOPE`");
 	expect(finalizerPrompt).toContain(
 		"hard_carrier_root_vetoes -> ordinary_remove_ranges -> ordinary_add_ranges",
 	);
@@ -232,11 +250,136 @@ test("runs the independent Finalizer after an empty challenge for non-empty S0",
 	expect(registration.state.callCount).toBe(2);
 	expect(registration.getPendingResponseCount()).toBe(0);
 	expect(result.schemaVersion).toBe(
-		"xique.word-requirement-review.pi-native-candidate-s0-result.v3",
+		"xique.word-requirement-review.pi-native-candidate-s0-result.v4",
 	);
 	expect(result.prompts.candidateS0RuntimeContract).toBe(
 		sha256(candidateS0RuntimeContract),
 	);
+});
+
+test("keeps valid typed root review after an independent rejection without forwarding conclusions", async () => {
+	const contexts: Context[] = [];
+	const rootTraceOnlyClaim = "TRACE_ONLY_ROOT_CHALLENGE_CLAIM_7A19D4E2";
+	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [
+			{
+				carrier_type: "response_format",
+				root_block_id: 4,
+				exit_block_id_exclusive: 3,
+				projected_s0_anchor_block_id: 1,
+				source_conclusion: "This root intentionally has a reversed boundary.",
+				supporting_block_ids: [3, 4],
+			},
+			{
+				carrier_type: "announcement_notice",
+				root_block_id: 0,
+				exit_block_id_exclusive: 3,
+				projected_s0_anchor_block_id: 1,
+				source_conclusion: rootTraceOnlyClaim,
+				supporting_block_ids: [0, 1, 3],
+			},
+		],
+		remove_partitions: [],
+		remove_audit_partitions: [],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		(context) => {
+			contexts.push(context);
+			return challengerResponse(challenge);
+		},
+		(context) => {
+			contexts.push(context);
+			return finalizerResponse({
+				ordinary_remove_ranges: [],
+				ordinary_add_ranges: [],
+			});
+		},
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("preserved");
+	expect(result.coverage).toEqual({
+		challenger: "partial",
+		rejectedPartitionCount: 1,
+	});
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "hard_root",
+			partitionIndex: 0,
+			reason:
+				"hard_carrier_root_challenges[0] exit position 3 must follow root position 4 in source order",
+		},
+	]);
+	expect(result.challenge?.hardCarrierRootChallenges).toMatchObject([
+		{
+			challengeIndex: 1,
+			carrierType: "announcement_notice",
+			rootBlockId: 0,
+			exitBlockIdExclusive: 3,
+			projectedS0AnchorBlockId: 1,
+			projectedRanges: ["段落1-段落2"],
+			sourceConclusion: rootTraceOnlyClaim,
+			supportingBlockIds: [0, 1, 3],
+		},
+	]);
+	expect(result.trace.challengerRawResponse).toContain(rootTraceOnlyClaim);
+	const finalizerMessage = contexts[1]?.messages.find(
+		(message) => message.role === "user",
+	);
+	if (finalizerMessage?.role !== "user") {
+		throw new Error("Finalizer context omitted its user message");
+	}
+	const finalizerInput =
+		typeof finalizerMessage.content === "string"
+			? finalizerMessage.content
+			: finalizerMessage.content
+					.map((content) => (content.type === "text" ? content.text : ""))
+					.join("");
+	expect(finalizerInput).toContain(
+		'"hard_root_review_groups":[{"challenge_index":1,"carrier_type":"announcement_notice","root_block_id":0,"exit_block_id_exclusive":3,"projected_s0_anchor_block_id":1,"supporting_block_ids":[0,1,3]}]',
+	);
+	expect(finalizerInput).not.toContain(rootTraceOnlyClaim);
+	expect(result.decision?.hardCarrierRootChallengeMatches).toEqual([
+		{ challengeIndex: 1, matchedVetoIndices: [] },
+	]);
+});
+
+test("continues to the independent Finalizer when only root reviews are invalid", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: 4,
+					projected_s0_anchor_block_id: 1,
+					source_conclusion: "The anchor intentionally falls outside the span.",
+					supporting_block_ids: [1, 3, 4],
+				},
+			],
+			remove_partitions: [],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("preserved");
+	expect(result.resolution).toBe("finalizer_preserved");
+	expect(result.budget.providerCalls).toBe(2);
+	expect(result.challenge?.hardCarrierRootChallenges).toEqual([]);
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "hard_root",
+			partitionIndex: 0,
+			reason:
+				"hard_carrier_root_challenges[0] anchor block 1 is outside the submitted root span",
+		},
+	]);
 });
 
 test("stops after an empty challenge when Candidate S0 is empty", async () => {
@@ -293,6 +436,7 @@ test("applies only the accepted remove and add envelope", async () => {
 test("allows the Finalizer to remove an S0 hard-carrier span outside the challenge envelope", async () => {
 	const registration = createFaux([
 		challengerResponse({
+			hard_carrier_root_challenges: [],
 			remove_partitions: [
 				{
 					target_ranges: ["段落2"],
@@ -328,7 +472,9 @@ test("allows the Finalizer to remove an S0 hard-carrier span outside the challen
 		removeRanges: ["段落2-段落4"],
 	});
 	expect(result.decision).toMatchObject({
-		challengeRemoveRanges: ["段落2"],
+		ordinaryRemoveRanges: ["段落2"],
+		challengedOrdinaryRemoveRanges: ["段落2"],
+		independentOrdinaryRemoveRanges: [],
 		hardCarrierRemoveRanges: ["段落3-段落4"],
 		removeRanges: ["段落2-段落4"],
 		hardCarrierRootVetoes: [
@@ -374,20 +520,53 @@ test("projects hard-carrier vetoes by source order when block IDs are sparse", a
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([10, 30]);
 });
 
-test("fails closed on a root-only remove outside the Challenger envelope", async () => {
+test("records root-review to veto matches without using the anchor as a gate", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 0,
+					exit_block_id_exclusive: 3,
+					projected_s0_anchor_block_id: 1,
+					source_conclusion: "The source proposes one bounded announcement root.",
+					supporting_block_ids: [0, 1, 3],
+				},
+			],
+			remove_partitions: [],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 0,
+					exit_block_id_exclusive: 3,
+					projected_s0_anchor_block_id: 2,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.decision?.hardCarrierRootChallengeMatches).toEqual([
+		{ challengeIndex: 0, matchedVetoIndices: [0] },
+	]);
+});
+
+test("allows an independent ordinary remove anywhere inside Candidate S0", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({
 			ordinary_remove_ranges: ["段落3"],
 			ordinary_add_ranges: [],
-			hard_carrier_root_vetoes: [
-				{
-					carrier_type: "contract_terms_and_formats",
-					root_block_id: 3,
-					exit_block_id_exclusive: "EOF",
-					projected_s0_anchor_block_id: 3,
-				},
-			],
+			hard_carrier_root_vetoes: [],
 		}),
 	]);
 
@@ -395,17 +574,97 @@ test("fails closed on a root-only remove outside the Challenger envelope", async
 		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
 	});
 
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1-段落2", "段落4"]);
+	expect(result.decision).toMatchObject({
+		ordinaryRemoveRanges: ["段落3"],
+		challengedOrdinaryRemoveRanges: [],
+		independentOrdinaryRemoveRanges: ["段落3"],
+	});
+});
+
+test("classifies challenged and independent ordinary removes as disjoint complete partitions", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [],
+			remove_partitions: [
+				{
+					target_ranges: ["段落2"],
+					source_conclusion: "One exact Candidate block requires review.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落2", "段落4"],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.decision).toMatchObject({
+		ordinaryRemoveBlockIds: [2, 4],
+		challengedOrdinaryRemoveBlockIds: [2],
+		independentOrdinaryRemoveBlockIds: [4],
+	});
+	const challenged = new Set(
+		result.decision?.challengedOrdinaryRemoveBlockIds ?? [],
+	);
+	const independent = new Set(
+		result.decision?.independentOrdinaryRemoveBlockIds ?? [],
+	);
+	expect([...challenged].filter((blockId) => independent.has(blockId))).toEqual([]);
+	expect([...challenged, ...independent].sort((left, right) => left - right)).toEqual(
+		result.decision?.ordinaryRemoveBlockIds,
+	);
+});
+
+test("fails closed when an ordinary remove leaves Candidate S0", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落3"],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
 	expect(result.status).toBe("degraded");
-	expect(result.finalRanges).toEqual(["段落1-段落4"]);
-	expect(result.decision).toBeNull();
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.failure?.message).toContain(
-		"Finalizer remove block 3 is outside the Challenger envelope",
+		"Finalizer remove block 3 is outside Candidate S0",
+	);
+});
+
+test("fails closed on an ordinary wholesale reversal of non-empty Candidate S0", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落1-段落2"],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.failure?.message).toContain(
+		"ordinary_remove_ranges cannot remove the entire non-empty Candidate S0",
 	);
 });
 
 test("continues after rejecting an effectless root veto when valid effects remain", async () => {
 	const registration = createFaux([
 		challengerResponse({
+			hard_carrier_root_challenges: [],
 			remove_partitions: [
 				{
 					target_ranges: ["段落2"],
@@ -456,6 +715,7 @@ test("continues after rejecting an effectless root veto when valid effects remai
 test("fails closed when an accepted add conflicts with a hard-carrier root veto", async () => {
 	const registration = createFaux([
 		challengerResponse({
+			hard_carrier_root_challenges: [],
 			remove_partitions: [],
 			remove_audit_partitions: [],
 			add_partitions: [
@@ -525,6 +785,7 @@ test("allows a hard-carrier root veto to shadow mixed-audit challenge addresses"
 test("allows a hard-carrier root veto to shadow an exact challenge address", async () => {
 	const registration = createFaux([
 		challengerResponse({
+			hard_carrier_root_challenges: [],
 			remove_partitions: [
 				{
 					target_ranges: ["段落3"],
@@ -555,13 +816,14 @@ test("allows a hard-carrier root veto to shadow an exact challenge address", asy
 
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual(["段落1-段落2"]);
-	expect(result.decision?.challengeRemoveBlockIds).toEqual([]);
+	expect(result.decision?.challengedOrdinaryRemoveBlockIds).toEqual([]);
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([3, 4]);
 });
 
 test("fails closed when ordinary remove duplicates a hard-carrier root veto", async () => {
 	const registration = createFaux([
 		challengerResponse({
+			hard_carrier_root_challenges: [],
 			remove_partitions: [
 				{
 					target_ranges: ["段落3"],
@@ -601,6 +863,7 @@ test("fails closed when ordinary remove duplicates a hard-carrier root veto", as
 test("allows a hard-carrier root to shadow recovery challenge addresses", async () => {
 	const registration = createFaux([
 		challengerResponse({
+			hard_carrier_root_challenges: [],
 			remove_partitions: [],
 			remove_audit_partitions: [
 				{
@@ -632,13 +895,14 @@ test("allows a hard-carrier root to shadow recovery challenge addresses", async 
 
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual(["段落1"]);
-	expect(result.decision?.challengeRemoveBlockIds).toEqual([2]);
+	expect(result.decision?.challengedOrdinaryRemoveBlockIds).toEqual([2]);
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([3, 4]);
 });
 
 test("fails closed when recovery ordinary delta duplicates its root veto", async () => {
 	const registration = createFaux([
 		challengerResponse({
+			hard_carrier_root_challenges: [],
 			remove_partitions: [],
 			remove_audit_partitions: [
 				{
@@ -818,6 +1082,7 @@ test("fails closed when the Finalizer removes a mixed atomic scope wholesale", a
 
 test("normalizes mechanically equivalent compact range syntax", async () => {
 	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [
 			{
 				target_ranges: ["段落1-2"],
@@ -919,9 +1184,10 @@ test.each([
 	},
 	{
 		name: "invalid Challenger schema",
-		responses: [
-			challengerResponse({
-				remove_partitions: [],
+			responses: [
+				challengerResponse({
+					hard_carrier_root_challenges: [],
+					remove_partitions: [],
 				remove_audit_partitions: [],
 				add_partitions: [],
 				unexpected: true,
@@ -932,10 +1198,24 @@ test.each([
 		expectedCalls: 1,
 	},
 	{
-		name: "Challenger supporting evidence exceeds the bounded output",
+		name: "missing required hard-carrier root challenge array",
 		responses: [
 			challengerResponse({
-				remove_partitions: [
+				remove_partitions: [],
+				remove_audit_partitions: [],
+				add_partitions: [],
+			}),
+		],
+		expectedRole: "challenger",
+		expectedCode: "contract_error",
+		expectedCalls: 1,
+	},
+		{
+			name: "Challenger supporting evidence exceeds the bounded output",
+			responses: [
+				challengerResponse({
+					hard_carrier_root_challenges: [],
+					remove_partitions: [
 					{
 						target_ranges: ["段落1"],
 						source_conclusion: "The partition intentionally exceeds the evidence-ID cap.",
@@ -999,6 +1279,7 @@ test.each([
 
 test("records the raw Challenger response when target authorization fails", async () => {
 	const invalidChallenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [],
 		remove_audit_partitions: [],
 		add_partitions: [
@@ -1027,6 +1308,7 @@ test("records the raw Challenger response when target authorization fails", asyn
 
 test("continues with partial coverage when one partition is unauthorized", async () => {
 	const mixedChallenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [boundedChallenge().remove_partitions[0]],
 		remove_audit_partitions: [],
 		add_partitions: [
@@ -1069,6 +1351,7 @@ test("continues with partial coverage when one partition is unauthorized", async
 
 test("continues after rejecting one partition with a non-canonical range", async () => {
 	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [
 			boundedChallenge().remove_partitions[0],
 			{
@@ -1097,7 +1380,7 @@ test("continues after rejecting one partition with a non-canonical range", async
 			direction: "remove",
 			partitionIndex: 1,
 			reason:
-				"invalid range in remove_partitions[1].target_ranges: 段落1中的后半句",
+				"invalid range in remove_partitions[1].target_ranges[0]: 段落1中的后半句",
 		},
 	]);
 	expect(result.coverage).toEqual({
@@ -1108,6 +1391,7 @@ test("continues after rejecting one partition with a non-canonical range", async
 
 test("continues after rejecting an audit that overlaps an exact remove challenge", async () => {
 	const overlappingChallenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [boundedChallenge().remove_partitions[0]],
 		remove_audit_partitions: [
 			{
@@ -1152,6 +1436,7 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 	const contexts: Context[] = [];
 	const traceOnlyClaim = "TRACE_ONLY_CHALLENGER_CLAIM_4E6D5A91";
 	const groupedChallenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [
 			{
 				target_ranges: ["段落1"],
@@ -1301,17 +1586,23 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 			},
 		],
 	});
-	expect(finalizerInput).toContain('"remove_review_ranges":["段落1-段落2"]');
 	expect(finalizerInput).toContain(
-		'"remove_review_groups":[{"review_kind":"exact_remove_claim","target_ranges":["段落1"],"supporting_block_ids":[0,1]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"supporting_block_ids":[2]}]',
+		'"remove_review_ranges":["段落1-段落2","段落4"]',
+	);
+	expect(finalizerInput).toContain('"hard_root_review_groups":[]');
+	expect(finalizerInput).toContain(
+		'"remove_review_groups":[{"review_kind":"exact_remove_claim","partition_index":0,"range_index":0,"target_ranges":["段落1"],"mechanical_context_block_ids":[0,2,3]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"supporting_block_ids":[2]}]',
 	);
 	expect(finalizerInput).toContain('"add_review_ranges":["段落3"]');
 	expect(finalizerInput).toContain(
-		'"add_review_groups":[{"review_kind":"exact_add_claim","target_ranges":["段落3"],"supporting_block_ids":[3]}]',
+		'"add_review_groups":[{"review_kind":"exact_add_claim","partition_index":0,"range_index":0,"target_ranges":["段落3"],"mechanical_context_block_ids":[1,2,4]}]',
 	);
 	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":true');
 	expect(finalizerInput).toContain(
 		'"challenger_claims_forwarded_as_untrusted":false',
+	);
+	expect(finalizerInput).toContain(
+		'"exact_partition_supporting_ids_forwarded":false',
 	);
 	expect(finalizerInput).toContain('"candidate_s0_block_ids":[1,2,4]');
 	expect(finalizerInput).toContain('"anchor_must_be_in_s0_and_span":true');
@@ -1322,9 +1613,103 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 	expect(finalizerInput).toContain("supporting_block_ids");
 });
 
+test("splits exact target ranges into stable groups with source-order neighbor context", async () => {
+	const contexts: Context[] = [];
+	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
+		remove_partitions: [
+			{
+				target_ranges: ["段落259", "段落265"],
+				source_conclusion: "Two independent exact addresses require review.",
+				supporting_block_ids: [100],
+			},
+		],
+		remove_audit_partitions: [],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		(context) => {
+			contexts.push(context);
+			return challengerResponse(challenge);
+		},
+		(context) => {
+			contexts.push(context);
+			return finalizerResponse({
+				ordinary_remove_ranges: [],
+				ordinary_add_ranges: [],
+			});
+		},
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落259", "段落265"],
+			blockIds: [100, 257, 259, 265, 300, 400, 500],
+			texts: [
+				"context zero",
+				"context one",
+				"selected 259",
+				"selected 265",
+				"context two",
+				"context three",
+				"context four",
+			],
+		}),
+	});
+
+	expect(result.status).toBe("preserved");
+	expect(result.challenge?.removePartitions[0]?.targetRangeGroups).toEqual([
+		{ rangeIndex: 0, targetRange: "段落259", targetBlockIds: [259] },
+		{ rangeIndex: 1, targetRange: "段落265", targetBlockIds: [265] },
+	]);
+	const finalizerMessage = contexts[1]?.messages.find(
+		(message) => message.role === "user",
+	);
+	if (finalizerMessage?.role !== "user") {
+		throw new Error("Finalizer context omitted its user message");
+	}
+	const finalizerInput =
+		typeof finalizerMessage.content === "string"
+			? finalizerMessage.content
+			: finalizerMessage.content
+					.map((content) => (content.type === "text" ? content.text : ""))
+					.join("");
+	const envelopePrefix = "CHALLENGE_ENVELOPE=";
+	const envelopeLine = finalizerInput
+		.split("\n")
+		.find((line) => line.startsWith(envelopePrefix));
+	if (envelopeLine === undefined) {
+		throw new Error("Finalizer context omitted the challenge envelope");
+	}
+	const envelope = JSON.parse(envelopeLine.slice(envelopePrefix.length)) as {
+		remove_review_groups: Array<Record<string, unknown>>;
+	};
+	expect(envelope.remove_review_groups).toEqual([
+		{
+			review_kind: "exact_remove_claim",
+			partition_index: 0,
+			range_index: 0,
+			target_ranges: ["段落259"],
+			mechanical_context_block_ids: [100, 257, 265, 300],
+		},
+		{
+			review_kind: "exact_remove_claim",
+			partition_index: 0,
+			range_index: 1,
+			target_ranges: ["段落265"],
+			mechanical_context_block_ids: [257, 259, 300, 400],
+		},
+	]);
+	expect(envelope.remove_review_groups).toHaveLength(2);
+	expect(envelope.remove_review_groups.every((group) =>
+		!Object.hasOwn(group, "supporting_block_ids"),
+	)).toBe(true);
+});
+
 test("keeps expanded audit block IDs internal to the Finalizer context", async () => {
 	const contexts: Context[] = [];
 	const largeAudit: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [],
 		remove_audit_partitions: [
 			{
@@ -1403,6 +1788,7 @@ test("keeps the two typed audit channels independently bounded", async () => {
 		...Array.from({ length: 52 }, (_, index) => index + 100),
 	];
 	const largeAudit: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [],
 		remove_audit_partitions: [
 			{
@@ -1456,6 +1842,7 @@ test("keeps the two typed audit channels independently bounded", async () => {
 
 test("fails closed after rejecting a recovery-boundary audit", async () => {
 	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [],
 		remove_audit_partitions: [
 			{
@@ -1506,6 +1893,7 @@ test("fails closed after rejecting a recovery-boundary audit", async () => {
 
 test("fails closed even when a later recovery audit is mechanically valid", async () => {
 	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [],
 		remove_partitions: [],
 		remove_audit_partitions: [
 			{
