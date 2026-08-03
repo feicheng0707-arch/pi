@@ -25,19 +25,23 @@ import {
 } from "./pi-native.ts";
 
 const CHALLENGER_MAX_TOKENS = 4_000;
-const FINALIZER_MAX_TOKENS = 4_000;
+const FINALIZER_MAX_TOKENS = 6_000;
 const CONTEXT_SAFETY_TOKENS = 8_000;
 const REQUEST_TIMEOUT_MS = 300_000;
 const WORKFLOW_TIMEOUT_MS = 600_000;
 const MAX_REMOVE_PARTITIONS = 4;
+const MAX_REMOVE_AUDIT_PARTITIONS = 2;
 const MAX_ADD_PARTITIONS = 2;
 const MAX_TARGET_RANGES_PER_PARTITION = 16;
+const MAX_AUDIT_RANGES_PER_PARTITION = 4;
+const MAX_AUDIT_BLOCKS_PER_PARTITION = 96;
+const MAX_TOTAL_AUDIT_BLOCKS = 128;
 const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 16;
 const MAX_FINAL_REMOVE_RANGES =
-	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
+	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v1";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v2";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-段落\\d+)?$",
@@ -66,11 +70,40 @@ export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 	{ additionalProperties: false },
 );
 
+export const PiNativeCandidateS0RemoveAuditPartitionSchema = Type.Object(
+	{
+		target_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
+			minItems: 1,
+			maxItems: MAX_AUDIT_RANGES_PER_PARTITION,
+			description:
+				"A bounded Candidate-S0 scope whose exact atomic membership requires independent Finalizer audit.",
+		}),
+		audit_basis: Type.String({
+			minLength: 1,
+			description:
+				"Source-grounded reason the selected scope may contain mixed atomic membership; this is not a remove conclusion.",
+		}),
+		supporting_block_ids: Type.Array(Type.Integer({ minimum: 0 }), {
+			minItems: 1,
+			maxItems: MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION,
+			description:
+				"Existing top-level source block IDs that locate the scope and its competing membership evidence.",
+		}),
+	},
+	{ additionalProperties: false },
+);
+
 export const PiNativeCandidateS0ChallengeSchema = Type.Object(
 	{
 		remove_partitions: Type.Array(PiNativeCandidateS0ChallengePartitionSchema, {
 			maxItems: MAX_REMOVE_PARTITIONS,
 		}),
+		remove_audit_partitions: Type.Array(
+			PiNativeCandidateS0RemoveAuditPartitionSchema,
+			{
+				maxItems: MAX_REMOVE_AUDIT_PARTITIONS,
+			},
+		),
 		add_partitions: Type.Array(PiNativeCandidateS0ChallengePartitionSchema, {
 			maxItems: MAX_ADD_PARTITIONS,
 		}),
@@ -109,9 +142,22 @@ export interface CanonicalPiNativeCandidateS0ChallengePartition {
 	supportingBlockIds: number[];
 }
 
+export interface CanonicalPiNativeCandidateS0RemoveAuditPartition {
+	partitionIndex: number;
+	targetRanges: string[];
+	targetBlockIds: number[];
+	auditBasis: string;
+	supportingBlockIds: number[];
+}
+
 export interface CanonicalPiNativeCandidateS0Challenge {
 	removePartitions: CanonicalPiNativeCandidateS0ChallengePartition[];
+	removeAuditPartitions: CanonicalPiNativeCandidateS0RemoveAuditPartition[];
 	addPartitions: CanonicalPiNativeCandidateS0ChallengePartition[];
+	removeExactEnvelopeRanges: string[];
+	removeExactEnvelopeBlockIds: number[];
+	removeAuditEnvelopeRanges: string[];
+	removeAuditEnvelopeBlockIds: number[];
 	removeEnvelopeRanges: string[];
 	removeEnvelopeBlockIds: number[];
 	addEnvelopeRanges: string[];
@@ -119,7 +165,7 @@ export interface CanonicalPiNativeCandidateS0Challenge {
 }
 
 export interface PiNativeCandidateS0RejectedChallengePartition {
-	direction: "remove" | "add";
+	direction: "remove" | "remove_audit" | "add";
 	partitionIndex: number;
 	reason: string;
 }
@@ -160,6 +206,8 @@ export interface RunPiNativeCandidateS0ReviewOptions {
 	packet: RequirementReviewPacket;
 	packetSha256: string;
 	prompts: RequirementReviewPrompts;
+	candidateS0RuntimeContract: string;
+	candidateS0RuntimeContractSha256: string;
 	challengerPrompt: string;
 	challengerPromptSha256: string;
 	finalizerPrompt: string;
@@ -198,7 +246,7 @@ type PiNativeCandidateS0FailureCode =
 	| "aborted";
 
 export interface PiNativeCandidateS0ReviewResult {
-	schemaVersion: "xique.word-requirement-review.pi-native-candidate-s0-result.v1";
+	schemaVersion: "xique.word-requirement-review.pi-native-candidate-s0-result.v2";
 	architecture: "pi_native_candidate_s0_challenger_finalizer";
 	status: "preserved" | "repaired" | "degraded";
 	resolution:
@@ -234,7 +282,7 @@ export interface PiNativeCandidateS0ReviewResult {
 	prompts: {
 		productPrinciples: string;
 		piNativeSemanticContract: string;
-		piNativeRuntimeContract: string;
+		candidateS0RuntimeContract: string;
 		challengerRole: string;
 		finalizerRole: string;
 	};
@@ -253,6 +301,10 @@ export interface PiNativeCandidateS0ReviewResult {
 		finalizerPreflightEstimatedTokens: number;
 		finalizerEstimatedTokens: number | null;
 		finalizerContextWindow: number;
+	};
+	coverage: {
+		challenger: "complete" | "partial" | "none" | "not_run";
+		rejectedPartitionCount: number;
 	};
 	trace: {
 		challengerRawResponse: string | null;
@@ -366,7 +418,7 @@ export async function runPiNativeCandidateS0Review(
 	const promptHashes = {
 		productPrinciples: options.prompts.hashes.productPrinciples,
 		piNativeSemanticContract: options.prompts.hashes.piNativeSemanticContract,
-		piNativeRuntimeContract: options.prompts.hashes.piNativeRuntimeContract,
+		candidateS0RuntimeContract: options.candidateS0RuntimeContractSha256,
 		challengerRole: options.challengerPromptSha256,
 		finalizerRole: options.finalizerPromptSha256,
 	};
@@ -400,8 +452,12 @@ export async function runPiNativeCandidateS0Review(
 				workflowTimeoutMs: WORKFLOW_TIMEOUT_MS,
 				maxProviderCalls: 2,
 				maxRemovePartitions: MAX_REMOVE_PARTITIONS,
+				maxRemoveAuditPartitions: MAX_REMOVE_AUDIT_PARTITIONS,
 				maxAddPartitions: MAX_ADD_PARTITIONS,
 				maxTargetRangesPerPartition: MAX_TARGET_RANGES_PER_PARTITION,
+				maxAuditRangesPerPartition: MAX_AUDIT_RANGES_PER_PARTITION,
+				maxAuditBlocksPerPartition: MAX_AUDIT_BLOCKS_PER_PARTITION,
+				maxTotalAuditBlocks: MAX_TOTAL_AUDIT_BLOCKS,
 				maxSupportingBlockIdsPerPartition:
 					MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION,
 			},
@@ -427,6 +483,7 @@ export async function runPiNativeCandidateS0Review(
 	let validatorFailure: string | null = null;
 	let challengerStopReason: string | null = null;
 	let finalizerStopReason: string | null = null;
+	let challengerCompleted = false;
 	let sourceTextCharacterCount = options.packet.blocks.reduce(
 		(total, block) => total + block.text.length,
 		0,
@@ -449,7 +506,7 @@ export async function runPiNativeCandidateS0Review(
 			| "failure"
 		>,
 	): PiNativeCandidateS0ReviewResult => ({
-		schemaVersion: "xique.word-requirement-review.pi-native-candidate-s0-result.v1",
+		schemaVersion: "xique.word-requirement-review.pi-native-candidate-s0-result.v2",
 		architecture: "pi_native_candidate_s0_challenger_finalizer",
 		packetSha256: options.packetSha256,
 		capabilitySha256,
@@ -483,6 +540,20 @@ export async function runPiNativeCandidateS0Review(
 			finalizerEstimatedTokens,
 			finalizerContextWindow: options.finalizerRuntime.model.contextWindow,
 		},
+		coverage: {
+			challenger: usage.challenger.providerCalls === 0
+				? "not_run"
+				: !challengerCompleted
+					? "none"
+				: challengerRejectedPartitions.length === 0
+					? "complete"
+					: challenge !== null &&
+						(challenge.removeEnvelopeBlockIds.length > 0 ||
+							challenge.addEnvelopeBlockIds.length > 0)
+						? "partial"
+						: "none",
+			rejectedPartitionCount: challengerRejectedPartitions.length,
+		},
 		trace: {
 			challengerRawResponse,
 			challengerNormalizedResponse,
@@ -504,6 +575,8 @@ export async function runPiNativeCandidateS0Review(
 			prepared = prepareCandidateS0Review(
 				options.packet,
 				options.prompts,
+				options.candidateS0RuntimeContract,
+				options.candidateS0RuntimeContractSha256,
 				options.challengerPrompt,
 				options.challengerPromptSha256,
 				options.finalizerPrompt,
@@ -617,6 +690,7 @@ export async function runPiNativeCandidateS0Review(
 			});
 		}
 		challenge = challengerResult.challenge;
+		challengerCompleted = true;
 		challengerRejectedPartitions = challengerResult.rejectedPartitions;
 		challengerInputSha256 = challengerResult.inputSha256;
 		challengerRawResponse = challengerResult.rawResponse;
@@ -766,11 +840,18 @@ export async function runPiNativeCandidateS0Review(
 function prepareCandidateS0Review(
 	packet: RequirementReviewPacket,
 	prompts: RequirementReviewPrompts,
+	candidateS0RuntimeContract: string,
+	candidateS0RuntimeContractSha256: string,
 	challengerPrompt: string,
 	challengerPromptSha256: string,
 	finalizerPrompt: string,
 	finalizerPromptSha256: string,
 ): PreparedCandidateS0Review {
+	validateExternalPrompt(
+		"candidateS0RuntimeContract",
+		candidateS0RuntimeContract,
+		candidateS0RuntimeContractSha256,
+	);
 	validateExternalPrompt("challengerPrompt", challengerPrompt, challengerPromptSha256);
 	validateExternalPrompt("finalizerPrompt", finalizerPrompt, finalizerPromptSha256);
 	validateExternalPrompt(
@@ -782,11 +863,6 @@ function prepareCandidateS0Review(
 		"prompts.piNativeSemanticContract",
 		prompts.piNativeSemanticContract,
 		prompts.hashes.piNativeSemanticContract,
-	);
-	validateExternalPrompt(
-		"prompts.piNativeRuntimeContract",
-		prompts.piNativeRuntimeContract,
-		prompts.hashes.piNativeRuntimeContract,
 	);
 	if (packet.blockCount !== packet.blocks.length) {
 		throw new CandidateS0ContractError(
@@ -860,7 +936,12 @@ function prepareTargetedFinalizer(
 ): PreparedTargetedFinalizer {
 	const envelope = JSON.stringify({
 		remove_partitions: challenge.removePartitions.map(renderChallengePartition),
+		remove_audit_partitions: challenge.removeAuditPartitions.map(
+			renderRemoveAuditPartition,
+		),
 		add_partitions: challenge.addPartitions.map(renderChallengePartition),
+		remove_exact_envelope_ranges: challenge.removeExactEnvelopeRanges,
+		remove_audit_envelope_ranges: challenge.removeAuditEnvelopeRanges,
 		remove_envelope_ranges: challenge.removeEnvelopeRanges,
 		add_envelope_ranges: challenge.addEnvelopeRanges,
 	});
@@ -998,7 +1079,17 @@ async function runCandidateS0Challenger(
 			last.stopReason,
 		);
 	}
-	const validated = validateChallengeSubmission(parsed, prepared);
+	let validated: ReturnType<typeof validateChallengeSubmission>;
+	try {
+		validated = validateChallengeSubmission(parsed, prepared);
+	} catch (error) {
+		throw new CandidateS0ChallengerContractError(
+			errorMessage(error),
+			textBlock.text,
+			parsed,
+			last.stopReason,
+		);
+	}
 	return {
 		challenge: validated.challenge,
 		rejectedPartitions: validated.rejectedPartitions,
@@ -1196,9 +1287,10 @@ function validateChallengeSubmission(
 } {
 	const candidate = new Set(prepared.candidateBlockIds);
 	const removeSeen = new Set<number>();
+	const removeAuditSeen = new Set<number>();
 	const addSeen = new Set<number>();
 	const rejectedPartitions: PiNativeCandidateS0RejectedChallengePartition[] = [];
-	const validatePartitions = (
+	const validateExactPartitions = (
 		direction: "remove" | "add",
 		partitions: PiNativeCandidateS0ChallengeSubmission[
 			| "remove_partitions"
@@ -1261,14 +1353,90 @@ function validateChallengeSubmission(
 		}
 		return validated;
 	};
-	const removePartitions = validatePartitions("remove", raw.remove_partitions);
-	const addPartitions = validatePartitions("add", raw.add_partitions);
+	const removePartitions = validateExactPartitions("remove", raw.remove_partitions);
+	const addPartitions = validateExactPartitions("add", raw.add_partitions);
+	const removeAuditPartitions: CanonicalPiNativeCandidateS0RemoveAuditPartition[] = [];
+	for (const [partitionIndex, partition] of raw.remove_audit_partitions.entries()) {
+		try {
+			if (partition.audit_basis.trim().length === 0) {
+				throw new CandidateS0ContractError(
+					`remove_audit_partitions[${partitionIndex}].audit_basis is blank`,
+				);
+			}
+			const targetBlockIds = expandRanges(
+				partition.target_ranges,
+				prepared.availableBlockIds,
+				`remove_audit_partitions[${partitionIndex}].target_ranges`,
+				true,
+			);
+			if (targetBlockIds.length > MAX_AUDIT_BLOCKS_PER_PARTITION) {
+				throw new CandidateS0ContractError(
+					`remove_audit_partitions[${partitionIndex}] expands to ${targetBlockIds.length} blocks; maximum is ${MAX_AUDIT_BLOCKS_PER_PARTITION}`,
+				);
+			}
+			const nextAuditSeen = new Set(removeAuditSeen);
+			for (const blockId of targetBlockIds) {
+				if (!candidate.has(blockId)) {
+					throw new CandidateS0ContractError(
+						`remove audit block ${blockId} is outside Candidate S0`,
+					);
+				}
+				if (removeSeen.has(blockId)) {
+					throw new CandidateS0ContractError(
+						`remove audit block ${blockId} already belongs to an exact remove challenge`,
+					);
+				}
+				if (removeAuditSeen.has(blockId)) {
+					throw new CandidateS0ContractError(
+						`remove audit duplicates block ${blockId} across audit partitions`,
+					);
+				}
+				nextAuditSeen.add(blockId);
+			}
+			if (nextAuditSeen.size > MAX_TOTAL_AUDIT_BLOCKS) {
+				throw new CandidateS0ContractError(
+					`remove audit envelope expands to ${nextAuditSeen.size} blocks; maximum is ${MAX_TOTAL_AUDIT_BLOCKS}`,
+				);
+			}
+			const supportingBlockIds = validateSupportingBlockIds(
+				partition.supporting_block_ids,
+				prepared.availableBlockIds,
+				`remove_audit_partitions[${partitionIndex}].supporting_block_ids`,
+			);
+			for (const blockId of targetBlockIds) removeAuditSeen.add(blockId);
+			removeAuditPartitions.push({
+				partitionIndex,
+				targetRanges: compactRanges(targetBlockIds),
+				targetBlockIds,
+				auditBasis: partition.audit_basis.trim(),
+				supportingBlockIds,
+			});
+		} catch (error) {
+			rejectedPartitions.push({
+				direction: "remove_audit",
+				partitionIndex,
+				reason: errorMessage(error),
+			});
+		}
+	}
+	const removeEnvelopeBlockIds = [...new Set([...removeSeen, ...removeAuditSeen])].sort(
+		(left, right) => left - right,
+	);
 	return {
 		challenge: {
 			removePartitions,
+			removeAuditPartitions,
 			addPartitions,
-			removeEnvelopeRanges: compactRanges([...removeSeen]),
-			removeEnvelopeBlockIds: [...removeSeen].sort((left, right) => left - right),
+			removeExactEnvelopeRanges: compactRanges([...removeSeen]),
+			removeExactEnvelopeBlockIds: [...removeSeen].sort(
+				(left, right) => left - right,
+			),
+			removeAuditEnvelopeRanges: compactRanges([...removeAuditSeen]),
+			removeAuditEnvelopeBlockIds: [...removeAuditSeen].sort(
+				(left, right) => left - right,
+			),
+			removeEnvelopeRanges: compactRanges(removeEnvelopeBlockIds),
+			removeEnvelopeBlockIds,
 			addEnvelopeRanges: compactRanges([...addSeen]),
 			addEnvelopeBlockIds: [...addSeen].sort((left, right) => left - right),
 		},
@@ -1332,8 +1500,18 @@ function renderChallengePartition(
 	return {
 		partition_index: partition.partitionIndex,
 		target_ranges: partition.targetRanges,
-		target_block_ids: partition.targetBlockIds,
 		source_conclusion: partition.sourceConclusion,
+		supporting_block_ids: partition.supportingBlockIds,
+	};
+}
+
+function renderRemoveAuditPartition(
+	partition: CanonicalPiNativeCandidateS0RemoveAuditPartition,
+): Record<string, unknown> {
+	return {
+		partition_index: partition.partitionIndex,
+		target_ranges: partition.targetRanges,
+		audit_basis: partition.auditBasis,
 		supporting_block_ids: partition.supportingBlockIds,
 	};
 }

@@ -7,9 +7,14 @@
 ## 裁决顺序
 
 1. 先完整读取 `COMPLETE_IMMUTABLE_SOURCE_JSON`，形成独立的文档结构、Owner/root/peer-exit 与原子 membership 判断；在读完 source 前不得接受、拒绝或排序任何 challenge。
-2. 再冻结 `S0`、remove envelope 与 add envelope，并校验每个 challenge 的方向和地址。对每个 partition 从完整 source 独立重建 premise，先判断 Owner/root/first semantic peer exit，再判断 recovery，最后对目标 canonical block 执行 atomic membership。Challenger 的 `source_conclusion` 与 `supporting_block_ids` 只是待证伪 claim 和定位地址，不是证据权重或阅读边界；必须主动读取足以证伪该 premise 的 root、peer、上下文和目标原文。不得因 Challenger 措辞确定、partition 较宽、support 较多或 Candidate 已选/未选而提高证据权重。
-3. partition 不是不可分票。逐 exact block 裁决后，只把真正改变 `S0` 的地址写入 delta；可以接受 partition 的全部、部分或零个 ranges。若一段连续 challenge 内出现语义 hole，输出 delta 必须拆开。
-4. 冻结 exact `Δ-` 与 `Δ+` 后立即提交。没有肯定 source proof 就保持 `S0`；不允许把不确定性变成修改。
+2. 再冻结 `S0`、exact remove、neutral remove-audit 与 exact add envelope，并校验每个 challenge 的方向和地址。对 exact partition 从完整 source 独立重建 premise；对 neutral audit 不接受或反驳 `audit_basis`，而是在其有界 scope 内独立形成 exact `ATOM|HEADING` membership。两类都先判断 Owner/root/first semantic peer exit，再判断 recovery，最后逐目标 canonical block 裁决。Challenger 的 `source_conclusion`、`audit_basis` 与 `supporting_block_ids` 只是待验证 claim 或定位地址，不是证据权重或阅读边界；必须主动读取足以证伪它们的 root、peer、上下文和目标原文。
+3. partition 与 audit scope 都不是不可分票。逐 exact block 裁决后，只把真正改变 `S0` 的地址写入 delta；可以接受 exact partition 的全部、部分或零个 ranges，也可以从 neutral audit 中提交任意 source-proven sparse remove subset。若连续 envelope 内出现 survivor hole，输出 delta 必须拆开。内部可以逐块检查，但不得输出 ledger 或 prose。
+4. 冻结 tentative `Δ-` 后执行四项 silent veto checksum，不输出过程：
+   - 每个仍保留的 heading 只可使用其到首个同级或更高 peer 前的 `D(h)`；后续 sibling section 的 survivor 不能反向救回 earlier 空 heading。heading 自身若是价格、付款、资格、响应或程序 wrapper，即使 child 含独立 requirement 也必须排除。
+   - 每个仍保留的普通 body/pointer 必须由目标 block 自身建立 `ATOM`；纯“详见/见/按另处”查找、document meta、身份壳或 excluded role 不能借父标题、相邻 survivor 或 recovery 获得 membership。
+   - 每个拟删除的 consequence/remedy block 必须先完整剥离后果，再穷尽全部 antecedent 与并列 trigger；若目标供应商自身仍有具体施工、服务、质量、安全、交付动作/状态/标准，则 whole-block survivor veto，不能因句首是采购人权利、停工、扣款或赔偿而删除。
+   - recovery/audit module 的最后若干 block 必须与 intro 使用同一 atomic gate；other-actor 义务、开放式类推处罚、未尽事项或不新增履约任务的 epilogue 不能因前文模块整体合格而保留。
+5. checksum 后冻结 exact `Δ-` 与 `Δ+` 并立即提交。没有肯定 source proof 就保持 `S0`；不允许把不确定性变成修改。
 
 ## 共享语义门
 
@@ -28,7 +33,7 @@
 
 只通过输入中 `FINALIZER_TOOL_SCHEMA` 对应的 provider-visible targeted-delta tool 提交一次严格结构化结果，且结果只含 schema 要求的 remove/add delta。不得输出 Markdown、普通 prose、reason、分析草稿、额外工具调用或完整 selection。
 
-- `accepted_remove_ranges=Δ-`：只能引用 remove challenge envelope 内且属于 `S0` 的 exact canonical blocks；每个目标必须由 source 肯定证明处于 hard carrier projection，或自身完全无 `ATOM|HEADING` provenance并具有明确 excluded role。
+- `accepted_remove_ranges=Δ-`：只能引用 exact remove 与 neutral remove-audit 合并 envelope 内且属于 `S0` 的 exact canonical blocks；每个目标必须由 source 肯定证明处于 hard carrier projection，或自身完全无 `ATOM|HEADING` provenance并具有明确 excluded role。neutral audit 只扩大可独立裁决的地址范围，不降低删除证明门槛，也不要求整段删除。
 - `accepted_add_ranges=Δ+`：只能引用 add challenge envelope 内且不属于 `S0` 的 exact canonical blocks；每个目标必须由自身 requirement proposition或合法 heading/table admission肯定建立 membership。Boundary exit 或 recovery 只能先解除错误 projection，不能替目标创建 membership。
 - 未挑战地址以及被拒绝、证据不足或方向错误的 challenge 地址一律不出现在 delta，机械保持 `S0`。禁止幂等 remove/add、同一地址双向出现、越权扩展 partition或借 reason 偷渡新地址。
 提交前执行 exact-set checksum：`Δ-⊆S0∩REMOVE_ENVELOPE`，`Δ+⊆ADD_ENVELOPE⊆(完整 packet block set-S0)`，`Δ-∩Δ+=∅`。再对每个 delta block执行 `ATOM|HEADING` checksum：remove 后确无 survivor，add 后确有 provenance；连续 ranges 中无 hole。最终集合只由 Harness 机械计算 `S=(S0-Δ-)∪Δ+`，代码不得读取 source 意义、修改方向或补做语义裁决。
