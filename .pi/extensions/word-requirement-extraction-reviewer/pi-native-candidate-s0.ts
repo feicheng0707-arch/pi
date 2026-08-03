@@ -42,15 +42,22 @@ const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v5";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v6";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
 });
 
+const PiNativeCandidateS0ChallengeRangeSchema = Type.String({
+	minLength: 1,
+	maxLength: 64,
+	description:
+		"One canonical top-level source range such as 段落12 or 段落12-段落18. The Harness rejects an invalid partition independently.",
+});
+
 export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 	{
-		target_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
+		target_ranges: Type.Array(PiNativeCandidateS0ChallengeRangeSchema, {
 			minItems: 1,
 			maxItems: MAX_TARGET_RANGES_PER_PARTITION,
 			description:
@@ -78,17 +85,11 @@ export const PiNativeCandidateS0RemoveAuditPartitionSchema = Type.Object(
 			Type.Literal("mixed_atomic_scope"),
 			Type.Literal("recovery_boundary_scope"),
 		]),
-		target_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
+		target_ranges: Type.Array(PiNativeCandidateS0ChallengeRangeSchema, {
 			minItems: 1,
 			maxItems: MAX_AUDIT_RANGES_PER_PARTITION,
 			description:
 				"A bounded Candidate-S0 scope whose exact atomic membership requires independent Finalizer audit.",
-		}),
-		target_block_count: Type.Integer({
-			minimum: 1,
-			maximum: MAX_AUDIT_BLOCKS_PER_PARTITION,
-			description:
-				"Exact number of unique canonical blocks expanded from target_ranges; the Harness verifies equality mechanically.",
 		}),
 		audit_basis: Type.String({
 			minLength: 1,
@@ -155,7 +156,7 @@ export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 		accepted_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_REMOVE_RANGES,
 			description:
-				"Exact subset of the mechanically authorized Challenger remove envelope. Redundant remove IDs already covered by a mechanically valid submitted hard-carrier root veto are tolerated and canonicalized separately. Every Challenger exact/audit block covered by a valid veto must still appear here; omission declares a challenged survivor and fails the decision.",
+				"Maximally compact exact subset of the mechanically authorized Challenger remove envelope. Do not enumerate non-challenge Candidate descendants removed only by a hard-carrier root veto. Every challenged block covered by a valid veto must still appear here; omission declares a challenged survivor and fails the decision. Mechanically tolerated root-covered redundancy is canonicalized separately and never expands authority.",
 		}),
 		accepted_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_ADD_RANGES,
@@ -166,7 +167,7 @@ export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 			{
 				maxItems: MAX_HARD_CARRIER_ROOT_VETOES,
 				description:
-					"Independent whole-source hard-carrier roots whose Candidate-S0 descendants must be removed after recovery and peer-exit adjudication.",
+					"Minimal set of maximal non-overlapping whole-source hard-carrier roots whose Candidate-S0 descendants must be removed after recovery and peer-exit adjudication; never enumerate descendants as separate vetoes.",
 			},
 		),
 	},
@@ -197,7 +198,7 @@ export interface CanonicalPiNativeCandidateS0RemoveAuditPartition {
 	auditKind: "mixed_atomic_scope" | "recovery_boundary_scope";
 	targetRanges: string[];
 	targetBlockIds: number[];
-	declaredTargetBlockCount: number;
+	targetBlockCount: number;
 	auditBasis: string;
 	supportingBlockIds: number[];
 }
@@ -503,7 +504,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->one-strict-tool-challenger->nonempty-S0-or-envelope-finalizer-with-global-hard-carrier-veto",
+				"candidate-initialRanges-as-S0->complete-source-plus-mechanical-S0-projection->one-strict-tool-challenger->nonempty-S0-or-envelope-finalizer-with-global-hard-carrier-veto",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -993,6 +994,13 @@ function prepareCandidateS0Review(
 	);
 	const candidateRanges = compactRanges(candidateBlockIds);
 	const candidateBlockIdSet = new Set(candidateBlockIds);
+	const candidateSourceProjection = JSON.stringify({
+		candidate_s0_ranges: candidateRanges,
+		semantic_authority: false,
+		blocks: packet.blocks
+			.filter((block) => candidateBlockIdSet.has(block.blockId))
+			.map((block) => ({ block_id: block.blockId, text: block.text })),
+	});
 	const targetAuthorization = JSON.stringify({
 		remove_ranges: candidateRanges,
 		add_ranges: compactRanges(
@@ -1014,6 +1022,8 @@ function prepareCandidateS0Review(
 	const challengerUserPrompt = `COMPLETE_IMMUTABLE_SOURCE_JSON=${fullSource}
 
 CANDIDATE_S0_RANGES=${JSON.stringify(candidateRanges)}
+
+CANDIDATE_S0_SOURCE_PROJECTION_JSON=${candidateSourceProjection}
 
 MECHANICAL_AUDIT_BUDGET=${JSON.stringify({
 	max_partitions: MAX_REMOVE_AUDIT_PARTITIONS,
@@ -1071,7 +1081,7 @@ function prepareTargetedFinalizer(
 			...challenge.removeAuditPartitions.map((partition) => ({
 				review_kind: partition.auditKind,
 				target_ranges: partition.targetRanges,
-				declared_target_block_count: partition.declaredTargetBlockCount,
+				mechanical_target_block_count: partition.targetBlockCount,
 				untrusted_challenger_claim: partition.auditBasis,
 				supporting_block_ids: partition.supportingBlockIds,
 			})),
@@ -1557,11 +1567,6 @@ function validateChallengeSubmission(
 					`remove_audit_partitions[${partitionIndex}] expands to ${targetBlockIds.length} blocks; maximum is ${MAX_AUDIT_BLOCKS_PER_PARTITION}`,
 				);
 			}
-			if (partition.target_block_count !== targetBlockIds.length) {
-				throw new CandidateS0ContractError(
-					`remove_audit_partitions[${partitionIndex}].target_block_count ${partition.target_block_count} does not match expanded target size ${targetBlockIds.length}`,
-				);
-			}
 			const nextAuditSeen = new Set(removeAuditSeen);
 			for (const blockId of targetBlockIds) {
 				if (!candidate.has(blockId)) {
@@ -1598,7 +1603,7 @@ function validateChallengeSubmission(
 				auditKind: partition.audit_kind,
 				targetRanges: compactRanges(targetBlockIds),
 				targetBlockIds,
-				declaredTargetBlockCount: partition.target_block_count,
+				targetBlockCount: targetBlockIds.length,
 				auditBasis: partition.audit_basis.trim(),
 				supportingBlockIds,
 			});

@@ -112,7 +112,6 @@ function auditChallenge(): PiNativeCandidateS0ChallengeSubmission {
 			{
 				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落4"],
-				target_block_count: 4,
 				audit_basis:
 					"The bounded selected scope contains competing atomic membership roles requiring exact independent adjudication.",
 				supporting_block_ids: [1, 2, 3, 4],
@@ -852,6 +851,45 @@ test("continues with partial coverage when one partition is unauthorized", async
 	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
+test("continues after rejecting one partition with a non-canonical range", async () => {
+	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		remove_partitions: [
+			boundedChallenge().remove_partitions[0],
+			{
+				target_ranges: ["段落1中的后半句"],
+				source_conclusion: "The target intentionally attempts a block-internal slice.",
+				supporting_block_ids: [1],
+			},
+		],
+		remove_audit_partitions: [],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		challengerResponse(challenge),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落2"],
+			accepted_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "remove",
+			partitionIndex: 1,
+			reason:
+				"invalid range in remove_partitions[1].target_ranges: 段落1中的后半句",
+		},
+	]);
+	expect(result.coverage).toEqual({
+		challenger: "partial",
+		rejectedPartitionCount: 1,
+	});
+});
+
 test("continues after rejecting an audit that overlaps an exact remove challenge", async () => {
 	const overlappingChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [boundedChallenge().remove_partitions[0]],
@@ -859,7 +897,6 @@ test("continues after rejecting an audit that overlaps an exact remove challenge
 			{
 				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落2"],
-				target_block_count: 2,
 				audit_basis: "The audit intentionally overlaps an exact remove target.",
 				supporting_block_ids: [1, 2],
 			},
@@ -909,7 +946,6 @@ test("forwards typed groups and untrusted Challenger claims without transformati
 			{
 				audit_kind: "recovery_boundary_scope",
 				target_ranges: ["段落2"],
-				target_block_count: 1,
 				audit_basis: "REMOVE_AUDIT_SECRET",
 				supporting_block_ids: [2],
 			},
@@ -940,6 +976,31 @@ test("forwards typed groups and untrusted Challenger claims without transformati
 
 	expect(result.status).toBe("preserved");
 	expect(contexts).toHaveLength(2);
+	const challengerMessage = contexts[0].messages.find(
+		(message) => message.role === "user",
+	);
+	if (challengerMessage?.role !== "user") {
+		throw new Error("Challenger context omitted its user message");
+	}
+	const challengerInput =
+		typeof challengerMessage.content === "string"
+			? challengerMessage.content
+			: challengerMessage.content
+					.map((content) => (content.type === "text" ? content.text : ""))
+					.join("");
+	const projectionPrefix = "CANDIDATE_S0_SOURCE_PROJECTION_JSON=";
+	const projectionLine = challengerInput
+		.split("\n")
+		.find((line) => line.startsWith(projectionPrefix));
+	if (projectionLine === undefined) {
+		throw new Error("Challenger context omitted the Candidate-S0 source projection");
+	}
+	const projection = JSON.parse(projectionLine.slice(projectionPrefix.length)) as {
+		semantic_authority: boolean;
+		blocks: Array<{ block_id: number }>;
+	};
+	expect(projection.semantic_authority).toBe(false);
+	expect(projection.blocks.map((block) => block.block_id)).toEqual([1, 2]);
 	const finalizerMessage = contexts[1].messages.find(
 		(message) => message.role === "user",
 	);
@@ -954,7 +1015,7 @@ test("forwards typed groups and untrusted Challenger claims without transformati
 					.join("");
 	expect(finalizerInput).toContain('"remove_review_ranges":["段落1-段落2"]');
 	expect(finalizerInput).toContain(
-		'"remove_review_groups":[{"review_kind":"exact_remove_claim","target_ranges":["段落1"],"untrusted_challenger_claim":"EXACT_REMOVE_SECRET","supporting_block_ids":[0,1]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"declared_target_block_count":1,"untrusted_challenger_claim":"REMOVE_AUDIT_SECRET","supporting_block_ids":[2]}]',
+		'"remove_review_groups":[{"review_kind":"exact_remove_claim","target_ranges":["段落1"],"untrusted_challenger_claim":"EXACT_REMOVE_SECRET","supporting_block_ids":[0,1]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"untrusted_challenger_claim":"REMOVE_AUDIT_SECRET","supporting_block_ids":[2]}]',
 	);
 	expect(finalizerInput).toContain('"add_review_ranges":["段落3"]');
 	expect(finalizerInput).toContain(
@@ -980,7 +1041,6 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 			{
 				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落96"],
-				target_block_count: 96,
 				audit_basis: "The bounded scope contains competing atomic roles.",
 				supporting_block_ids: [1, 48, 96],
 			},
@@ -1058,7 +1118,6 @@ test("keeps the two typed audit channels independently bounded", async () => {
 			{
 				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落77"],
-				target_block_count: 77,
 				audit_basis:
 					"One bounded ordinary Candidate scope has mixed atomic-membership risk.",
 				supporting_block_ids: Array.from({ length: 65 }, (_, index) => index + 1),
@@ -1066,7 +1125,6 @@ test("keeps the two typed audit channels independently bounded", async () => {
 			{
 				audit_kind: "recovery_boundary_scope",
 				target_ranges: ["段落100-段落151"],
-				target_block_count: 52,
 				audit_basis:
 					"One independently bounded recovered module requires atomic review.",
 				supporting_block_ids: [100, 151],
@@ -1113,14 +1171,12 @@ test("continues after rejecting a duplicate typed audit kind", async () => {
 			{
 				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1"],
-				target_block_count: 1,
 				audit_basis: "The first bounded mixed scope requires independent review.",
 				supporting_block_ids: [1],
 			},
 			{
 				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落2"],
-				target_block_count: 1,
 				audit_basis: "The second mixed scope attempts to reuse the typed slot.",
 				supporting_block_ids: [2],
 			},
@@ -1151,6 +1207,59 @@ test("continues after rejecting a duplicate typed audit kind", async () => {
 		},
 	]);
 	expect(result.finalRanges).toEqual(["段落2"]);
+});
+
+test("accepts a later typed audit after rejecting an earlier over-budget scope", async () => {
+	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		remove_partitions: [],
+		remove_audit_partitions: [
+			{
+				audit_kind: "mixed_atomic_scope",
+				target_ranges: ["段落1-段落97"],
+				audit_basis: "The first scope intentionally exceeds the fixed audit budget.",
+				supporting_block_ids: [1],
+			},
+			{
+				audit_kind: "mixed_atomic_scope",
+				target_ranges: ["段落100"],
+				audit_basis: "A later mechanically valid scope may use the typed slot.",
+				supporting_block_ids: [100],
+			},
+		],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		challengerResponse(challenge),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落100"],
+			accepted_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落1-段落97", "段落100"],
+			texts: Array.from({ length: 110 }, (_, blockId) => `Source block ${blockId}`),
+		}),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.coverage).toEqual({
+		challenger: "partial",
+		rejectedPartitionCount: 1,
+	});
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "remove_audit",
+			partitionIndex: 0,
+			reason:
+				"remove_audit_partitions[0] expands to 97 blocks; maximum is 96",
+		},
+	]);
+	expect(result.challenge?.removeAuditPartitions).toMatchObject([
+		{ partitionIndex: 1, auditKind: "mixed_atomic_scope", targetBlockIds: [100] },
+	]);
+	expect(result.finalRanges).toEqual(["段落1-段落97"]);
 });
 
 test("fails capacity preflight before the first provider call", async () => {
