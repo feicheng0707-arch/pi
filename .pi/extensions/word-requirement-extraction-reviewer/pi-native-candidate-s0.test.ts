@@ -116,7 +116,12 @@ function auditChallenge(): PiNativeCandidateS0ChallengeSubmission {
 }
 
 function challengerResponse(challenge: unknown) {
-	return fauxAssistantMessage(JSON.stringify(challenge), { stopReason: "stop" });
+	return fauxAssistantMessage(
+		fauxToolCall("submit_final_selection", challenge, {
+			id: "candidate-s0-challenger",
+		}),
+		{ stopReason: "toolUse" },
+	);
 }
 
 function finalizerResponse(
@@ -278,6 +283,33 @@ test("applies a sparse remove subset inside a bounded neutral audit scope", asyn
 	expect(result.budget.providerCalls).toBe(2);
 });
 
+test("normalizes mechanically equivalent compact range syntax", async () => {
+	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		remove_partitions: [
+			{
+				target_ranges: ["段落1-2"],
+				source_conclusion: "The exact selected range requires bounded review.",
+				supporting_block_ids: [1, 2],
+			},
+		],
+		remove_audit_partitions: [],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		challengerResponse(challenge),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落2"],
+			accepted_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("repaired");
+	expect(result.challenge?.removeExactEnvelopeRanges).toEqual(["段落1-段落2"]);
+	expect(result.finalRanges).toEqual(["段落1"]);
+});
+
 test("fails closed when a neutral audit scope leaves Candidate S0", async () => {
 	const registration = createFaux([challengerResponse(auditChallenge())]);
 
@@ -345,8 +377,10 @@ test.each([
 		expectedCalls: 1,
 	},
 	{
-		name: "invalid Challenger JSON",
-		responses: [fauxAssistantMessage('{"remove_partitions":', { stopReason: "stop" })],
+		name: "Challenger text instead of tool call",
+		responses: [
+			fauxAssistantMessage(JSON.stringify(emptyChallenge()), { stopReason: "stop" }),
+		],
 		expectedRole: "challenger",
 		expectedCode: "contract_error",
 		expectedCalls: 1,
@@ -433,11 +467,11 @@ test("records the raw Challenger response when target authorization fails", asyn
 	});
 	expect(result.trace.challengerRawResponse).toBe(rawResponse);
 	expect(result.trace.challengerNormalizedResponse).toEqual(invalidChallenge);
-	expect(result.trace.challengerStopReason).toBe("stop");
+	expect(result.trace.challengerStopReason).toBe("toolUse");
 	expect(result.inputs.challengerSha256).toMatch(/^[a-f0-9]{64}$/u);
 });
 
-test("continues with valid partitions when another partition is unauthorized", async () => {
+test("fails closed when one partition is unauthorized", async () => {
 	const mixedChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [boundedChallenge().remove_partitions[0]],
 		remove_audit_partitions: [],
@@ -459,8 +493,13 @@ test("continues with valid partitions when another partition is unauthorized", a
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.patch).toBeNull();
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
+	});
 	expect(result.trace.challengerRejectedPartitions).toEqual([
 		{
 			direction: "add",
@@ -473,7 +512,8 @@ test("continues with valid partitions when another partition is unauthorized", a
 		challenger: "partial",
 		rejectedPartitionCount: 1,
 	});
-	expect(result.budget.providerCalls).toBe(2);
+	expect(result.budget.providerCalls).toBe(1);
+	expect(registration.getPendingResponseCount()).toBe(1);
 });
 
 test("rejects a neutral audit that overlaps an exact remove challenge", async () => {
@@ -498,8 +538,9 @@ test("rejects a neutral audit that overlaps an exact remove challenge", async ()
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.patch).toBeNull();
 	expect(result.challenge?.removeAuditPartitions).toEqual([]);
 	expect(result.trace.challengerRejectedPartitions).toEqual([
 		{
@@ -512,6 +553,8 @@ test("rejects a neutral audit that overlaps an exact remove challenge", async ()
 		challenger: "partial",
 		rejectedPartitionCount: 1,
 	});
+	expect(result.budget.providerCalls).toBe(1);
+	expect(registration.getPendingResponseCount()).toBe(1);
 });
 
 test("keeps expanded audit block IDs internal to the Finalizer context", async () => {
@@ -575,6 +618,9 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 	expect(orderedMarkers).toEqual([...orderedMarkers].sort((left, right) => left - right));
 	expect(finalizerInput).toContain('"target_ranges":["段落1-段落96"]');
 	expect(finalizerInput).not.toContain("target_block_ids");
+	expect(finalizerInput).not.toContain("audit_basis");
+	expect(finalizerInput).not.toContain("source_conclusion");
+	expect(finalizerInput).not.toContain("supporting_block_ids");
 });
 
 test("fails capacity preflight before the first provider call", async () => {

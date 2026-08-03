@@ -8,8 +8,8 @@
 
 1. 先完整读取 source，独立判断文档的实际 communicative structure。
 2. 再读取 Candidate `S0`，把每个 selected island 视为“其内地址均应保留”的待证伪命题，把每个明显缺口视为“其内地址均应排除”的待证伪命题。
-3. 先攻击 Owner/root/peer-exit 错误，再攻击 exact atomic membership；最后才考虑标题闭合或 recovery。不得从 Candidate 反推 source，也不得因为 Candidate 已成熟而降低 source 证据门槛。
-4. exact remove 能肯定、无 hole 地列出错误时优先提交 exact remove。若一个仍被选择的最小 source-bounded scope 明显混合 `ATOM|HEADING` survivor 与 excluded blocks，但稀疏 holes 无法在不做逐 block ledger 的情况下可靠枚举，可提交 neutral remove-audit scope，让独立 Finalizer在该 scope 内形成 exact subset。audit 不是删除结论、保留票或不确定项收容器，且不得与任何 exact remove target 重叠；已经 exact 定位的地址不需要再次 audit。
+3. 在提交任何 atomic partition 前，对 `S0` 的每个 selected island 先定位其最近的包含或前置 source-function root，并确定真实 peer exit。若完整 source 已证明四类 hard carrier root，则必须先把 `root→peer exit/EOF` 与 `S0` 的完整交集投影为 exact remove；不得只提交其中代表性 atom。一个 root 的交集超过单 partition range 上限时，可以按地址拆到多个 exact remove partitions，但不能遗漏任何已确认 descendant。不得从 Candidate 反推 source，也不得因为 Candidate 已成熟而降低 source 证据门槛。
+4. hard carrier descendant 是 categorical exact remove，不得进入 neutral audit。只有完整 source 已独立建立 recovery 的累计资格、但 recovery module 内部存在 mixed atomic membership 时，才可把 recovery module 的最小范围放入独立 audit；前置仍属 carrier 的 spans 必须与它分离并 exact remove。其他 exact remove 能肯定、无 hole 地列出错误时同样优先提交 exact remove。若一个合格 Owner 中仍被选择的最小 source-bounded scope明显混合 `ATOM|HEADING` survivor 与 excluded blocks，但稀疏 holes 无法在不做逐 block ledger 的情况下可靠枚举，可提交 neutral remove-audit scope，让独立 Finalizer 在该 scope 内形成 exact subset。audit 不是删除结论、保留票或不确定项收容器，且不得与任何 exact remove target 重叠；已经 exact 定位的地址不需要再次 audit。
 5. audit slot 分两条独立通道检查：一条检查普通 selected island 内的 mixed heading/body、价格/资格/程序 wrapper 与 atomic holes；另一条检查经 recovery、operative incorporation 或边界恢复后被选择的 later module，从 module intro 到真实 peer exit/尾部是否混入 meta、pointer、other-actor、抽象后果或开放式 epilogue。两类都成立时各保留一个最材料、最小的 scope，普通 mixed island 不得挤占 recovery-module audit；某类无 source-grounded mixed risk 时不为它占 slot。
 6. 统一枚举全部有资格的反例后按 source 确定性、材料性和独立失败覆盖排序，再提交有限 partitions。不得按文档先后或类型先占名额。每个 audit scope 最多 96 blocks，所有 audit scope 去重后最多 128 blocks；必须取足以覆盖同一局部失败机制的最小范围，不得机械重开完整 Candidate。
 7. `S0` 中未进入有效 exact remove 或 neutral remove-audit envelope 的地址会由 Harness 自动保留。不得使用 add partition 表达“该已选模块应继续保留”、recovery 成立、Challenger 赞同 Candidate 或防止 Finalizer 误删；这些都应保持沉默。add 只表达 `S0` 之外的真实遗漏，任何已属于 `S0` 的 add target 都是方向越权。
@@ -29,7 +29,7 @@
 
 ## Partition 合同
 
-只输出输入中 `CHALLENGER_JSON_SCHEMA` 允许的纯 JSON object。顶层恰有 `remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 三个 non-nullable arrays；分别最多四项、两项和两项。不得输出 Markdown、代码围栏、前后说明、分析草稿或额外字段。
+只通过唯一 provider-visible strict tool 提交一次结构化 object。顶层恰有 `remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 三个 non-nullable arrays；分别最多四项、两项和两项。工具调用必须是首个且唯一可见输出；不得输出 Markdown、代码围栏、前后说明、分析草稿、普通 prose 或额外字段。
 
 每个 partition 表达一个方向明确、source-grounded 的单一 premise：
 

@@ -20,7 +20,6 @@ import { Value } from "typebox/value";
 import type { RequirementReviewPacket, RequirementReviewPrompts } from "./index.ts";
 import {
 	piNativeFinalizerStreamFunction,
-	piNativeWitnessStreamFunction,
 	type PiNativeWitnessThinkingMode,
 } from "./pi-native.ts";
 
@@ -33,7 +32,7 @@ const MAX_REMOVE_PARTITIONS = 4;
 const MAX_REMOVE_AUDIT_PARTITIONS = 2;
 const MAX_ADD_PARTITIONS = 2;
 const MAX_TARGET_RANGES_PER_PARTITION = 16;
-const MAX_AUDIT_RANGES_PER_PARTITION = 4;
+const MAX_AUDIT_RANGES_PER_PARTITION = 16;
 const MAX_AUDIT_BLOCKS_PER_PARTITION = 96;
 const MAX_TOTAL_AUDIT_BLOCKS = 128;
 const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 16;
@@ -41,10 +40,10 @@ const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v2";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v3";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
-	pattern: "^段落\\d+(?:-段落\\d+)?$",
+	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
 });
 
 export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
@@ -57,6 +56,7 @@ export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 		}),
 		source_conclusion: Type.String({
 			minLength: 1,
+			maxLength: 600,
 			description:
 				"One source-grounded conclusion shared by every target range in this partition.",
 		}),
@@ -80,6 +80,7 @@ export const PiNativeCandidateS0RemoveAuditPartitionSchema = Type.Object(
 		}),
 		audit_basis: Type.String({
 			minLength: 1,
+			maxLength: 600,
 			description:
 				"Source-grounded reason the selected scope may contain mixed atomic membership; this is not a remove conclusion.",
 		}),
@@ -218,7 +219,7 @@ export interface RunPiNativeCandidateS0ReviewOptions {
 	requestTimeoutMs?: number;
 	onProgress?: (progress: {
 		role: "challenger" | "finalizer";
-		tool: "challenger_json" | typeof FINALIZER_TOOL_NAME;
+		tool: typeof FINALIZER_TOOL_NAME;
 	}) => void;
 }
 
@@ -425,12 +426,13 @@ export async function runPiNativeCandidateS0Review(
 	const capabilitySha256 = sha256(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
-			architecture: "candidate-initialRanges-as-S0->one-challenger->optional-one-finalizer",
+			architecture:
+				"candidate-initialRanges-as-S0->one-strict-tool-challenger->optional-one-finalizer",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
 						options.challengerRuntime,
-						"pi_native_witness_json_object_v1",
+						"pi_native_challenger_strict_tool_v1",
 					),
 					thinkingMode,
 				},
@@ -606,7 +608,10 @@ export async function runPiNativeCandidateS0Review(
 		finalizerSourceSerializedCharacterCount = prepared.fullSource.length;
 		challengerEstimatedTokens =
 			estimateTextTokens(
-				`${prepared.challengerSystemPrompt}\n${prepared.challengerUserPrompt}`,
+				`${prepared.challengerSystemPrompt}\n${prepared.challengerUserPrompt}\n${JSON.stringify({
+					name: FINALIZER_TOOL_NAME,
+					parameters: PiNativeCandidateS0ChallengeSchema,
+				})}`,
 			) +
 			CHALLENGER_MAX_TOKENS +
 			CONTEXT_SAFETY_TOKENS;
@@ -696,30 +701,29 @@ export async function runPiNativeCandidateS0Review(
 		challengerRawResponse = challengerResult.rawResponse;
 		challengerNormalizedResponse = challengerResult.normalizedResponse;
 		challengerStopReason = challengerResult.stopReason;
-		options.onProgress?.({ role: "challenger", tool: "challenger_json" });
+		options.onProgress?.({ role: "challenger", tool: FINALIZER_TOOL_NAME });
 		throwIfAborted(signal);
+		if (challengerRejectedPartitions.length > 0) {
+			validatorFailure = `${challengerRejectedPartitions.length} Challenger partition(s) failed mechanical authorization`;
+			return finish({
+				status: "degraded",
+				resolution: "review_incomplete",
+				reviewDegraded: true,
+				patch: null,
+				reason:
+					"The Challenger submission was only partially authorized; Candidate S0 preserved.",
+				failure: {
+					role: "challenger",
+					code: "contract_error",
+					message: validatorFailure,
+				},
+			});
+		}
 
 		if (
 			challenge.removeEnvelopeBlockIds.length === 0 &&
 			challenge.addEnvelopeBlockIds.length === 0
 		) {
-			if (challengerRejectedPartitions.length > 0) {
-				validatorFailure =
-					"Every Challenger partition failed mechanical target authorization";
-				return finish({
-					status: "degraded",
-					resolution: "review_incomplete",
-					reviewDegraded: true,
-					patch: null,
-					reason:
-						"The Challenger produced only mechanically unauthorized partitions; Candidate S0 preserved.",
-					failure: {
-						role: "challenger",
-						code: "contract_error",
-						message: validatorFailure,
-					},
-				});
-			}
 			return finish({
 				status: "preserved",
 				resolution: "challenger_no_change",
@@ -910,8 +914,7 @@ function prepareCandidateS0Review(
 CANDIDATE_S0_RANGES=${JSON.stringify(candidateRanges)}
 
 MECHANICAL_TARGET_AUTHORIZATION=${targetAuthorization}
-
-CHALLENGE_JSON_SCHEMA=${JSON.stringify(PiNativeCandidateS0ChallengeSchema)}`;
+`;
 	return {
 		availableBlockIds,
 		candidateBlockIds,
@@ -979,7 +982,49 @@ async function runCandidateS0Challenger(
 			schema: PiNativeCandidateS0ChallengeSchema,
 		}),
 	);
-	const streamFunction = runtime.streamFunction ?? piNativeWitnessStreamFunction;
+	let challengeResult:
+		| ReturnType<typeof validateChallengeSubmission>
+		| undefined;
+	let contractError: string | null = null;
+	const rawSubmissions: unknown[] = [];
+	const submitTool: AgentTool<
+		typeof PiNativeCandidateS0ChallengeSchema,
+		Record<string, unknown>
+	> = {
+		name: FINALIZER_TOOL_NAME,
+		label: "Submit bounded Candidate S0 challenge",
+		description:
+			"Submit the complete bounded Candidate S0 challenge once through this strict structured tool.",
+		parameters: PiNativeCandidateS0ChallengeSchema,
+		executionMode: "sequential",
+		prepareArguments(args) {
+			rawSubmissions.push(args);
+			if (!Value.Check(PiNativeCandidateS0ChallengeSchema, args)) {
+				contractError = schemaErrors(PiNativeCandidateS0ChallengeSchema, args);
+				throw new CandidateS0ContractError(contractError);
+			}
+			return args as PiNativeCandidateS0ChallengeSubmission;
+		},
+		async execute(_toolCallId, params) {
+			try {
+				if (challengeResult !== undefined) {
+					throw new CandidateS0ContractError(
+						"received more than one Challenger submission",
+					);
+				}
+				challengeResult = validateChallengeSubmission(params, prepared);
+				return terminalResult({ ok: true, status: "accepted" });
+			} catch (error) {
+				contractError = errorMessage(error);
+				return terminalResult({
+					ok: false,
+					status: "contract_failure",
+					validationError: contractError,
+				});
+			}
+		},
+	};
+	const streamFunction = runtime.streamFunction ?? piNativeFinalizerStreamFunction;
 	const boundedStreamFunction: StreamFn = (model, context, streamOptions) => {
 		if (providerCalls >= 1) {
 			throw new CandidateS0ProviderError(
@@ -1000,7 +1045,7 @@ async function runCandidateS0Challenger(
 			{
 				systemPrompt: prepared.challengerSystemPrompt,
 				messages: [],
-				tools: [],
+				tools: [submitTool],
 			},
 			{
 				model: runtime.model,
@@ -1030,71 +1075,53 @@ async function runCandidateS0Challenger(
 	);
 	for (const message of assistantMessages) recordUsage(usage.challenger, message.usage);
 	if (providerCalls !== 1 || assistantMessages.length !== 1) {
-		throw new CandidateS0ContractError(
+		throw new CandidateS0ChallengerContractError(
 			`expected one Challenger provider call and response; received ${providerCalls} call(s) and ${assistantMessages.length} response(s)`,
+			rawSubmissions.length === 0 ? null : JSON.stringify(rawSubmissions[0]),
+			rawSubmissions[0] ?? null,
+			null,
 		);
 	}
 	const last = assistantMessages[0];
-	const rawResponse = last.content
-		.filter((content) => content.type === "text")
-		.map((content) => content.text)
-		.join("");
-	const turnError = validateChallengerTurnShape(last, thinkingMode);
+	const rawResponse =
+		rawSubmissions.length === 0 ? null : JSON.stringify(rawSubmissions[0]);
+	const turnError = validateChallengerTurnShape(
+		last,
+		thinkingMode,
+		submitTool.name,
+	);
 	if (turnError !== null) {
 		if (last.stopReason === "error" || last.stopReason === "aborted") {
 			throw new CandidateS0ProviderError(last.errorMessage ?? turnError);
 		}
 		throw new CandidateS0ChallengerContractError(
 			turnError,
-			rawResponse.length === 0 ? null : rawResponse,
-			null,
+			rawResponse,
+			rawSubmissions[0] ?? null,
 			last.stopReason,
 		);
 	}
-	const textBlock = last.content.find((content) => content.type === "text");
-	if (textBlock === undefined) {
+	if (contractError !== null) {
 		throw new CandidateS0ChallengerContractError(
-			"Challenger response omitted JSON text",
-			null,
-			null,
+			contractError,
+			rawResponse,
+			rawSubmissions[0] ?? null,
 			last.stopReason,
 		);
 	}
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(textBlock.text);
-	} catch (error) {
+	if (challengeResult === undefined || rawSubmissions.length !== 1) {
 		throw new CandidateS0ChallengerContractError(
-			`Challenger JSON parse failed: ${errorMessage(error)}`,
-			textBlock.text,
-			null,
-			last.stopReason,
-		);
-	}
-	if (!Value.Check(PiNativeCandidateS0ChallengeSchema, parsed)) {
-		throw new CandidateS0ChallengerContractError(
-			schemaErrors(PiNativeCandidateS0ChallengeSchema, parsed),
-			textBlock.text,
-			parsed,
-			last.stopReason,
-		);
-	}
-	let validated: ReturnType<typeof validateChallengeSubmission>;
-	try {
-		validated = validateChallengeSubmission(parsed, prepared);
-	} catch (error) {
-		throw new CandidateS0ChallengerContractError(
-			errorMessage(error),
-			textBlock.text,
-			parsed,
+			"Challenger tool call did not produce one mechanically valid submission",
+			rawResponse,
+			rawSubmissions[0] ?? null,
 			last.stopReason,
 		);
 	}
 	return {
-		challenge: validated.challenge,
-		rejectedPartitions: validated.rejectedPartitions,
-		rawResponse: textBlock.text,
-		normalizedResponse: parsed,
+		challenge: challengeResult.challenge,
+		rejectedPartitions: challengeResult.rejectedPartitions,
+		rawResponse,
+		normalizedResponse: rawSubmissions[0],
 		inputSha256,
 		stopReason: last.stopReason,
 	};
@@ -1500,8 +1527,6 @@ function renderChallengePartition(
 	return {
 		partition_index: partition.partitionIndex,
 		target_ranges: partition.targetRanges,
-		source_conclusion: partition.sourceConclusion,
-		supporting_block_ids: partition.supportingBlockIds,
 	};
 }
 
@@ -1511,8 +1536,6 @@ function renderRemoveAuditPartition(
 	return {
 		partition_index: partition.partitionIndex,
 		target_ranges: partition.targetRanges,
-		audit_basis: partition.auditBasis,
-		supporting_block_ids: partition.supportingBlockIds,
 	};
 }
 
@@ -1544,7 +1567,7 @@ function expandRanges(
 ): number[] {
 	const blockIds = new Set<number>();
 	for (const range of ranges) {
-		const match = /^段落(\d+)(?:-段落(\d+))?$/u.exec(range.trim());
+		const match = /^段落(\d+)(?:-(?:段落)?(\d+))?$/u.exec(range.trim());
 		if (!match) throw new CandidateS0ContractError(`invalid range in ${fieldName}: ${range}`);
 		const start = Number(match[1]);
 		const end = Number(match[2] ?? match[1]);
@@ -1588,9 +1611,10 @@ function compactRanges(blockIds: readonly number[]): string[] {
 function validateChallengerTurnShape(
 	message: AssistantMessage,
 	thinkingMode: PiNativeWitnessThinkingMode,
+	toolName: string,
 ): string | null {
 	if (message.stopReason === "length") {
-		return "Challenger JSON response was truncated by the output-token limit";
+		return "Challenger tool call was truncated by the output-token limit";
 	}
 	const thinkingBlockCount = message.content.filter(
 		(content) => content.type === "thinking",
@@ -1601,18 +1625,25 @@ function validateChallengerTurnShape(
 	if (thinkingMode === "enabled" && thinkingBlockCount > 1) {
 		return `Challenger turn may contain at most one thinking block; received ${thinkingBlockCount}`;
 	}
-	const toolCallCount = message.content.filter(
-		(content) => content.type === "toolCall",
-	).length;
-	if (toolCallCount > 0) {
-		return `Challenger turn must not contain tool calls; received ${toolCallCount}`;
+	const toolCalls = message.content.filter((content) => content.type === "toolCall");
+	if (toolCalls.length !== 1) {
+		return `Challenger turn must contain exactly one tool call; received ${toolCalls.length}`;
 	}
-	if (message.stopReason !== "stop") {
-		return `Challenger JSON response must stop normally; received ${message.stopReason}`;
+	if (toolCalls[0].name !== toolName) {
+		return `Challenger turn called unexpected tool ${toolCalls[0].name}`;
+	}
+	if (!Value.Check(PiNativeCandidateS0ChallengeSchema, toolCalls[0].arguments)) {
+		return schemaErrors(PiNativeCandidateS0ChallengeSchema, toolCalls[0].arguments);
+	}
+	if (message.stopReason !== "toolUse") {
+		return `Challenger tool response must stop after tool use; received ${message.stopReason}`;
 	}
 	const textBlockCount = message.content.filter((content) => content.type === "text").length;
-	if (textBlockCount !== 1 || message.content.length !== textBlockCount + thinkingBlockCount) {
-		return `Challenger turn must contain exactly one JSON text block and only its allowed thinking block; received ${textBlockCount} text and ${thinkingBlockCount} thinking block(s)`;
+	if (
+		textBlockCount !== 0 ||
+		message.content.length !== toolCalls.length + thinkingBlockCount
+	) {
+		return `Challenger turn must contain only its tool call and allowed thinking block; received ${textBlockCount} text and ${thinkingBlockCount} thinking block(s)`;
 	}
 	return null;
 }
