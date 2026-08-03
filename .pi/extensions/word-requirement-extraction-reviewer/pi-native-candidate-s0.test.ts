@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v27 concise-role prompts aligned with root-free Challenger mechanics", () => {
+test("keeps the v28 concise-role prompts aligned with root-free Challenger mechanics", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain(
@@ -250,6 +250,9 @@ test("keeps the v27 concise-role prompts aligned with root-free Challenger mecha
 		"同一份扁平、无筛选、无语义的 `S0` source projection",
 	);
 	expect(candidateS0RuntimeContract).toContain(
+		"projection 必须是最后一个 section 和 neutral terminal reread queue",
+	);
+	expect(candidateS0RuntimeContract).toContain(
 		"该双通道地址只是优先导航，不是两票、额外删除授权或完整 audit 的抽样替代",
 	);
 	expect(candidateS0RuntimeContract).toContain(
@@ -264,6 +267,10 @@ test("keeps the v27 concise-role prompts aligned with root-free Challenger mecha
 	expect(prompts.productPrinciples).toContain(
 		"canonical serialized payload 完全相同的 projection",
 	);
+	expect(prompts.productPrinciples).toContain("Candidate-S0 v28 Challenger");
+	expect(prompts.productPrinciples).toContain(
+		"必须原样置于 `CHALLENGE_ENVELOPE` 后",
+	);
 	expect(prompts.productPrinciples).toContain(
 		"exact-overlap blocks 的并集必须是每个完整 audit target set 的严格子集",
 	);
@@ -273,6 +280,10 @@ test("keeps the v27 concise-role prompts aligned with root-free Challenger mecha
 	expect(finalizerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(finalizerPrompt).toContain(
 		"Projection 中相邻 entries 可能被完整 source 中未选择 blocks 隔开",
+	);
+	expect(finalizerPrompt).toContain("最后的 neutral terminal reread queue");
+	expect(finalizerPrompt).toContain(
+		"不得在 `CHALLENGE_ENVELOPE` 后直接序列化",
 	);
 	expect(finalizerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON");
 	expect(finalizerPrompt).toContain("未挑战 `S0` 仍可删除");
@@ -456,6 +467,8 @@ test("passes the complete empty S0 projection to the Finalizer when add review e
 	if (projectionLine === undefined) {
 		throw new Error("Finalizer context omitted the empty Candidate-S0 projection");
 	}
+	expect(finalizerInput.trim().split("\n\n").at(-1)).toBe(projectionLine);
+	expect(finalizerInput.match(/CANDIDATE_S0_SOURCE_PROJECTION_JSON=/gu)).toHaveLength(1);
 	expect(JSON.parse(projectionLine.slice(projectionPrefix.length))).toEqual({
 		candidate_s0_ranges: [],
 		semantic_authority: false,
@@ -2484,18 +2497,21 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 	const orderedMarkers = [
 		"COMPLETE_IMMUTABLE_SOURCE_JSON=",
 		"CANDIDATE_S0_RANGES=",
-		"CANDIDATE_S0_SOURCE_PROJECTION_JSON=",
 		"MECHANICAL_S0_RUN_QUEUE_JSON=",
 		"MECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON=",
 		"GLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=",
 		"FINALIZER_TOOL_SCHEMA=",
 		"CHALLENGE_ENVELOPE=",
+		"CANDIDATE_S0_SOURCE_PROJECTION_JSON=",
 	].map((marker) => finalizerInput.indexOf(marker));
 	expect(orderedMarkers.every((index) => index >= 0)).toBe(true);
 	expect(orderedMarkers).toEqual([...orderedMarkers].sort((left, right) => left - right));
-	expect(finalizerInput.trim().split("\n\n").at(-1)?.startsWith("CHALLENGE_ENVELOPE=")).toBe(
-		true,
-	);
+	const projectionLine = finalizerInput
+		.split("\n")
+		.find((line) => line.startsWith("CANDIDATE_S0_SOURCE_PROJECTION_JSON="));
+	expect(projectionLine).toBeDefined();
+	expect(finalizerInput.trim().split("\n\n").at(-1)).toBe(projectionLine);
+	expect(finalizerInput.match(/CANDIDATE_S0_SOURCE_PROJECTION_JSON=/gu)).toHaveLength(1);
 	expect(finalizerInput).not.toContain("remove_review_ranges");
 	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":true');
 	expect(finalizerInput).toContain('"review_kind":"mixed_atomic_scope"');
