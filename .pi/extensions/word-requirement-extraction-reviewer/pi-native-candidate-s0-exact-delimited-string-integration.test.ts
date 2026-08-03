@@ -64,7 +64,6 @@ test("forwards the same mechanical occurrence index to Challenger and Finalizer"
 			return fauxAssistantMessage(
 				fauxText(
 					JSON.stringify({
-						hard_carrier_root_challenges: [],
 						remove_partitions: [],
 						remove_audit_partitions: [],
 						add_partitions: [],
@@ -217,7 +216,6 @@ test("includes the occurrence index in both deterministic capacity estimates", a
 		fauxAssistantMessage(
 			fauxText(
 				JSON.stringify({
-					hard_carrier_root_challenges: [],
 					remove_partitions: [],
 					remove_audit_partitions: [],
 					add_partitions: [],

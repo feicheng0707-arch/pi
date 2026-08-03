@@ -55,19 +55,20 @@ test("loads the recovery eligibility and directional Owner challenge contract", 
 	);
 });
 
-test("keeps the v25 Challenger concise and mechanically complete", () => {
+test("keeps the v26 root-free Challenger concise and mechanically complete", () => {
 	expect(Buffer.byteLength(challengerVNext, "utf8")).toBeLessThanOrEqual(
 		13 * 1024,
 	);
-	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v25");
+	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v26");
 	expect(challengerVNext).toContain("最多 160 字符");
 	expect(challengerVNext).toContain("它是唯一业务语义源");
 	expect(challengerVNext).not.toContain("## 共享语义门");
+	expect(challengerVNext).not.toContain("hard_carrier_root_challenges");
 
 	const orderedStages = [
 		"**Source-first discovery**",
 		"**Recovery before root inheritance**",
-		"**Root map**",
+		"**Internal root suppression map**",
 		"**Atomic closure**",
 		"**Heading fixed point**",
 		"**Audit routing**",
@@ -78,41 +79,37 @@ test("keeps the v25 Challenger concise and mechanically complete", () => {
 	);
 
 	expect(challengerVNext).toContain(
-		"`exit_block_id_exclusive` 是 first peer 或 `\"EOF\"`",
-	);
-	expect(challengerVNext).toContain(
-		"`projected_s0_anchor_block_id` 必须取自本项 `I`",
-	);
-	expect(challengerVNext).toContain(
 		"其 source-proven descendants 必须对 exact remove、neutral audit 和 add 完全沉默",
 	);
 	expect(challengerVNext).toContain("supporting IDs不能代替 exact hole");
 	expect(challengerVNext).toContain("严格子集");
 	expect(challengerVNext).toContain("`recovery/root XOR checksum`");
 	expect(challengerVNext).toContain("必须满足 `H∩Q=∅`");
-	expect(challengerVNext).toContain("再重新计算 `I=S0∩H`");
 	expect(challengerVNext).toContain(
-		"提交 `exit_block_id_exclusive=P`，绝不能提交 `L`",
-	);
-	expect(challengerVNext).toContain("同时含两个不同地址 `L` 与 `P`");
-	expect(challengerVNext).toContain(
-		"绝不能同时提交相互重叠的两项让 Finalizer替你选择",
+		"顶层恰有 `remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 三个 non-nullable arrays",
 	);
 	expect(challengerVNext).toContain(
-		"顶层恰有 `hard_carrier_root_challenges`、`remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 四个 non-nullable arrays",
+		"schema/transport hard cap 都是 `maxItems=32`",
 	);
+	expect(challengerVNext).toContain("exact partition 必须为 1-8 个");
+	expect(challengerVNext).toContain("audit partition 必须为 1-12 个");
+	expect(challengerVNext).toContain("protocol overflow 拒绝整个 partition");
+	expect(challengerVNext).toContain("不截断、不挑选、不保留前 N 个");
 	expect(challengerVNext).toContain('`response_format={"type":"json_object"}`');
 });
 
-test("keeps the v23 Finalizer challenge-last and delete-only", () => {
+test("keeps the v26 Finalizer challenge-last, root-independent, and delete-only", () => {
 	expect(Buffer.byteLength(targetedFinalizerVNext, "utf8")).toBeLessThanOrEqual(
 		13 * 1024,
 	);
 	expect(targetedFinalizerVNext).toContain(
-		"# Candidate-S0 Targeted Finalizer v23",
+		"# Candidate-S0 Targeted Finalizer v26",
 	);
 	expect(targetedFinalizerVNext).toContain("是唯一业务语义源");
 	expect(targetedFinalizerVNext).not.toContain("## 共享语义门");
+	expect(targetedFinalizerVNext).not.toContain("hard_root_review_groups");
+	expect(targetedFinalizerVNext).not.toContain("Root challenge");
+	expect(targetedFinalizerVNext).toContain("独立全 source hard-root sweep");
 
 	const orderedStages = [
 		"### 0. INDEPENDENT T0 FREEZE",
