@@ -98,15 +98,12 @@ test("keeps the v26 root-free Challenger concise and mechanically complete", () 
 	expect(challengerVNext).toContain('`response_format={"type":"json_object"}`');
 });
 
-test("keeps the v28 Finalizer terminal-reread, root-independent, and delete-only", () => {
+test("keeps the v26 Finalizer challenge-last, root-independent, and delete-only", () => {
 	expect(Buffer.byteLength(targetedFinalizerVNext, "utf8")).toBeLessThanOrEqual(
 		13 * 1024,
 	);
 	expect(targetedFinalizerVNext).toContain(
-		"# Candidate-S0 Targeted Finalizer v28",
-	);
-	expect(targetedFinalizerVNext).toContain(
-		"最后的 neutral terminal reread queue",
+		"# Candidate-S0 Targeted Finalizer v26",
 	);
 	expect(targetedFinalizerVNext).toContain("是唯一业务语义源");
 	expect(targetedFinalizerVNext).not.toContain("## 共享语义门");
@@ -120,7 +117,6 @@ test("keeps the v28 Finalizer terminal-reread, root-independent, and delete-only
 		"### 2. ROOT, RECOVERY AND RESIDUAL CLOSURE",
 		"### 1. AUDIT PASS",
 		"### 2. GLOBAL RESIDUAL PASS",
-		"本 pass 的最后动作是按输入尾部唯一 projection",
 		"### 3. HEADING FIXED-POINT PASS",
 		"### 4. TOOL SERIALIZATION PASS",
 	].map((marker) => targetedFinalizerVNext.indexOf(marker));
@@ -139,9 +135,6 @@ test("keeps the v28 Finalizer terminal-reread, root-independent, and delete-only
 		"对每个 `T0` proposed remove 主动寻找",
 	);
 	expect(targetedFinalizerVNext).toContain("直至 fixed-point");
-	expect(targetedFinalizerVNext).toContain(
-		"不得在 `CHALLENGE_ENVELOPE` 后直接序列化",
-	);
 	expect(targetedFinalizerVNext).toContain(
 		"per-block actor reset + epilogue scan",
 	);

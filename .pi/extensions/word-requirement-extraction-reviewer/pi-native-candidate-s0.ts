@@ -52,7 +52,7 @@ const MAX_FINAL_REMOVE_RANGES =
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v28";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v27";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -729,7 +729,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-root-free-three-array-json-object-challenger-with-partition-local-exact-and-typed-audit-navigation->single-canonical-S0-authorization->challenge-envelope-before-terminal-neutral-S0-projection-reread-queue-full-S0-finalizer-with-independent-tentative-closure-delete-only-sparse-ordinary-delta-global-hard-carrier-veto-root-owned-same-direction-redundancy-normalization-and-strict-audit-subset-checksum",
+				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-root-free-three-array-json-object-challenger-with-partition-local-exact-and-typed-audit-navigation->single-canonical-S0-authorization->challenge-last-full-S0-finalizer-with-independent-tentative-closure-delete-only-sparse-ordinary-delta-global-hard-carrier-veto-root-owned-same-direction-redundancy-normalization-and-strict-audit-subset-checksum",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -791,14 +791,12 @@ export async function runPiNativeCandidateS0Review(
 				exactDelimitedStringOccurrenceIndex:
 					"S0-first-seed-scan-paired-delimiter-whitespace-collapsed-exact-literal-source-block-occurrences-with-bounded-total-fanout",
 				candidateS0SourceProjection: {
-					version: 2,
+					version: 1,
 					selection: "all-and-only-candidate-S0-blocks",
 					order: "packet-source-order",
 					fields: ["block_id", "text"],
 					serialization: "compact-JSON.stringify",
 					roleDelivery: "identical-payload-to-challenger-and-finalizer",
-					finalizerPlacement:
-						"after-challenge-envelope-as-terminal-neutral-reread-queue",
 				},
 				exactDelimitedStringOccurrenceAlgorithm: {
 					version: 2,
@@ -1109,9 +1107,9 @@ export async function runPiNativeCandidateS0Review(
 				`${[
 					options.prompts.piNativeSemanticContract.trim(),
 					options.finalizerPrompt.trim(),
-				].join("\n\n")}\nCOMPLETE_IMMUTABLE_SOURCE_JSON=${prepared.fullSource}\n\nCANDIDATE_S0_RANGES=${JSON.stringify(
+				].join("\n\n")}\nCANDIDATE_S0_RANGES=${JSON.stringify(
 					prepared.candidateRanges,
-				)}\n\nMECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
+				)}\n\nCOMPLETE_IMMUTABLE_SOURCE_JSON=${prepared.fullSource}\n\nCANDIDATE_S0_SOURCE_PROJECTION_JSON=${prepared.candidateSourceProjection}\n\nMECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
 					semantic_authority: false,
 					runs: prepared.candidateRunQueue,
 				})}\n\nMECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON=${prepared.exactDelimitedStringOccurrenceIndex}\n\nGLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
@@ -1125,7 +1123,7 @@ export async function runPiNativeCandidateS0Review(
 					max_vetoes: MAX_HARD_CARRIER_ROOT_VETOES,
 				})}\n\nFINALIZER_TOOL_SCHEMA=${JSON.stringify(
 					PiNativeCandidateS0FinalSubmissionSchema,
-				)}\n\nCHALLENGE_ENVELOPE=\n\nCANDIDATE_S0_SOURCE_PROJECTION_JSON=${prepared.candidateSourceProjection}`,
+				)}`,
 			) +
 			challengerOutputTokenLimit +
 			FINALIZER_MAX_TOKENS +
@@ -1605,6 +1603,8 @@ function prepareTargetedFinalizer(
 
 CANDIDATE_S0_RANGES=${JSON.stringify(prepared.candidateRanges)}
 
+CANDIDATE_S0_SOURCE_PROJECTION_JSON=${prepared.candidateSourceProjection}
+
 MECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
 	semantic_authority: false,
 	runs: prepared.candidateRunQueue,
@@ -1625,9 +1625,7 @@ GLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
 
 FINALIZER_TOOL_SCHEMA=${JSON.stringify(PiNativeCandidateS0FinalSubmissionSchema)}
 
-CHALLENGE_ENVELOPE=${envelope}
-
-CANDIDATE_S0_SOURCE_PROJECTION_JSON=${prepared.candidateSourceProjection}`,
+CHALLENGE_ENVELOPE=${envelope}`,
 		finalizerSourceBlockCount: packet.blocks.length,
 		finalizerSourceSerializedCharacterCount: prepared.fullSource.length,
 		finalizerSourceContextSerializedCharacterCount:
