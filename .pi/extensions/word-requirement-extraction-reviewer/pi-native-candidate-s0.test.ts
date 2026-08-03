@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v18 JSON, locator, terminal closure, and orthogonal hard-root prompts aligned", () => {
+test("keeps the v19 shared S0 projection, locator, terminal closure, and orthogonal hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
@@ -239,6 +239,16 @@ test("keeps the v18 JSON, locator, terminal closure, and orthogonal hard-root pr
 	);
 	expect(candidateS0RuntimeContract).toContain(
 		"两类 typed audit 的 ordinary `Delta-` 都必须是各自完整 target set 的严格子集",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		"同一份扁平、无筛选、无语义的 `S0` source projection",
+	);
+	expect(prompts.productPrinciples).toContain(
+		"canonical serialized payload 完全相同的 projection",
+	);
+	expect(finalizerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
+	expect(finalizerPrompt).toContain(
+		"Projection 中相邻 entries 可能被完整 source 中未选择 blocks 隔开",
 	);
 	expect(finalizerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON");
 	expect(finalizerPrompt).toContain("未挑战 `S0` 仍可删除");
@@ -602,6 +612,67 @@ test("stops after an empty challenge when Candidate S0 is empty", async () => {
 	expect(result.finalRanges).toEqual([]);
 	expect(result.budget.providerCalls).toBe(1);
 	expect(registration.getPendingResponseCount()).toBe(1);
+});
+
+test("passes the complete empty S0 projection to the Finalizer when add review exists", async () => {
+	const contexts: Context[] = [];
+	const registration = createFaux([
+		(context) => {
+			contexts.push(context);
+			return challengerResponse({
+				hard_carrier_root_challenges: [],
+				remove_partitions: [],
+				remove_audit_partitions: [],
+				add_partitions: [
+					{
+						target_ranges: ["段落1"],
+						source_conclusion: "One outside block requires bounded add review.",
+						supporting_block_ids: [1],
+					},
+				],
+			});
+		},
+		(context) => {
+			contexts.push(context);
+			return finalizerResponse({
+				ordinary_remove_ranges: [],
+				ordinary_add_ranges: [],
+			});
+		},
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: [] }),
+	});
+
+	expect(result.status).toBe("preserved");
+	expect(result.resolution).toBe("finalizer_preserved");
+	expect(result.budget.providerCalls).toBe(2);
+	expect(result.context.candidateS0SourceProjectionBlockCount).toBe(0);
+	const finalizerMessage = contexts[1]?.messages.find(
+		(message) => message.role === "user",
+	);
+	if (finalizerMessage?.role !== "user") {
+		throw new Error("Finalizer context omitted its user message");
+	}
+	const finalizerInput =
+		typeof finalizerMessage.content === "string"
+			? finalizerMessage.content
+			: finalizerMessage.content
+					.map((content) => (content.type === "text" ? content.text : ""))
+					.join("");
+	const projectionPrefix = "CANDIDATE_S0_SOURCE_PROJECTION_JSON=";
+	const projectionLine = finalizerInput
+		.split("\n")
+		.find((line) => line.startsWith(projectionPrefix));
+	if (projectionLine === undefined) {
+		throw new Error("Finalizer context omitted the empty Candidate-S0 projection");
+	}
+	expect(JSON.parse(projectionLine.slice(projectionPrefix.length))).toEqual({
+		candidate_s0_ranges: [],
+		semantic_authority: false,
+		blocks: [],
+	});
 });
 
 test("applies only the accepted remove and add envelope", async () => {
@@ -1895,7 +1966,32 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 			: finalizerMessage.content
 					.map((content) => (content.type === "text" ? content.text : ""))
 					.join("");
-	expect(finalizerInput).not.toContain(projectionPrefix);
+	const finalizerProjectionLine = finalizerInput
+		.split("\n")
+		.find((line) => line.startsWith(projectionPrefix));
+	if (finalizerProjectionLine === undefined) {
+		throw new Error("Finalizer context omitted the Candidate-S0 source projection");
+	}
+	const finalizerProjection = JSON.parse(
+		finalizerProjectionLine.slice(projectionPrefix.length),
+	) as typeof challengerProjection;
+	expect(finalizerProjection).toEqual(challengerProjection);
+	expect(result.context.candidateS0SourceProjectionBlockCount).toBe(
+		challengerProjection.blocks.length,
+	);
+	expect(result.context.candidateS0SourceProjectionSerializedCharacterCount).toBe(
+		JSON.stringify(challengerProjection).length,
+	);
+	expect(result.context.candidateS0SourceProjectionSha256).toBe(
+		sha256(JSON.stringify(challengerProjection)),
+	);
+	expect(result.context.finalizerSourceSerializedCharacterCount).toBe(
+		result.context.fullSourceSerializedCharacterCount,
+	);
+	expect(result.context.finalizerSourceContextSerializedCharacterCount).toBe(
+		result.context.fullSourceSerializedCharacterCount +
+			result.context.candidateS0SourceProjectionSerializedCharacterCount,
+	);
 	const finalizerRunQueueLine = finalizerInput
 		.split("\n")
 		.find((line) => line.startsWith(runQueuePrefix));
@@ -2097,6 +2193,7 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 	const orderedMarkers = [
 		"COMPLETE_IMMUTABLE_SOURCE_JSON=",
 		"CANDIDATE_S0_RANGES=",
+		"CANDIDATE_S0_SOURCE_PROJECTION_JSON=",
 		"MECHANICAL_S0_RUN_QUEUE_JSON=",
 		"CHALLENGE_ENVELOPE=",
 		"FINALIZER_TOOL_SCHEMA=",
@@ -2319,6 +2416,60 @@ test("fails output-capacity preflight before provider use when model maxTokens i
 	expect(result.context.challengerOutputTokenLimit).toBe(1_000);
 	expect(result.budget.providerCalls).toBe(0);
 	expect(registration.state.callCount).toBe(0);
+});
+
+test("counts the shared S0 projection in Finalizer capacity without changing capability identity", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+	]);
+	const longText = "长".repeat(8_000);
+	const shortText = "短";
+	const selectedLong = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落0"],
+			texts: [longText, shortText],
+		}),
+		packetSha256: "c".repeat(64),
+	});
+	const selectedShort = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落0"],
+			texts: [shortText, longText],
+		}),
+		packetSha256: "d".repeat(64),
+	});
+
+	expect(selectedLong.status).toBe("preserved");
+	expect(selectedShort.status).toBe("preserved");
+	expect(selectedLong.context.sourceTextCharacterCount).toBe(
+		selectedShort.context.sourceTextCharacterCount,
+	);
+	expect(selectedLong.context.fullSourceSerializedCharacterCount).toBe(
+		selectedShort.context.fullSourceSerializedCharacterCount,
+	);
+	expect(selectedLong.context.finalizerSourceSerializedCharacterCount).toBe(
+		selectedShort.context.finalizerSourceSerializedCharacterCount,
+	);
+	expect(
+		selectedLong.context.candidateS0SourceProjectionSerializedCharacterCount,
+	).toBeGreaterThan(
+		selectedShort.context.candidateS0SourceProjectionSerializedCharacterCount,
+	);
+	expect(
+		selectedLong.context.finalizerSourceContextSerializedCharacterCount,
+	).toBeGreaterThan(
+		selectedShort.context.finalizerSourceContextSerializedCharacterCount,
+	);
+	expect(selectedLong.context.finalizerPreflightEstimatedTokens).toBeGreaterThan(
+		selectedShort.context.finalizerPreflightEstimatedTokens,
+	);
+	expect(selectedLong.context.finalizerEstimatedTokens).toBeGreaterThan(
+		selectedShort.context.finalizerEstimatedTokens ?? 0,
+	);
+	expect(selectedLong.capabilitySha256).toBe(selectedShort.capabilitySha256);
 });
 
 test("records an exact-delimited-string entry omitted by the total fanout bound", async () => {

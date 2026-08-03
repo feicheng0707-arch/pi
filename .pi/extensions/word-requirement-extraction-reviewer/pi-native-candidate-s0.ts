@@ -52,7 +52,7 @@ const MAX_FINAL_REMOVE_RANGES =
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v18";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v19";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -464,8 +464,12 @@ export interface PiNativeCandidateS0ReviewResult {
 		exactDelimitedStringFanoutOmittedEntryCount: number;
 		exactDelimitedStringOccurrenceEntryCount: number;
 		exactDelimitedStringOccurrenceSerializedCharacterCount: number;
+		candidateS0SourceProjectionBlockCount: number;
+		candidateS0SourceProjectionSerializedCharacterCount: number;
+		candidateS0SourceProjectionSha256: string | null;
 		finalizerSourceBlockCount: number;
 		finalizerSourceSerializedCharacterCount: number;
+		finalizerSourceContextSerializedCharacterCount: number;
 		challengerEstimatedTokens: number;
 		challengerWorstCaseOutputTokens: number;
 		challengerOutputReserveTokens: number;
@@ -507,6 +511,7 @@ interface PreparedCandidateS0Review {
 		singleton: boolean;
 	}>;
 	fullSource: string;
+	candidateSourceProjection: string;
 	exactDelimitedStringOccurrenceIndex: string;
 	exactDelimitedStringScannedSeedCount: number;
 	exactDelimitedStringSeedScanTruncated: boolean;
@@ -527,6 +532,7 @@ interface PreparedTargetedFinalizer {
 	userPrompt: string;
 	finalizerSourceBlockCount: number;
 	finalizerSourceSerializedCharacterCount: number;
+	finalizerSourceContextSerializedCharacterCount: number;
 }
 
 interface ChallengerCallResult {
@@ -773,7 +779,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-json-object-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto-and-strict-audit-subset-checksum",
+				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-json-object-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto-and-strict-audit-subset-checksum",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -832,6 +838,14 @@ export async function runPiNativeCandidateS0Review(
 					MAX_EXACT_DELIMITED_STRING_TOTAL_BLOCK_OCCURRENCES,
 				exactDelimitedStringOccurrenceIndex:
 					"S0-first-seed-scan-paired-delimiter-whitespace-collapsed-exact-literal-source-block-occurrences-with-bounded-total-fanout",
+				candidateS0SourceProjection: {
+					version: 1,
+					selection: "all-and-only-candidate-S0-blocks",
+					order: "packet-source-order",
+					fields: ["block_id", "text"],
+					serialization: "compact-JSON.stringify",
+					roleDelivery: "identical-payload-to-challenger-and-finalizer",
+				},
 				exactDelimitedStringOccurrenceAlgorithm: {
 					version: 2,
 					delimiters: ["《》", "“”", "「」", "『』", '\"\"'],
@@ -894,8 +908,12 @@ export async function runPiNativeCandidateS0Review(
 	let exactDelimitedStringFanoutOmittedEntryCount = 0;
 	let exactDelimitedStringOccurrenceEntryCount = 0;
 	let exactDelimitedStringOccurrenceSerializedCharacterCount = 0;
+	let candidateS0SourceProjectionBlockCount = 0;
+	let candidateS0SourceProjectionSerializedCharacterCount = 0;
+	let candidateS0SourceProjectionSha256: string | null = null;
 	let finalizerSourceBlockCount = 0;
 	let finalizerSourceSerializedCharacterCount = 0;
+	let finalizerSourceContextSerializedCharacterCount = 0;
 	let challengerEstimatedTokens = 0;
 	let challengerWorstCaseOutputTokens = 0;
 	const challengerOutputTokenLimit = Math.min(
@@ -962,8 +980,12 @@ export async function runPiNativeCandidateS0Review(
 			exactDelimitedStringFanoutOmittedEntryCount,
 			exactDelimitedStringOccurrenceEntryCount,
 			exactDelimitedStringOccurrenceSerializedCharacterCount,
+			candidateS0SourceProjectionBlockCount,
+			candidateS0SourceProjectionSerializedCharacterCount,
+			candidateS0SourceProjectionSha256,
 			finalizerSourceBlockCount,
 			finalizerSourceSerializedCharacterCount,
+			finalizerSourceContextSerializedCharacterCount,
 			challengerEstimatedTokens,
 			challengerWorstCaseOutputTokens,
 			challengerOutputReserveTokens: CHALLENGER_OUTPUT_RESERVE_TOKENS,
@@ -1077,8 +1099,16 @@ export async function runPiNativeCandidateS0Review(
 			prepared.exactDelimitedStringOccurrenceEntryCount;
 		exactDelimitedStringOccurrenceSerializedCharacterCount =
 			prepared.exactDelimitedStringOccurrenceIndex.length;
+		candidateS0SourceProjectionBlockCount = prepared.candidateBlockIds.length;
+		candidateS0SourceProjectionSerializedCharacterCount =
+			prepared.candidateSourceProjection.length;
+		candidateS0SourceProjectionSha256 = sha256(
+			prepared.candidateSourceProjection,
+		);
 		finalizerSourceBlockCount = options.packet.blocks.length;
 		finalizerSourceSerializedCharacterCount = prepared.fullSource.length;
+		finalizerSourceContextSerializedCharacterCount =
+			prepared.fullSource.length + prepared.candidateSourceProjection.length;
 		challengerWorstCaseOutputTokens =
 			estimateWorstCaseCanonicalChallengePayloadTokens();
 		if (
@@ -1126,9 +1156,7 @@ export async function runPiNativeCandidateS0Review(
 					options.finalizerPrompt.trim(),
 				].join("\n\n")}\nCANDIDATE_S0_RANGES=${JSON.stringify(
 					prepared.candidateRanges,
-				)}\n\nCOMPLETE_IMMUTABLE_SOURCE_JSON=${prepared.fullSource}\n\nFINALIZER_TOOL_SCHEMA=${JSON.stringify(
-					PiNativeCandidateS0FinalSubmissionSchema,
-				)}\n\nMECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
+				)}\n\nCOMPLETE_IMMUTABLE_SOURCE_JSON=${prepared.fullSource}\n\nCANDIDATE_S0_SOURCE_PROJECTION_JSON=${prepared.candidateSourceProjection}\n\nMECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
 					semantic_authority: false,
 					runs: prepared.candidateRunQueue,
 				})}\n\nMECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON=${prepared.exactDelimitedStringOccurrenceIndex}\n\nGLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
@@ -1140,7 +1168,9 @@ export async function runPiNativeCandidateS0Review(
 					projection_must_be_nonempty: true,
 					anchor_must_be_in_s0_and_span: true,
 					max_vetoes: MAX_HARD_CARRIER_ROOT_VETOES,
-				})}`,
+				})}\n\nFINALIZER_TOOL_SCHEMA=${JSON.stringify(
+					PiNativeCandidateS0FinalSubmissionSchema,
+				)}`,
 			) +
 			challengerOutputTokenLimit +
 			FINALIZER_MAX_TOKENS +
@@ -1272,6 +1302,8 @@ export async function runPiNativeCandidateS0Review(
 		finalizerSourceBlockCount = targeted.finalizerSourceBlockCount;
 		finalizerSourceSerializedCharacterCount =
 			targeted.finalizerSourceSerializedCharacterCount;
+		finalizerSourceContextSerializedCharacterCount =
+			targeted.finalizerSourceContextSerializedCharacterCount;
 		finalizerEstimatedTokens =
 			estimateTextTokens(
 				`${targeted.systemPrompt}\n${targeted.userPrompt}\n${JSON.stringify({
@@ -1540,6 +1572,7 @@ CHALLENGER_JSON_SCHEMA=${JSON.stringify(PiNativeCandidateS0ChallengeSchema)}
 		candidateRanges,
 		candidateRunQueue,
 		fullSource,
+		candidateSourceProjection,
 		exactDelimitedStringOccurrenceIndex,
 		exactDelimitedStringScannedSeedCount:
 			exactDelimitedStringOccurrenceIndexBuild.scannedSeedCount,
@@ -1631,6 +1664,8 @@ function prepareTargetedFinalizer(
 
 CANDIDATE_S0_RANGES=${JSON.stringify(prepared.candidateRanges)}
 
+CANDIDATE_S0_SOURCE_PROJECTION_JSON=${prepared.candidateSourceProjection}
+
 MECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
 	semantic_authority: false,
 	runs: prepared.candidateRunQueue,
@@ -1654,6 +1689,8 @@ GLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
 FINALIZER_TOOL_SCHEMA=${JSON.stringify(PiNativeCandidateS0FinalSubmissionSchema)}`,
 		finalizerSourceBlockCount: packet.blocks.length,
 		finalizerSourceSerializedCharacterCount: prepared.fullSource.length,
+		finalizerSourceContextSerializedCharacterCount:
+			prepared.fullSource.length + prepared.candidateSourceProjection.length,
 	};
 }
 

@@ -281,6 +281,8 @@ Active Pi-native 路线必须最大化复用 Pi Agent 底座的模型循环、�
 
 Candidate-S0 两调用实验允许 Harness 在本次完整 source 内，从 `《》`、`“”`、`「」`、`『』` 或英文双引号中提取 2-80 字符的 bounded seed，只做 Unicode 空白折叠，再按大小写、标点和其他字符完全不变的 exact literal occurrence 定位 source blocks。seed 扫描按 `S0` blocks source order 优先、再按 `OUT` blocks source order进行；这只是确定性容量调度，不是语义风险筛选，也不要求定界符首次出现在 `S0`。只有至少一个 occurrence 位于 `S0` 且全 source 共命中 2-8 个 distinct blocks 的 seed 才可进入索引，因此同时允许 `S0↔S0` 与 `S0↔OUT`；9 个以上 fanout 必须整项省略，不能转发截断地址。最多扫描 256 个 seeds、输出 24 个 entries、每侧最多 8 个 block IDs；seed/entry/fanout omission 与截断状态进入 trace，算法和全部上限进入 capability identity。该索引只能作为两个角色共享的 bounded、non-exhaustive source locator，不判定引用方向、纳入关系、同一 module、固定/填充状态、对象/功能对应、intro applicability、Owner、recovery、membership、材料性或修复方向，不生成 challenge、root、audit、add envelope、delta 或发布权限；命中、未命中、high-fanout omission 和任一层上限截断都不是语义证据。两个角色必须回到完整 source 独立证明结论，且 Finalizer 接收的必须是同一份原始机械索引，不能是 Challenger 挑选或改写后的子集。
 
+Candidate-S0 两调用实验还允许 Harness 从同一次不可变 packet 与冻结 `S0` 一次性生成 `CANDIDATE_S0_SOURCE_PROJECTION_JSON`，按 packet source order 原样平铺全部且仅 `S0` canonical blocks，每个 block 恰好一次，只含 block ID 与完整 text。Challenger 与 Finalizer 必须接收 canonical serialized payload 完全相同的 projection；不得截断、采样、摘要、重排、按关键词/地址/模型答案筛选或在两次调用之间改写。projection 只是 answer-free 的完整 `S0` coverage queue，不是第二事实源、风险排序、keep/remove 票、Challenger claim、语义证据或地址扩权；相邻 entries 也不证明原文相邻、heading `D(h)`、peer/root/recovery 边界、Owner 连续或 actor 继承。所有语义结论仍须回到完整 source，由模型独立完成。Harness 只可机械记录 projection block count、serialized character count、SHA、两个 role input SHA 和容量影响；case-specific projection SHA 不得进入 capability hash。
+
 代码不得读取标题或正文含义，不得生成 semantic challenge、Owner 结论、membership 结论、修复方向或自动 override，也不得在 repair card 中硬编码价格、法律、载体、资格、heading 等业务攻击指令。所有语义原则只能进入受 Prompt hash 约束的 active Prompt。Witness 只提供模型反例；Finalizer 必须自行接受、反驳、收窄或撤回 claim。非空 Candidate 的 Candidate-only universe 与空 Candidate 的完整 source universe 只由地址集合和 Candidate 是否为空确定。
 
 以下旧 overlay、`REMOVE_REVIEW`、`BOUNDARY_REVIEW`、residual unlock 与两角色隔离细节只适用于 V1 legacy 工具：
@@ -314,6 +316,8 @@ Candidate-S0 两调用实验允许 Harness 在本次完整 source 内，从 `《
 
 Candidate-S0 exact-delimited-string occurrence index 只能由本次不可变 source 与冻结 `S0` 机械重建；不得读取外部附件文本、Production 或其他 Agent 输出、历史 run、case 元数据、evaluator 或答案来新增、删除、排序或筛选 seed 与 occurrence。
 
+Candidate-S0 source projection 同样只能由本次不可变 source 与冻结 `S0` 机械重建；不得读取 expected、gold、evaluator、历史 run、其他 Agent 输出或 case 元数据来选择、排序、删减、摘要或改写任何 block。
+
 评测必须在 Agent raw result 和 trace 落盘后独立进行。离线代码只能比较结果，不能在计分前执行生产路径中不存在的语义补丁。
 
 ## 六、成本与调用上限
@@ -322,7 +326,7 @@ Active Pi-native 每个 case 固定最多三次 provider call：GLM Finalizer pr
 
 调用前必须用 answer-free、确定性的上下文估算做容量预检。provider、capacity、timeout、abort、budget、全局 JSON/turn/schema/cross-field、完整 source 地址、Owner slot 非 `valid_challenge` 且 exclude/select 两个 atom lanes 均为 `rejected_source_focus`、调用数或最终一致性失败均不应用语义改写，Candidate 原样保留并标记 degraded。单张 card 的 focus/slot/group/universe 动态越权只把该原始 card 机械降为 `rejected_source_focus`，不增加调用、不触发 retry，也不阻断其他有效 card 与第三次 Finalizer；成功结果必须显式标记 `partial` coverage。上述非空单岛普通 `OUT` spill 的最小权限投影只是删除模型无权选择的地址，不是 range failure、语义补丁或答案裁决；其他越权形态仍失败关闭。上游 Candidate 成本与新增 Agent 成本分开报告。
 
-Candidate-S0 Challenger/Finalizer 实验固定最多两次 provider call；exact-delimited-string occurrence index 只进入这两次既有输入与容量预检，不增加第三次调用、retry、模型角色或 ledger。
+Candidate-S0 Challenger/Finalizer 实验固定最多两次 provider call；完整机械 `S0` source projection 与 exact-delimited-string occurrence index 只进入这两次既有输入与容量预检，不增加第三次调用、retry、模型角色或 ledger。Finalizer preflight 必须计入 projection 的完整实际序列化长度；容量不足时在第一次付费调用前 fail-closed，不得裁剪 projection 或回退到旧上下文。
 
 以下两调用成本规则只适用于 V1 legacy baseline：
 
