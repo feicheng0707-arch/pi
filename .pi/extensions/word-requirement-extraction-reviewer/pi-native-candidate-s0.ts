@@ -23,7 +23,7 @@ import {
 	type PiNativeWitnessThinkingMode,
 } from "./pi-native.ts";
 
-const CHALLENGER_MAX_TOKENS = 6_000;
+const CHALLENGER_MAX_TOKENS = 12_000;
 const FINALIZER_MAX_TOKENS = 12_000;
 const CONTEXT_SAFETY_TOKENS = 8_000;
 const REQUEST_TIMEOUT_MS = 300_000;
@@ -42,7 +42,7 @@ const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v9";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v10";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -65,7 +65,7 @@ export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 		}),
 		source_conclusion: Type.String({
 			minLength: 1,
-			maxLength: 300,
+			maxLength: 200,
 			description:
 				"One source-grounded conclusion shared by every target range in this partition.",
 		}),
@@ -93,7 +93,7 @@ export const PiNativeCandidateS0RemoveAuditPartitionSchema = Type.Object(
 		}),
 		audit_basis: Type.String({
 			minLength: 1,
-			maxLength: 300,
+			maxLength: 200,
 			description:
 				"Source-grounded reason the selected scope may contain mixed atomic membership; this is not a remove conclusion.",
 		}),
@@ -111,17 +111,21 @@ export const PiNativeCandidateS0ChallengeSchema = Type.Object(
 	{
 		remove_partitions: Type.Array(PiNativeCandidateS0ChallengePartitionSchema, {
 			maxItems: MAX_REMOVE_PARTITIONS,
+			description:
+				"Ordinary exact-remove challenges outside every source-proven hard-carrier root. Hard-root descendants must remain absent and are owned exclusively by the Finalizer veto channel.",
 		}),
 		remove_audit_partitions: Type.Array(
 			PiNativeCandidateS0RemoveAuditPartitionSchema,
 			{
 				maxItems: MAX_REMOVE_AUDIT_PARTITIONS,
 				description:
-					"At most one mixed_atomic_scope and one recovery_boundary_scope; both share the mechanical total audit-block budget.",
+					"At most one mixed_atomic_scope and one recovery_boundary_scope outside every source-proven hard-carrier root; both share the mechanical total audit-block budget. Hard-root descendants must remain absent.",
 			},
 		),
 		add_partitions: Type.Array(PiNativeCandidateS0ChallengePartitionSchema, {
 			maxItems: MAX_ADD_PARTITIONS,
+			description:
+				"Ordinary exact-add challenges outside Candidate S0 and outside every source-proven hard-carrier root.",
 		}),
 	},
 	{ additionalProperties: false },
@@ -153,23 +157,24 @@ export const PiNativeCandidateS0HardCarrierRootVetoSchema = Type.Object(
 
 export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 	{
-		accepted_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
-			maxItems: MAX_FINAL_REMOVE_RANGES,
-			description:
-				"Confirmed excluded blocks only, not accepted review groups. Submit a maximally compact exact subset of the mechanically authorized Challenger remove envelope. A mixed_atomic_scope must remain sparse and must not be copied wholesale. Every challenged block covered by a valid veto must still appear here; omission declares a challenged survivor and fails the decision. Root-only descendants must be expressed only by a hard-carrier root veto; any remove outside the Challenger envelope is a contract failure.",
-		}),
-		accepted_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
-			maxItems: MAX_FINAL_ADD_RANGES,
-			description: "Exact subset of the mechanically authorized add challenge envelope.",
-		}),
 		hard_carrier_root_vetoes: Type.Array(
 			PiNativeCandidateS0HardCarrierRootVetoSchema,
 			{
 				maxItems: MAX_HARD_CARRIER_ROOT_VETOES,
 				description:
-					"Minimal set of maximal non-overlapping whole-source hard-carrier roots whose Candidate-S0 descendants must be removed after recovery and peer-exit adjudication; never enumerate descendants as separate vetoes.",
+					"Submit the minimal maximal non-overlapping source-proven hard-carrier roots first. Their Candidate-S0 descendants are removed exclusively by this channel and must never be copied into ordinary_remove_ranges; a challenge address covered by a veto is mechanically shadowed by the root channel.",
 			},
 		),
+		ordinary_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
+			maxItems: MAX_FINAL_REMOVE_RANGES,
+			description:
+				"Ordinary Challenger-envelope delta only, never a final removal inventory. Submit a maximally compact exact subset of the mechanically authorized remove envelope. A mixed_atomic_scope must remain sparse and must not be copied wholesale. Any block covered by a submitted hard-carrier root veto is owned exclusively by that veto and must be omitted here. Any address outside the Challenger remove envelope is a contract failure.",
+		}),
+		ordinary_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
+			maxItems: MAX_FINAL_ADD_RANGES,
+			description:
+				"Ordinary Challenger-envelope add delta only: exact subset of the mechanically authorized add envelope.",
+		}),
 	},
 	{ additionalProperties: false },
 );
@@ -1369,8 +1374,11 @@ async function runCandidateS0Finalizer(
 	> = {
 		name: FINALIZER_TOOL_NAME,
 		label: "Submit targeted delta and hard-carrier vetoes",
-		description:
-			"Submit accepted remove/add subsets of the Challenger envelope plus independently adjudicated hard-carrier root vetoes over Candidate S0.",
+		description: `Submit hard-carrier root vetoes plus ordinary remove/add subsets. ordinary_remove_ranges is limited exactly to ${JSON.stringify(
+			challenge.removeEnvelopeRanges,
+		)}; ordinary_add_ranges is limited exactly to ${JSON.stringify(
+			challenge.addEnvelopeRanges,
+		)}. Every block covered by a submitted root veto, including a challenged address, must be omitted from ordinary_remove_ranges; never submit a final removal inventory.`,
 		parameters: PiNativeCandidateS0FinalSubmissionSchema,
 		executionMode: "sequential",
 		prepareArguments(args) {
@@ -1709,15 +1717,15 @@ function validateFinalSubmission(
 	challenge: CanonicalPiNativeCandidateS0Challenge,
 ): CanonicalPiNativeCandidateS0FinalDecision {
 	const submittedRemoveBlockIds = expandRanges(
-		raw.accepted_remove_ranges,
+		raw.ordinary_remove_ranges,
 		prepared.availableBlockIds,
-		"accepted_remove_ranges",
+		"ordinary_remove_ranges",
 		true,
 	);
 	const addBlockIds = expandRanges(
-		raw.accepted_add_ranges,
+		raw.ordinary_add_ranges,
 		prepared.availableBlockIds,
-		"accepted_add_ranges",
+		"ordinary_add_ranges",
 		true,
 	);
 	const submittedRemove = new Set(submittedRemoveBlockIds);
@@ -1759,7 +1767,15 @@ function validateFinalSubmission(
 			),
 		),
 	].sort((left, right) => left - right);
+	const hardCarrierRemove = new Set(hardCarrierRemoveBlockIds);
 	const challengeRemoveBlockIds = submittedRemoveBlockIds;
+	for (const blockId of challengeRemoveBlockIds) {
+		if (hardCarrierRemove.has(blockId)) {
+			throw new CandidateS0ContractError(
+				`ordinary remove block ${blockId} duplicates a hard-carrier root veto`,
+			);
+		}
+	}
 	if (
 		rootValidation.rejectedHardCarrierRootVetoes.length > 0 &&
 		rootValidation.hardCarrierRootVetoes.length === 0 &&
@@ -1772,20 +1788,6 @@ function validateFinalSubmission(
 				.join("; ")}`,
 		);
 	}
-	const acceptedChallengeRemove = new Set(challengeRemoveBlockIds);
-	const challengedSurvivors = new Set(
-		[
-			...challenge.removeExactEnvelopeBlockIds,
-			...challenge.removeAuditEnvelopeBlockIds,
-		].filter((blockId) => !acceptedChallengeRemove.has(blockId)),
-	);
-	for (const blockId of hardCarrierRemoveBlockIds) {
-		if (challengedSurvivors.has(blockId)) {
-			throw new CandidateS0ContractError(
-				`hard-carrier root veto removes challenged survivor block ${blockId}`,
-			);
-		}
-	}
 	const removeBlockIds = [
 		...new Set([...challengeRemoveBlockIds, ...hardCarrierRemoveBlockIds]),
 	].sort((left, right) => left - right);
@@ -1795,8 +1797,8 @@ function validateFinalSubmission(
 		...addBlockIds,
 	].sort((left, right) => left - right);
 	return {
-		submittedRemoveRanges: raw.accepted_remove_ranges,
-		submittedAddRanges: raw.accepted_add_ranges,
+		submittedRemoveRanges: raw.ordinary_remove_ranges,
+		submittedAddRanges: raw.ordinary_add_ranges,
 		hardCarrierRootVetoes: rootValidation.hardCarrierRootVetoes,
 		rejectedHardCarrierRootVetoes:
 			rootValidation.rejectedHardCarrierRootVetoes,

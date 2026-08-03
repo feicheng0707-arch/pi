@@ -194,29 +194,30 @@ async function runReview(
 	});
 }
 
-test("keeps the v9 flat-projection and exclusive hard-root prompts aligned", () => {
+test("keeps the v10 flat-projection and orthogonal hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("先裁决全部 singleton");
 	expect(challengerPrompt).toContain("首 block与末 block");
-	expect(challengerPrompt).toContain("任何 descendant 都必须保持沉默");
-	expect(challengerPrompt).toContain("不得进入 exact remove、任何 neutral audit 或 add");
+	expect(challengerPrompt).toContain("任何 descendant 都必须保持完全沉默");
+	expect(challengerPrompt).toContain("不得进入 exact remove、任何 neutral audit、add");
 	expect(challengerPrompt).not.toContain("sentinel");
 	expect(challengerPrompt).toContain("heading/pointer/consequence residue fixed-point");
 	expect(challengerPrompt).not.toContain("SOURCE_PROJECTION_JSON.runs");
 	expect(candidateS0RuntimeContract).toContain(
-		"Challenger exact/audit envelope-Delta-",
+		"Challenger envelope 只是普通审查地址授权，不是 keep 票",
 	);
 	expect(finalizerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON");
 	expect(finalizerPrompt).toContain(
-		"exact_remove_claim ∪ mixed_atomic_scope ∪ recovery_boundary_scope",
+		"hard_carrier_root_vetoes -> ordinary_remove_ranges -> ordinary_add_ranges",
 	);
+	expect(finalizerPrompt).toContain("`Δ-∩V=∅`");
 });
 
 test("runs the independent Finalizer after an empty challenge for non-empty S0", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
-		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }, "unused"),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }, "unused"),
 	]);
 
 	const result = await runReview(registration);
@@ -241,7 +242,7 @@ test("runs the independent Finalizer after an empty challenge for non-empty S0",
 test("stops after an empty challenge when Candidate S0 is empty", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
-		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }, "unused"),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }, "unused"),
 	]);
 
 	const result = await runReview(registration, {
@@ -259,8 +260,8 @@ test("applies only the accepted remove and add envelope", async () => {
 	const registration = createFaux([
 		challengerResponse(boundedChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: ["段落3"],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: ["段落3"],
 		}),
 	]);
 
@@ -303,8 +304,8 @@ test("allows the Finalizer to remove an S0 hard-carrier span outside the challen
 			add_partitions: [],
 		}),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "contract_terms_and_formats",
@@ -347,8 +348,8 @@ test("projects hard-carrier vetoes by source order when block IDs are sparse", a
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: [],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "announcement_notice",
@@ -377,8 +378,8 @@ test("fails closed on a root-only remove outside the Challenger envelope", async
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落3"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落3"],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "contract_terms_and_formats",
@@ -416,8 +417,8 @@ test("continues after rejecting an effectless root veto when valid effects remai
 			add_partitions: [],
 		}),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "announcement_notice",
@@ -466,8 +467,8 @@ test("fails closed when an accepted add conflicts with a hard-carrier root veto"
 			],
 		}),
 		finalizerResponse({
-			accepted_remove_ranges: [],
-			accepted_add_ranges: ["段落3"],
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: ["段落3"],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "contract_terms_and_formats",
@@ -492,12 +493,12 @@ test("fails closed when an accepted add conflicts with a hard-carrier root veto"
 	);
 });
 
-test("fails closed when a hard-carrier root veto removes a mixed-audit survivor", async () => {
+test("allows a hard-carrier root veto to shadow mixed-audit challenge addresses", async () => {
 	const registration = createFaux([
 		challengerResponse(auditChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "contract_terms_and_formats",
@@ -513,15 +514,15 @@ test("fails closed when a hard-carrier root veto removes a mixed-audit survivor"
 		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
 	});
 
-	expect(result.status).toBe("degraded");
-	expect(result.finalRanges).toEqual(["段落1-段落4"]);
-	expect(result.patch).toBeNull();
-	expect(result.failure?.message).toContain(
-		"hard-carrier root veto removes challenged survivor block 3",
-	);
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.patch).toEqual({
+		addRanges: [],
+		removeRanges: ["段落2-段落4"],
+	});
 });
 
-test("fails closed when a hard-carrier root veto removes an exact challenged survivor", async () => {
+test("allows a hard-carrier root veto to shadow an exact challenge address", async () => {
 	const registration = createFaux([
 		challengerResponse({
 			remove_partitions: [
@@ -535,8 +536,45 @@ test("fails closed when a hard-carrier root veto removes an exact challenged sur
 			add_partitions: [],
 		}),
 		finalizerResponse({
-			accepted_remove_ranges: [],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 3,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.decision?.challengeRemoveBlockIds).toEqual([]);
+	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([3, 4]);
+});
+
+test("fails closed when ordinary remove duplicates a hard-carrier root veto", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			remove_partitions: [
+				{
+					target_ranges: ["段落3"],
+					source_conclusion: "The exact target independently requires removal.",
+					supporting_block_ids: [3],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落3"],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "contract_terms_and_formats",
@@ -556,26 +594,27 @@ test("fails closed when a hard-carrier root veto removes an exact challenged sur
 	expect(result.finalRanges).toEqual(["段落1-段落4"]);
 	expect(result.decision).toBeNull();
 	expect(result.failure?.message).toContain(
-		"hard-carrier root veto removes challenged survivor block 3",
+		"ordinary remove block 3 duplicates a hard-carrier root veto",
 	);
 });
 
-test("allows a hard-carrier root veto when an overlapping exact challenge is removed", async () => {
+test("allows a hard-carrier root to shadow recovery challenge addresses", async () => {
 	const registration = createFaux([
 		challengerResponse({
-			remove_partitions: [
+			remove_partitions: [],
+			remove_audit_partitions: [
 				{
-					target_ranges: ["段落3"],
-					source_conclusion: "The exact target independently requires removal.",
-					supporting_block_ids: [3],
+					audit_kind: "recovery_boundary_scope",
+					target_ranges: ["段落1-段落4"],
+					audit_basis: "The complete later-module boundary requires recovery adjudication.",
+					supporting_block_ids: [1, 4],
 				},
 			],
-			remove_audit_partitions: [],
 			add_partitions: [],
 		}),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落3"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "contract_terms_and_formats",
@@ -592,28 +631,28 @@ test("allows a hard-carrier root veto when an overlapping exact challenge is rem
 	});
 
 	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落1-段落2"]);
-	expect(result.decision?.challengeRemoveBlockIds).toEqual([3]);
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.decision?.challengeRemoveBlockIds).toEqual([2]);
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([3, 4]);
 });
 
-test("fails closed when a hard-carrier root crosses an unresolved recovery boundary", async () => {
+test("fails closed when recovery ordinary delta duplicates its root veto", async () => {
 	const registration = createFaux([
 		challengerResponse({
 			remove_partitions: [],
 			remove_audit_partitions: [
 				{
 					audit_kind: "recovery_boundary_scope",
-					target_ranges: ["段落1-段落4"],
+					target_ranges: ["段落3-段落4"],
 					audit_basis: "The complete later-module boundary requires recovery adjudication.",
-					supporting_block_ids: [1, 4],
+					supporting_block_ids: [3, 4],
 				},
 			],
 			add_partitions: [],
 		}),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落3-段落4"],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "contract_terms_and_formats",
@@ -631,55 +670,18 @@ test("fails closed when a hard-carrier root crosses an unresolved recovery bound
 
 	expect(result.status).toBe("degraded");
 	expect(result.finalRanges).toEqual(["段落1-段落4"]);
+	expect(result.decision).toBeNull();
 	expect(result.failure?.message).toContain(
-		"hard-carrier root veto removes challenged survivor block 3",
+		"ordinary remove block 3 duplicates a hard-carrier root veto",
 	);
-});
-
-test("allows a hard-carrier root to cross a recovery scope after its covered blocks are explicitly removed", async () => {
-	const registration = createFaux([
-		challengerResponse({
-			remove_partitions: [],
-			remove_audit_partitions: [
-				{
-					audit_kind: "recovery_boundary_scope",
-					target_ranges: ["段落3-段落4"],
-					audit_basis: "The complete later-module boundary requires recovery adjudication.",
-					supporting_block_ids: [3, 4],
-				},
-			],
-			add_partitions: [],
-		}),
-		finalizerResponse({
-			accepted_remove_ranges: ["段落3-段落4"],
-			accepted_add_ranges: [],
-			hard_carrier_root_vetoes: [
-				{
-					carrier_type: "contract_terms_and_formats",
-					root_block_id: 3,
-					exit_block_id_exclusive: "EOF",
-					projected_s0_anchor_block_id: 3,
-				},
-			],
-		}),
-	]);
-
-	const result = await runReview(registration, {
-		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
-	});
-
-	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落1-段落2"]);
-	expect(result.decision?.challengeRemoveBlockIds).toEqual([3, 4]);
-	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([3, 4]);
 });
 
 test("fails closed when hard-carrier veto spans overlap", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: [],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "announcement_notice",
@@ -709,8 +711,8 @@ test("fails closed when a hard-carrier veto anchor is outside Candidate S0", asy
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: [],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "response_format",
@@ -734,8 +736,8 @@ test("fails closed when a hard-carrier veto anchor is outside its root span", as
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: [],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
 			hard_carrier_root_vetoes: [
 				{
 					carrier_type: "response_format",
@@ -759,8 +761,8 @@ test("applies a sparse remove subset inside a bounded neutral audit scope", asyn
 	const registration = createFaux([
 		challengerResponse(auditChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2", "段落4"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2", "段落4"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -798,8 +800,8 @@ test("fails closed when the Finalizer removes a mixed atomic scope wholesale", a
 	const registration = createFaux([
 		challengerResponse(auditChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落1-段落4"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落1-段落4"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -829,8 +831,8 @@ test("normalizes mechanically equivalent compact range syntax", async () => {
 	const registration = createFaux([
 		challengerResponse(challenge),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -867,8 +869,8 @@ test("fails closed when the Finalizer leaves the Challenger envelope", async () 
 	const registration = createFaux([
 		challengerResponse(boundedChallenge()),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落1"],
-			accepted_add_ranges: ["段落4"],
+			ordinary_remove_ranges: ["段落1"],
+			ordinary_add_ranges: ["段落4"],
 		}),
 	]);
 
@@ -885,8 +887,8 @@ test("fails closed when the Finalizer leaves the Challenger envelope", async () 
 	expect(result.failure?.message).toContain("outside the Challenger envelope");
 	expect(result.trace.finalizerRawSubmissions).toEqual([
 		{
-			accepted_remove_ranges: ["段落1"],
-			accepted_add_ranges: ["段落4"],
+			ordinary_remove_ranges: ["段落1"],
+			ordinary_add_ranges: ["段落4"],
 			hard_carrier_root_vetoes: [],
 		},
 	]);
@@ -968,7 +970,7 @@ test.each([
 		name: "invalid Finalizer schema",
 		responses: [
 			challengerResponse(boundedChallenge()),
-			finalizerResponse({ accepted_remove_ranges: ["段落2"] }),
+			finalizerResponse({ ordinary_remove_ranges: ["段落2"] }),
 		],
 		expectedRole: "finalizer",
 		expectedCode: "contract_error",
@@ -1038,8 +1040,8 @@ test("continues with partial coverage when one partition is unauthorized", async
 	const registration = createFaux([
 		challengerResponse(mixedChallenge),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -1081,8 +1083,8 @@ test("continues after rejecting one partition with a non-canonical range", async
 	const registration = createFaux([
 		challengerResponse(challenge),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -1120,8 +1122,8 @@ test("continues after rejecting an audit that overlaps an exact remove challenge
 	const registration = createFaux([
 		challengerResponse(overlappingChallenge),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -1180,8 +1182,8 @@ test("forwards the flat S0 projection only to Challenger and the run queue to bo
 		(context) => {
 			contexts.push(context);
 			return finalizerResponse({
-				accepted_remove_ranges: [],
-				accepted_add_ranges: [],
+				ordinary_remove_ranges: [],
+				ordinary_add_ranges: [],
 			});
 		},
 	]);
@@ -1333,8 +1335,8 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 		(context) => {
 			contexts.push(context);
 			return finalizerResponse({
-				accepted_remove_ranges: ["段落2", "段落96"],
-				accepted_add_ranges: [],
+				ordinary_remove_ranges: ["段落2", "段落96"],
+				ordinary_add_ranges: [],
 			});
 		},
 	]);
@@ -1414,8 +1416,8 @@ test("keeps the two typed audit channels independently bounded", async () => {
 	const registration = createFaux([
 		challengerResponse(largeAudit),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落2", "段落151"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落2", "段落151"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -1465,8 +1467,8 @@ test("fails closed after rejecting a recovery-boundary audit", async () => {
 	const registration = createFaux([
 		challengerResponse(challenge),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落1"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落1"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -1515,8 +1517,8 @@ test("fails closed even when a later recovery audit is mechanically valid", asyn
 	const registration = createFaux([
 		challengerResponse(challenge),
 		finalizerResponse({
-			accepted_remove_ranges: ["段落100"],
-			accepted_add_ranges: [],
+			ordinary_remove_ranges: ["段落100"],
+			ordinary_add_ranges: [],
 		}),
 	]);
 
@@ -1577,8 +1579,8 @@ test("ignores and hashes Finalizer auxiliary text", async () => {
 			[
 				fauxText("ignored auxiliary explanation"),
 				fauxToolCall("submit_final_selection", {
-					accepted_remove_ranges: ["段落2"],
-					accepted_add_ranges: [],
+					ordinary_remove_ranges: ["段落2"],
+					ordinary_add_ranges: [],
 					hard_carrier_root_vetoes: [],
 				}),
 			],
@@ -1601,9 +1603,9 @@ test("ignores and hashes Finalizer auxiliary text", async () => {
 test("keeps the capability hash independent of packet and Candidate data", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
-		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
 		challengerResponse(emptyChallenge()),
-		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
 	]);
 	const firstPacket = packet();
 	const secondPacket = packet({
