@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v16 JSON, locator, and orthogonal hard-root prompts aligned", () => {
+test("keeps the v17 JSON, locator, typed-audit, and orthogonal hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
@@ -237,6 +237,9 @@ test("keeps the v16 JSON, locator, and orthogonal hard-root prompts aligned", ()
 	expect(candidateS0RuntimeContract).toContain(
 		'固定 `thinking={"type":"disabled"}`',
 	);
+	expect(candidateS0RuntimeContract).toContain(
+		"两类 typed audit 的 ordinary `Delta-` 都必须是各自完整 target set 的严格子集",
+	);
 	expect(finalizerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON");
 	expect(finalizerPrompt).toContain("未挑战 `S0` 仍可删除");
 	expect(finalizerPrompt).toContain(
@@ -249,6 +252,10 @@ test("keeps the v16 JSON, locator, and orthogonal hard-root prompts aligned", ()
 		"hard_carrier_root_vetoes -> ordinary_remove_ranges -> ordinary_add_ranges",
 	);
 	expect(finalizerPrompt).toContain("`Δ-∩V=∅`");
+	expect(finalizerPrompt).toContain("`typed-audit sparse burden`");
+	expect(finalizerPrompt).toContain(
+		"`recovery_boundary_scope` 的 ordinary `Δ-` 也必须是完整 target set 的严格子集",
+	);
 });
 
 test("runs the independent Finalizer after an empty challenge for non-empty S0", async () => {
@@ -1267,8 +1274,79 @@ test("fails closed when the Finalizer removes a mixed atomic scope wholesale", a
 	expect(result.status).toBe("degraded");
 	expect(result.finalRanges).toEqual(["段落1-段落4"]);
 	expect(result.failure?.message).toContain(
-		"mixed_atomic_scope partition 0 cannot be removed wholesale",
+		"mixed_atomic_scope partition 0 cannot be removed wholesale through ordinary_remove_ranges",
 	);
+});
+
+test("fails closed when the Finalizer removes a recovery boundary scope wholesale through ordinary delta", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [],
+			remove_partitions: [],
+			remove_audit_partitions: [
+				{
+					audit_kind: "recovery_boundary_scope",
+					target_ranges: ["段落1-段落4"],
+					audit_basis: "The bounded later module requires recovery adjudication.",
+					supporting_block_ids: [1, 4],
+				},
+			],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落1-段落4"],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落4"]);
+	expect(result.failure?.message).toContain(
+		"recovery_boundary_scope partition 0 cannot be removed wholesale through ordinary_remove_ranges",
+	);
+});
+
+test("allows a typed hard-carrier root veto to own an entire recovery audit scope", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [],
+			remove_partitions: [],
+			remove_audit_partitions: [
+				{
+					audit_kind: "recovery_boundary_scope",
+					target_ranges: ["段落1-段落4"],
+					audit_basis: "The bounded later module requires recovery adjudication.",
+					supporting_block_ids: [1, 4],
+				},
+			],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 1,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 1,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.decision?.ordinaryRemoveBlockIds).toEqual([]);
+	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([1, 2, 3, 4]);
 });
 
 test("normalizes mechanically equivalent compact range syntax", async () => {
@@ -1841,7 +1919,7 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 	);
 	expect(finalizerInput).toContain('"hard_root_review_groups":[]');
 	expect(finalizerInput).toContain(
-		'"remove_review_groups":[{"review_kind":"exact_remove_claim","partition_index":0,"range_index":0,"target_ranges":["段落1"],"mechanical_context_block_ids":[0,2,3]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"supporting_block_ids":[2]}]',
+		'"remove_review_groups":[{"review_kind":"exact_remove_claim","partition_index":0,"range_index":0,"target_ranges":["段落1"],"mechanical_context_block_ids":[0,2,3]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"ordinary_remove_must_be_strict_subset":true,"supporting_block_ids":[2]}]',
 	);
 	expect(finalizerInput).toContain('"add_review_ranges":["段落3"]');
 	expect(finalizerInput).toContain(

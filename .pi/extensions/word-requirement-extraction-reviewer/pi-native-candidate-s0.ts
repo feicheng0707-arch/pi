@@ -52,7 +52,7 @@ const MAX_FINAL_REMOVE_RANGES =
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v16";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v17";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -218,7 +218,7 @@ export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 		ordinary_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_REMOVE_RANGES,
 			description:
-				"Ordinary full-Candidate-S0 delta, never a final removal inventory. Submit a maximally compact exact subset of Candidate S0. A mixed_atomic_scope must remain sparse and must not be copied wholesale. Any block covered by a submitted hard-carrier root veto is owned exclusively by that veto and must be omitted here. Any address outside Candidate S0 is a contract failure.",
+				"Ordinary full-Candidate-S0 delta, never a final removal inventory. Submit a maximally compact exact subset of Candidate S0. Every mixed_atomic_scope and recovery_boundary_scope must remain a strict sparse subset and must not be copied wholesale through this ordinary channel. A source-proven categorical hard-carrier span must use hard_carrier_root_vetoes instead. Any block covered by a submitted hard-carrier root veto is owned exclusively by that veto and must be omitted here. Any address outside Candidate S0 is a contract failure.",
 		}),
 		ordinary_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_ADD_RANGES,
@@ -773,7 +773,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-json-object-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto",
+				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-json-object-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto-and-strict-audit-subset-checksum",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -849,6 +849,8 @@ export async function runPiNativeCandidateS0Review(
 						"omit-the-entire-entry-when-total-distinct-source-block-occurrences-exceed-eight",
 				},
 				ordinaryRemoveAuthorization: "all-candidate-S0",
+				removeAuditOrdinaryDeltaPolicy:
+					"strict-subset-per-typed-audit-partition",
 				exactRangeMechanicalContextNeighborsPerSide: 2,
 				hardCarrierProjection:
 					"candidate-S0-intersection-with-source-order-inclusive-root-exclusive-exit",
@@ -1608,6 +1610,7 @@ function prepareTargetedFinalizer(
 				review_kind: partition.auditKind,
 				target_ranges: partition.targetRanges,
 				mechanical_target_block_count: partition.targetBlockCount,
+				ordinary_remove_must_be_strict_subset: true,
 				supporting_block_ids: partition.supportingBlockIds,
 			})),
 		],
@@ -1853,7 +1856,7 @@ async function runCandidateS0Finalizer(
 			prepared.candidateRanges,
 		)}; ordinary_add_ranges is limited exactly to ${JSON.stringify(
 			challenge.addEnvelopeRanges,
-		)}. Every block covered by a submitted root veto, including a challenged address, must be omitted from ordinary_remove_ranges; never submit a final removal inventory.`,
+		)}. Every typed audit partition must remain a strict subset in ordinary_remove_ranges; use a source-proven hard-carrier root veto for a categorical span. Every block covered by a submitted root veto, including a challenged address, must be omitted from ordinary_remove_ranges; never submit a final removal inventory.`,
 		parameters: PiNativeCandidateS0FinalSubmissionSchema,
 		executionMode: "sequential",
 		prepareArguments(args) {
@@ -2348,17 +2351,6 @@ function validateFinalSubmission(
 		"ordinary_add_ranges",
 		true,
 	);
-	const submittedRemove = new Set(submittedRemoveBlockIds);
-	for (const partition of challenge.removeAuditPartitions) {
-		if (
-			partition.auditKind === "mixed_atomic_scope" &&
-			partition.targetBlockIds.every((blockId) => submittedRemove.has(blockId))
-		) {
-			throw new CandidateS0ContractError(
-				`mixed_atomic_scope partition ${partition.partitionIndex} cannot be removed wholesale`,
-			);
-		}
-	}
 	const candidate = new Set(prepared.candidateBlockIds);
 	const challengedRemoveEnvelope = new Set(challenge.removeEnvelopeBlockIds);
 	const addEnvelope = new Set(challenge.addEnvelopeBlockIds);
@@ -2407,6 +2399,16 @@ function validateFinalSubmission(
 		if (hardCarrierRemove.has(blockId)) {
 			throw new CandidateS0ContractError(
 				`ordinary remove block ${blockId} duplicates a hard-carrier root veto`,
+			);
+		}
+	}
+	const submittedRemove = new Set(ordinaryRemoveBlockIds);
+	for (const partition of challenge.removeAuditPartitions) {
+		if (
+			partition.targetBlockIds.every((blockId) => submittedRemove.has(blockId))
+		) {
+			throw new CandidateS0ContractError(
+				`${partition.auditKind} partition ${partition.partitionIndex} cannot be removed wholesale through ordinary_remove_ranges`,
 			);
 		}
 	}
