@@ -55,11 +55,11 @@ test("loads the recovery eligibility and directional Owner challenge contract", 
 	);
 });
 
-test("keeps the v23 Challenger concise and mechanically complete", () => {
+test("keeps the v24 Challenger concise and mechanically complete", () => {
 	expect(Buffer.byteLength(challengerVNext, "utf8")).toBeLessThanOrEqual(
 		13 * 1024,
 	);
-	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v23");
+	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v24");
 	expect(challengerVNext).toContain("它是唯一业务语义源");
 	expect(challengerVNext).not.toContain("## 共享语义门");
 
@@ -87,6 +87,16 @@ test("keeps the v23 Challenger concise and mechanically complete", () => {
 	);
 	expect(challengerVNext).toContain("supporting IDs不能代替 exact hole");
 	expect(challengerVNext).toContain("严格子集");
+	expect(challengerVNext).toContain("`recovery/root XOR checksum`");
+	expect(challengerVNext).toContain("必须满足 `H∩Q=∅`");
+	expect(challengerVNext).toContain("再重新计算 `I=S0∩H`");
+	expect(challengerVNext).toContain(
+		"提交 `exit_block_id_exclusive=P`，绝不能提交 `L`",
+	);
+	expect(challengerVNext).toContain("同时含两个不同地址 `L` 与 `P`");
+	expect(challengerVNext).toContain(
+		"绝不能同时提交相互重叠的两项让 Finalizer替你选择",
+	);
 	expect(challengerVNext).toContain(
 		"顶层恰有 `hard_carrier_root_challenges`、`remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 四个 non-nullable arrays",
 	);

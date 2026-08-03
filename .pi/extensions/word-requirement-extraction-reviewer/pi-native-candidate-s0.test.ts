@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v23 concise-role prompts aligned with the shared S0 and hard-root mechanics", () => {
+test("keeps the v24 concise-role prompts aligned with the shared S0 and hard-root mechanics", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
