@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { expect, test } from "vitest";
 import { loadRequirementReviewPrompts } from "./index.ts";
@@ -54,32 +55,86 @@ test("loads the recovery eligibility and directional Owner challenge contract", 
 	);
 });
 
-test("loads the Challenger partition serialization checksum", () => {
-	expect(challengerVNext).toContain("`partition serialization checksum`");
-	expect(challengerVNext).toContain("只能保留 1-8 个最小充分证据");
-	expect(challengerVNext).toContain("不得按 target 逐项枚举");
-	expect(challengerVNext).toContain("只有 source-proven hard-root descendants");
-	expect(challengerVNext).toContain("共同 verdict、宽泛上位类别");
-	expect(challengerVNext).toContain(
-		"`(direction, Owner 状态, controlling role/mechanism, 直接 membership/exclusion source premise)`",
+test("keeps the v23 Challenger concise and mechanically complete", () => {
+	expect(Buffer.byteLength(challengerVNext, "utf8")).toBeLessThanOrEqual(
+		13 * 1024,
 	);
-	expect(challengerVNext).toContain("add premise 必须直接证明存在 `ATOM|HEADING`");
-	expect(challengerVNext).toContain("不能从章节摘要或宽泛类别重新生成 ranges");
-	expect(challengerVNext).toContain("`root boundary serialization checksum`");
-	expect(challengerVNext).toContain("仅在 exit 非 `EOF` 时覆盖 exit");
-	expect(challengerVNext).toContain("不能仅因属于采购程序就自动标成 `bidder_instructions` root");
-	expect(challengerVNext).toContain("boundary 证据、肯定 survivor");
-	expect(challengerVNext).toContain("partition 或 range schema 上限");
-	expect(challengerVNext).toContain("必须围绕 survivor 拆洞");
-	expect(challengerVNext).toContain("supporting IDs 永远不能代替 exact hole");
-	expect(challengerVNext).toContain("完整 audit `target_ranges` 仍必须保持不裁剪");
-	expect(challengerVNext.trim().endsWith("绝不能提交 schema-invalid JSON。")).toBe(true);
+	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v23");
+	expect(challengerVNext).toContain("它是唯一业务语义源");
+	expect(challengerVNext).not.toContain("## 共享语义门");
+
+	const orderedStages = [
+		"**Source-first discovery**",
+		"**Recovery before root inheritance**",
+		"**Root map**",
+		"**Atomic closure**",
+		"**Heading fixed point**",
+		"**Audit routing**",
+	].map((marker) => challengerVNext.indexOf(marker));
+	expect(orderedStages.every((index) => index >= 0)).toBe(true);
+	expect(orderedStages).toEqual(
+		[...orderedStages].sort((left, right) => left - right),
+	);
+
+	expect(challengerVNext).toContain(
+		"`exit_block_id_exclusive` 是 first peer 或 `\"EOF\"`",
+	);
+	expect(challengerVNext).toContain(
+		"`projected_s0_anchor_block_id` 必须取自本项 `I`",
+	);
+	expect(challengerVNext).toContain(
+		"其 source-proven descendants 必须对 exact remove、neutral audit 和 add 完全沉默",
+	);
+	expect(challengerVNext).toContain("supporting IDs不能代替 exact hole");
+	expect(challengerVNext).toContain("严格子集");
+	expect(challengerVNext).toContain(
+		"顶层恰有 `hard_carrier_root_challenges`、`remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 四个 non-nullable arrays",
+	);
+	expect(challengerVNext).toContain('`response_format={"type":"json_object"}`');
 });
 
-test("loads the Finalizer delete-only serialization checksum", () => {
+test("keeps the v23 Finalizer challenge-last and delete-only", () => {
+	expect(Buffer.byteLength(targetedFinalizerVNext, "utf8")).toBeLessThanOrEqual(
+		13 * 1024,
+	);
+	expect(targetedFinalizerVNext).toContain(
+		"# Candidate-S0 Targeted Finalizer v23",
+	);
+	expect(targetedFinalizerVNext).toContain("是唯一业务语义源");
+	expect(targetedFinalizerVNext).not.toContain("## 共享语义门");
+
+	const orderedStages = [
+		"### 0. INDEPENDENT T0 FREEZE",
+		"### 1. CHALLENGER FALSIFICATION",
+		"### 2. ROOT, RECOVERY AND RESIDUAL CLOSURE",
+		"### 1. AUDIT PASS",
+		"### 2. GLOBAL RESIDUAL PASS",
+		"### 3. HEADING FIXED-POINT PASS",
+		"### 4. TOOL SERIALIZATION PASS",
+	].map((marker) => targetedFinalizerVNext.indexOf(marker));
+	expect(orderedStages.every((index) => index >= 0)).toBe(true);
+	expect(orderedStages).toEqual(
+		[...orderedStages].sort((left, right) => left - right),
+	);
+
+	expect(targetedFinalizerVNext).toContain(
+		"必须是首个 source-proven 异质 peer block ID",
+	);
+	expect(targetedFinalizerVNext).toContain(
+		"对每个 `T0` retained block 主动寻找",
+	);
+	expect(targetedFinalizerVNext).toContain(
+		"对每个 `T0` proposed remove 主动寻找",
+	);
+	expect(targetedFinalizerVNext).toContain("直至 fixed-point");
+	expect(targetedFinalizerVNext).toContain(
+		"per-block actor reset + epilogue scan",
+	);
 	expect(targetedFinalizerVNext).toContain("### 4. TOOL SERIALIZATION PASS");
 	expect(targetedFinalizerVNext).toContain("不是 keep ranges、最终 selection 或 Candidate 副本");
 	expect(targetedFinalizerVNext).toContain("完整非空 `S0` 或任一完整 typed audit target set");
 	expect(targetedFinalizerVNext).toContain("若 root/exit 不能肯定证明，则保持该范围");
-	expect(targetedFinalizerVNext.trim().endsWith("不能依赖 Harness 拒绝。")).toBe(true);
+	expect(targetedFinalizerVNext).toContain("`Δ-⊆S0`");
+	expect(targetedFinalizerVNext).toContain("`Δ+⊆ADD_ENVELOPE");
+	expect(targetedFinalizerVNext).toContain("`Δ-∩V=∅`");
 });

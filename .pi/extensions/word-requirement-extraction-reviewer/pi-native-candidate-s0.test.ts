@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v22 shared S0 projection, dual-channel audit, terminal closure, and hard-root prompts aligned", () => {
+test("keeps the v23 concise-role prompts aligned with the shared S0 and hard-root mechanics", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
@@ -2415,11 +2415,16 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 		"CANDIDATE_S0_RANGES=",
 		"CANDIDATE_S0_SOURCE_PROJECTION_JSON=",
 		"MECHANICAL_S0_RUN_QUEUE_JSON=",
-		"CHALLENGE_ENVELOPE=",
+		"MECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON=",
+		"GLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=",
 		"FINALIZER_TOOL_SCHEMA=",
+		"CHALLENGE_ENVELOPE=",
 	].map((marker) => finalizerInput.indexOf(marker));
 	expect(orderedMarkers.every((index) => index >= 0)).toBe(true);
 	expect(orderedMarkers).toEqual([...orderedMarkers].sort((left, right) => left - right));
+	expect(finalizerInput.trim().split("\n\n").at(-1)?.startsWith("CHALLENGE_ENVELOPE=")).toBe(
+		true,
+	);
 	expect(finalizerInput).not.toContain("remove_review_ranges");
 	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":true');
 	expect(finalizerInput).toContain('"review_kind":"mixed_atomic_scope"');
