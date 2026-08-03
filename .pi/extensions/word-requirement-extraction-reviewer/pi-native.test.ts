@@ -129,12 +129,14 @@ function finalDeltas(
 	runDeltas: RunDeltaFixture[] = [],
 	hardRootClaims: Array<ReturnType<typeof hardRootClaim>> = [],
 	reason = "The source supports this bounded final delta.",
+	acceptedOwnerBoundaryChallengeIndices: number[] = [],
 ) {
 	return {
 		submission_kind: "final_delta" as const,
 		owner_reason: "The source Owner boundaries were inspected again.",
 		residual_reason: reason,
 		hard_root_claims: hardRootClaims,
+		accepted_owner_boundary_challenge_indices: acceptedOwnerBoundaryChallengeIndices,
 		run_selections: [],
 		run_deltas: runDeltas,
 	};
@@ -145,6 +147,7 @@ function finalDelta(
 	addRanges: string[] = [],
 	hardRootClaims: Array<ReturnType<typeof hardRootClaim>> = [],
 	reason = "The source supports this bounded final delta.",
+	acceptedOwnerBoundaryChallengeIndices: number[] = [],
 ) {
 	return finalDeltas(
 		removeRanges.length === 0 && addRanges.length === 0
@@ -152,6 +155,7 @@ function finalDelta(
 			: [{ run_index: 0, remove_ranges: removeRanges, add_ranges: addRanges }],
 		hardRootClaims,
 		reason,
+		acceptedOwnerBoundaryChallengeIndices,
 	);
 }
 
@@ -182,7 +186,27 @@ function witnessChallenge(
 type WitnessChallengeFixture = ReturnType<typeof witnessChallenge>;
 type WitnessCardFixture = Omit<WitnessChallengeFixture, "direction">;
 
-function witnessSubmission(challenges: WitnessChallengeFixture[] = []) {
+function witnessOwnerBoundaryChallenge(
+	rootBlockId: number,
+	exitBlockIdExclusive: number | null,
+	anchorBlockId: number,
+	supportingBlockIds: number[],
+	carrierType: TestCarrierType = "contract_terms",
+) {
+	return {
+		carrier_type: carrierType,
+		root_block_id: rootBlockId,
+		exit_block_id_exclusive: exitBlockIdExclusive,
+		anchor_block_id: anchorBlockId,
+		source_conclusion: "The cited source establishes this complete hard-carrier span.",
+		supporting_block_ids: supportingBlockIds,
+	};
+}
+
+function witnessSubmission(
+	challenges: WitnessChallengeFixture[] = [],
+	ownerBoundaryChallenges: Array<ReturnType<typeof witnessOwnerBoundaryChallenge>> = [],
+) {
 	const removeFromProvisional: WitnessCardFixture[] = [];
 	const addToProvisional: WitnessCardFixture[] = [];
 	for (const { direction, ...challenge } of challenges) {
@@ -190,6 +214,7 @@ function witnessSubmission(challenges: WitnessChallengeFixture[] = []) {
 		else addToProvisional.push(challenge);
 	}
 	return {
+		owner_boundary_challenges: ownerBoundaryChallenges,
 		remove_from_provisional: removeFromProvisional,
 		add_to_provisional: addToProvisional,
 	};
@@ -325,13 +350,19 @@ function witnessReviewPacket(observed: { userPrompt: string }) {
 		throw new Error("missing HARNESS_REVIEW_PACKET in Finalizer replay");
 	}
 	const packet = JSON.parse(reviewText) as {
-		review_evidence: {
+			review_evidence: {
 			independent_semantic_witness: {
 				coverage: "full" | "partial" | "none" | null;
+				owner_boundary_status:
+					| "valid_none"
+					| "valid_challenge"
+					| "rejected_source_focus"
+					| null;
 				lane_status: {
 					exclude: "valid_none" | "valid_challenge" | "rejected_source_focus";
 					select: "valid_none" | "valid_challenge" | "rejected_source_focus";
 				} | null;
+				owner_boundary_challenges: Array<Record<string, unknown>>;
 				challenges: Array<Record<string, unknown>>;
 			};
 		};
@@ -414,8 +445,8 @@ function witnessProvisionalRationale(observed: { userPrompt: string }): {
 	};
 }
 
-test("loads the v50 source-ordered adversarial typed-delta contracts", () => {
-	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
+test("loads the v51 source-ordered typed Owner and atom-delta contracts", () => {
+	expect(prompts.finalizer).toContain("`S=(S0-A-Δ-)∪Δ+`");
 	expect(prompts.finalizer).toContain("exact target-own predicate");
 	expect(prompts.finalizer).toContain(
 		"先冻结 exact `S` 与 delta，再据 `S` 写 reason",
@@ -429,7 +460,7 @@ test("loads the v50 source-ordered adversarial typed-delta contracts", () => {
 	expect(prompts.finalizer).toContain("不得写 run-by-run atom");
 	expect(prompts.finalizer).toContain("`reason budget gate`");
 	expect(prompts.finalizer).toContain(
-		"8000 字符是 fail-closed 上限，不是可用输出目标",
+		"第一轮 8000 字符不是可用输出目标，第二轮不得超过 2400",
 	);
 	expect(prompts.finalizer).toContain(
 		"内部语义扫描与外部 reason 序列化必须分离",
@@ -617,7 +648,7 @@ test("loads the v50 source-ordered adversarial typed-delta contracts", () => {
 	);
 	expect(prompts.witness).toContain("先从 source 独立确定变更方向");
 	expect(prompts.witness).toContain(
-		"全文只有单一肯定 excluded effect 的短 target 优先于长 mixed block",
+		"全文只有单一肯定 excluded effect 的短 atom target 优先于长 mixed block",
 	);
 	expect(prompts.witness).toContain(
 		"长 block 只有在逐 proposition self-falsification 后 remainder 确为零才可入选",
@@ -674,11 +705,10 @@ test("loads the v50 source-ordered adversarial typed-delta contracts", () => {
 	expect(prompts.piNativeRuntimeContract).not.toContain("`authorized_target_groups`");
 	expect(prompts.piNativeRuntimeContract).not.toContain("`target_lane=null`");
 	expect(prompts.finalizer).toContain(
-		"Witness 的 singleton `owner_boundary` target 只是最小反例地址，不是修复宽度",
+		"typed `owner_boundary_challenges` 已给出 carrier/root/exclusive-exit 和 span 内 anchor",
 	);
-	expect(prompts.finalizer).toContain(
-		"必须重建完整 root→first peer exit 或逐 module recovery scope",
-	);
+	expect(prompts.finalizer).toContain("`accepted_owner_boundary_challenge_indices`");
+	expect(prompts.finalizer).toContain("stable index + exact final hard-root claim 双钥匙");
 });
 
 test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () => {
@@ -692,7 +722,7 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	]);
 
 	expect(result.status).toBe("preserved");
-	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v5");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v6");
 	expect(result.witness?.trace.responseFormat).toBe("json_object");
 	expect(result.witness?.trace.thinking).toEqual({
 		mode: "disabled",
@@ -751,6 +781,9 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 		'"required_next_submission_kind":"final_delta"',
 	);
 	expect(scripted.observed[2].serializedContext).toContain("mechanical_delta_contract");
+	expect(scripted.observed[2].serializedContext).toContain(
+		"A=S0 intersect [root,exit); S=(S0-A-remove_ranges) union add_ranges",
+	);
 	expect(scripted.observed[2].serializedContext).toContain("mechanical_contract_blockers");
 	expect(scripted.observed[2].serializedContext).toContain("review_evidence");
 	expect(scripted.observed[2].serializedContext).not.toContain("repair_required");
@@ -778,9 +811,12 @@ test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () =>
 	expect(scripted.observed[0].systemPrompt).toContain(
 		"对 `S0` 中每个 exact canonical block 运行 shared atomic gate",
 	);
-	expect(scripted.observed[0].systemPrompt).toContain("`owner_reason` 最多 1200 字符");
+	expect(scripted.observed[0].systemPrompt).toContain("`owner_reason` 每轮最多 1200 字符");
 	expect(scripted.observed[0].systemPrompt).toContain(
-		"`residual_reason` 以 2400 字符为目标、8000 字符为硬上限",
+		"第一轮 provisional `residual_reason` 以 2400 字符为压缩目标、8000 字符为硬上限",
+	);
+	expect(scripted.observed[0].systemPrompt).toContain(
+		"第二轮 final delta `residual_reason` 的硬上限就是 2400 字符",
 	);
 	expect(scripted.observed[0].systemPrompt).toContain("终态 checksum");
 	expect(scripted.observed[0].systemPrompt).not.toContain(
@@ -1572,13 +1608,31 @@ test("attributes nested Witness elapsed time exactly once", async () => {
 	expect(result.budget.elapsedMs).toBe(100);
 });
 
-test("exposes two required bounded Witness card arrays without direction fields", () => {
+test("exposes one typed Owner slot and two bounded atom-card arrays without direction fields", () => {
 	expect(PiNativeSemanticWitnessSchema).toMatchObject({
-		required: ["remove_from_provisional", "add_to_provisional"],
+		required: [
+			"owner_boundary_challenges",
+			"remove_from_provisional",
+			"add_to_provisional",
+		],
 		properties: {
+			owner_boundary_challenges: {
+				type: "array",
+				maxItems: 1,
+				items: {
+					required: [
+						"carrier_type",
+						"root_block_id",
+						"exit_block_id_exclusive",
+						"anchor_block_id",
+						"source_conclusion",
+						"supporting_block_ids",
+					],
+				},
+			},
 			remove_from_provisional: {
 				type: "array",
-				maxItems: 3,
+				maxItems: 2,
 				items: {
 					required: ["kind", "ranges", "source_conclusion", "supporting_block_ids"],
 					properties: {
@@ -1593,6 +1647,9 @@ test("exposes two required bounded Witness card arrays without direction fields"
 	expect(
 		PiNativeSemanticWitnessSchema.properties.remove_from_provisional.items.properties,
 	).not.toHaveProperty("direction");
+	expect(
+		PiNativeSemanticWitnessSchema.properties.remove_from_provisional.items.properties.kind,
+	).toMatchObject({ const: "atom_membership" });
 	expect(PiNativeSemanticWitnessSchema.properties).not.toHaveProperty("challenges");
 	expect(PiNativeSemanticWitnessSchema.properties).not.toHaveProperty("exclude");
 	expect(PiNativeSemanticWitnessSchema.properties).not.toHaveProperty("select");
@@ -1754,7 +1811,7 @@ test("keeps OUT focus blocks source-ordered and support-only", async () => {
 				role: "witness",
 				response: toolWitness(
 					witnessSubmission([
-						witnessChallenge("owner_boundary", "exclude", ["段落1"], [0]),
+						witnessChallenge("atom_membership", "exclude", ["段落1"], [0]),
 						witnessChallenge("atom_membership", "select", ["段落0"], [0]),
 					]),
 				),
@@ -1886,10 +1943,10 @@ test("includes fixed edge windows for every provisional hard-claim projection is
 	expect(result.finalRanges).toEqual(["段落10", "段落40"]);
 });
 
-test("exposes ignored no-projection hard claims with root and exit source windows", async () => {
-	const blocks = Array.from({ length: 60 }, (_, blockId) => ({
-		blockId,
-		text: `Source block ${blockId}.`,
+test("uses source-order neighbors for ignored hard-root windows with non-consecutive IDs", async () => {
+	const blocks = Array.from({ length: 60 }, (_, sourceIndex) => ({
+		blockId: sourceIndex * 10,
+		text: `Source block ${sourceIndex * 10}.`,
 	}));
 	const sourcePacket = parseRequirementReviewPacket({
 		schemaVersion: "xique.word-requirement-review.packet.v1",
@@ -1903,16 +1960,16 @@ test("exposes ignored no-projection hard claims with root and exit source window
 		blockCount: blocks.length,
 		candidateId: "requirement_candidate_v120",
 		candidatePromptSha256: "7".repeat(64),
-		initialRanges: ["段落10"],
+		initialRanges: ["段落100"],
 		blocks,
 	});
-	const ignoredClaim = hardRootClaim(40, 50);
+	const ignoredClaim = hardRootClaim(400, 500);
 	const { result, scripted } = await runScenario(
 		[
 			{
 				role: "finalizer",
 				response: toolSelection(
-					selection(["段落10"], [ignoredClaim], "The claim is outside the audit island."),
+					selection(["段落100"], [ignoredClaim], "The claim is outside the audit island."),
 					"provisional",
 				),
 			},
@@ -1933,18 +1990,18 @@ test("exposes ignored no-projection hard claims with root and exit source window
 	expect(witnessHardRootClaims(scripted.observed[1])).toEqual([
 		{
 			carrierType: "contract_terms",
-			rootBlockId: 40,
-			exitBlockIdExclusive: 50,
+			rootBlockId: 400,
+			exitBlockIdExclusive: 500,
 		},
 	]);
 	const focusBlockIds = witnessFocusSource(scripted.observed[1]).source_ordered_blocks.map(
 		(block) => block.block_id,
 	);
 	expect(focusBlockIds).toEqual(
-		expect.arrayContaining([38, 39, 40, 41, 42, 48, 49, 50, 51, 52]),
+		expect.arrayContaining([380, 390, 400, 410, 420, 480, 490, 500, 510, 520]),
 	);
 	expect(witnessTargetAuthorization(scripted.observed[1])).toEqual({
-		remove_from_provisional: [{ ranges: ["段落10"] }],
+		remove_from_provisional: [{ ranges: ["段落100"] }],
 		add_to_provisional: [],
 	});
 });
@@ -2001,7 +2058,7 @@ test("partitions mixed Witness ranges and does not grant an override", async () 
 		},
 	]);
 	expect(result.witness?.summary).toBe(
-		"1 bounded counterexample card; 2 canonical partitions",
+		"0 Owner boundary challenges; 1 bounded atom card; 2 canonical partitions",
 	);
 	expect(scripted.observed[2].userPrompt).toContain(
 		'"selection_intersects_hard_claim_ranges":["段落1"]',
@@ -2073,9 +2130,11 @@ test("rejects a select card when its target mixes provisional states", async () 
 	});
 	expect(scripted.callCount()).toBe(3);
 	const review = witnessReviewPacket(scripted.observed[2]);
-	expect(review).toEqual({
+	expect(review).toMatchObject({
 		coverage: "partial",
+		owner_boundary_status: "valid_none",
 		lane_status: { exclude: "valid_none", select: "rejected_source_focus" },
+		owner_boundary_challenges: [],
 		challenges: [],
 	});
 	expect(JSON.stringify(review)).not.toContain(rejectedPremise);
@@ -2115,6 +2174,283 @@ test("allows the Finalizer to rebut a Witness select challenge without an overri
 		},
 	]);
 	expect(result.trace.finalClaimSelectionConflicts).toEqual([]);
+});
+
+test("accepts a typed Owner challenge whose root is also its selected anchor", async () => {
+	const { result, scripted } = await runScenario([
+		{
+			role: "finalizer",
+			response: toolSelection(selection(["段落0-段落2"]), "provisional"),
+		},
+		{
+			role: "witness",
+			response: toolWitness(
+				witnessSubmission([], [witnessOwnerBoundaryChallenge(0, 2, 0, [0, 2])]),
+			),
+		},
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+	]);
+
+	expect(result.status).toBe("preserved");
+	expect(result.witness?.ownerBoundaryChallenges).toMatchObject([
+		{
+			challengeIndex: 0,
+			rootBlockId: 0,
+			exitBlockIdExclusive: 2,
+			anchorBlockId: 0,
+			projectedProvisionalRanges: ["段落0-段落1"],
+		},
+	]);
+	expect(witnessReviewPacket(scripted.observed[2])).toMatchObject({
+		owner_boundary_status: "valid_challenge",
+		owner_boundary_challenges: [
+			{
+				challenge_index: 0,
+				mechanical_projected_provisional_ranges: ["段落0-段落1"],
+			},
+		],
+	});
+});
+
+test("rejects a typed Owner challenge when root evidence is outside Witness focus", async () => {
+	const blocks = Array.from({ length: 401 }, (_, blockId) => ({
+		blockId,
+		text: `Source block ${blockId}.`,
+	}));
+	const sourcePacket = parseRequirementReviewPacket({
+		schemaVersion: "xique.word-requirement-review.packet.v1",
+		reviewMode: "candidate_protected_residual",
+		version: "docx-paragraphs-v1",
+		outputField: "完整采购需求编号范围",
+		sourceName: "owner-focus-authorization.docx",
+		sourceSha256: sha256(
+			blocks.map((block) => `段落${block.blockId}：${block.text}`).join("\n"),
+		),
+		blockCount: blocks.length,
+		candidateId: "requirement_candidate_v120",
+		candidatePromptSha256: "7".repeat(64),
+		initialRanges: ["段落200"],
+		blocks,
+	});
+	const { result } = await runScenario(
+		[
+			{ role: "finalizer", response: toolSelection(selection(["段落200"]), "provisional") },
+			{
+				role: "witness",
+				response: toolWitness(
+					witnessSubmission([], [
+						witnessOwnerBoundaryChallenge(0, 201, 200, [200, 201]),
+					]),
+				),
+			},
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+		],
+		undefined,
+		undefined,
+		"0".repeat(64),
+		sourcePacket,
+	);
+
+	expect(result.status).toBe("preserved");
+	expect(result.witness).toMatchObject({
+		status: "accepted",
+		coverage: "partial",
+		ownerBoundaryCoverage: { status: "rejected_source_focus", forwarded: false },
+		ownerBoundaryChallenges: [],
+		trace: {
+			rejectedCards: [
+				{
+					lane: "owner_boundary",
+					cardIndex: 0,
+					reason: { unseenTargetBlockIds: [0] },
+				},
+			],
+		},
+	});
+});
+
+test("rejects a typed Owner challenge whose anchor lacks remove authorization", async () => {
+	const { result } = await runScenario([
+		{ role: "finalizer", response: toolSelection(selection(["段落1"]), "provisional") },
+		{
+			role: "witness",
+			response: toolWitness(
+				witnessSubmission([], [witnessOwnerBoundaryChallenge(0, 2, 0, [0, 2])]),
+			),
+		},
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+	]);
+
+	expect(result.status).toBe("repaired");
+	expect(result.witness).toMatchObject({
+		status: "accepted",
+		coverage: "partial",
+		ownerBoundaryChallenges: [],
+		trace: {
+			rejectedCards: [
+				{
+					lane: "owner_boundary",
+					reason: {
+						outOfGroupTargetBlockIds: [0],
+						wrongStateTargetBlockIds: [0],
+					},
+				},
+			],
+		},
+	});
+});
+
+test("fails closed when an accepted Owner challenge lacks an exact final hard-root claim", async () => {
+	const { result } = await runScenario([
+		{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
+		{
+			role: "witness",
+			response: toolWitness(
+				witnessSubmission([], [witnessOwnerBoundaryChallenge(0, 2, 0, [0, 2])]),
+			),
+		},
+		{
+			role: "finalizer",
+			response: toolSelection(
+				finalDelta([], [], [hardRootClaim(0, 2, "announcement")], "Mismatch.", [0]),
+				"final",
+			),
+		},
+	]);
+
+	expect(result.status).toBe("degraded");
+	expect(result.decision).toBeNull();
+	expect(result.failure?.message).toContain("exact final hard_root_claim");
+});
+
+test("does not project an exact Owner claim unless its Witness challenge index is accepted", async () => {
+	const { result } = await runScenario([
+		{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
+		{
+			role: "witness",
+			response: toolWitness(
+				witnessSubmission([], [witnessOwnerBoundaryChallenge(0, 2, 0, [0, 2])]),
+			),
+		},
+		{
+			role: "finalizer",
+			response: toolSelection(finalDelta([], [], [hardRootClaim(0, 2)]), "final"),
+		},
+	]);
+
+	expect(result.status).toBe("degraded");
+	expect(result.decision).toBeNull();
+	expect(result.failure?.message).toContain("intersects final hard-root projection");
+});
+
+test("automatically projects an accepted exact Owner span across multiple runs", async () => {
+	const blocks = Array.from({ length: 6 }, (_, blockId) => ({
+		blockId,
+		text: `Source block ${blockId}.`,
+	}));
+	const sourcePacket = parseRequirementReviewPacket({
+		schemaVersion: "xique.word-requirement-review.packet.v1",
+		reviewMode: "candidate_protected_residual",
+		version: "docx-paragraphs-v1",
+		outputField: "完整采购需求编号范围",
+		sourceName: "owner-cross-run.docx",
+		sourceSha256: sha256(
+			blocks.map((block) => `段落${block.blockId}：${block.text}`).join("\n"),
+		),
+		blockCount: blocks.length,
+		candidateId: "requirement_candidate_v120",
+		candidatePromptSha256: "7".repeat(64),
+		initialRanges: ["段落1", "段落3"],
+		blocks,
+	});
+	const provisional = {
+		...selection([]),
+		run_selections: [
+			{ run_index: 0, final_selected_ranges: ["段落1"] },
+			{ run_index: 1, final_selected_ranges: ["段落3"] },
+		],
+	};
+	const final = finalDeltas([], [hardRootClaim(0, 4)], "Accepted exact Owner span.", [0]);
+	const { result } = await runScenario(
+		[
+			{ role: "finalizer", response: toolSelection(provisional, "provisional") },
+			{
+				role: "witness",
+				response: toolWitness(
+					witnessSubmission([], [witnessOwnerBoundaryChallenge(0, 4, 1, [0, 1, 4])]),
+				),
+			},
+			{ role: "finalizer", response: toolSelection(final, "final") },
+		],
+		undefined,
+		undefined,
+		"0".repeat(64),
+		sourcePacket,
+	);
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.decision).toMatchObject({
+		acceptedOwnerBoundaryChallengeIndices: [0],
+		removeFromProvisionalBlockIds: [1, 3],
+		removeFromProvisionalRanges: ["段落1", "段落3"],
+	});
+});
+
+test("expands selected-island focus outward by source order for non-consecutive IDs", async () => {
+	const blocks = Array.from({ length: 180 }, (_, sourceIndex) => ({
+		blockId: sourceIndex * 10,
+		text: `Source block ${sourceIndex * 10}.`,
+	}));
+	const sourcePacket = parseRequirementReviewPacket({
+		schemaVersion: "xique.word-requirement-review.packet.v1",
+		reviewMode: "candidate_protected_residual",
+		version: "docx-paragraphs-v1",
+		outputField: "完整采购需求编号范围",
+		sourceName: "source-order-outward-focus.docx",
+		sourceSha256: sha256(
+			blocks.map((block) => `段落${block.blockId}：${block.text}`).join("\n"),
+		),
+		blockCount: blocks.length,
+		candidateId: "requirement_candidate_v120",
+		candidatePromptSha256: "7".repeat(64),
+		initialRanges: ["段落900"],
+		blocks,
+	});
+	const { result, scripted } = await runScenario(
+		[
+			{ role: "finalizer", response: toolSelection(selection(["段落900"]), "provisional") },
+			{
+				role: "witness",
+				response: toolWitness(
+					witnessSubmission([], [
+						witnessOwnerBoundaryChallenge(100, 1700, 900, [100, 900, 1700]),
+					]),
+				),
+			},
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+		],
+		undefined,
+		undefined,
+		"0".repeat(64),
+		sourcePacket,
+	);
+
+	const focusBlockIds = witnessFocusSource(scripted.observed[1]).source_ordered_blocks.map(
+		(block) => block.block_id,
+	);
+	expect(focusBlockIds).toEqual(expect.arrayContaining([100, 900, 1700]));
+	expect(result.witness).toMatchObject({
+		status: "accepted",
+		ownerBoundaryCoverage: { status: "valid_challenge", forwarded: true },
+		ownerBoundaryChallenges: [
+			{
+				rootBlockId: 100,
+				exitBlockIdExclusive: 1700,
+				anchorBlockId: 900,
+			},
+		],
+	});
 });
 
 test("accepts selection after the Finalizer narrows its hard-root claim", async () => {
@@ -2187,11 +2523,12 @@ test("normalizes terminalBlockId plus one to an EOF hard-root exit", async () =>
 });
 
 test.each([2_401, 7_033, 8_000])(
-	"accepts a %i-character residual reason above the soft target without truncation",
+	"accepts a %i-character provisional residual reason while requiring a compact final reason",
 	async (reasonLength) => {
 		const residualReason = "R".repeat(reasonLength);
+		const finalReason = "The final delta adjudication is compact.";
 		const provisional = selection(["段落0-段落2"], [], residualReason);
-		const final = finalDelta([], [], [], residualReason);
+		const final = finalDelta([], [], [], finalReason);
 		const { result, scripted } = await runScenario([
 			{ role: "finalizer", response: toolSelection(provisional, "bounded-provisional") },
 			{ role: "witness", response: toolWitness(witnessSubmission()) },
@@ -2201,8 +2538,8 @@ test.each([2_401, 7_033, 8_000])(
 		expect(scripted.callCount()).toBe(3);
 		expect(result.status).toBe("preserved");
 		expect(result.provisionalDecision?.residualReason).toBe(residualReason);
-		expect(result.decision?.residualReason).toBe(residualReason);
-		expect(result.reason.endsWith(residualReason)).toBe(true);
+		expect(result.decision?.residualReason).toBe(finalReason);
+		expect(result.reason.endsWith(finalReason)).toBe(true);
 	},
 );
 
@@ -2218,7 +2555,7 @@ test("fails closed when the Finalizer owner reason exceeds its hard budget", asy
 
 	expect(scripted.callCount()).toBe(1);
 	expect(result.status).toBe("degraded");
-	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v5");
+	expect(result.schemaVersion).toBe("xique.word-requirement-review.pi-native-result.v6");
 	expect(result.trace.rawSubmissions).toEqual([longSelection]);
 	expect(result.trace.normalizedSubmissions).toEqual([longSelection]);
 	expect(result.provisionalDecision).toBeNull();
@@ -2266,7 +2603,7 @@ test("fails closed when the final residual reason exceeds its hard budget", asyn
 	const validProvisional = selection(["段落0-段落2"]);
 	const overlongFinal = {
 		...finalDelta(),
-		residual_reason: "R".repeat(8_001),
+		residual_reason: "R".repeat(2_401),
 	};
 	const { result, scripted } = await runScenario([
 		{ role: "finalizer", response: toolSelection(validProvisional, "valid-provisional") },
@@ -2283,7 +2620,8 @@ test("fails closed when the final residual reason exceeds its hard budget", asyn
 	expect(result.trace.rawSubmissions).toEqual([validProvisional, overlongFinal]);
 	expect(result.trace.normalizedSubmissions).toEqual([validProvisional, overlongFinal]);
 	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
-	expect(result.failure?.message).toContain("8000");
+	expect(result.failure?.message).toContain("2400");
+	expect(scripted.observed[2].serializedContext).toContain('"maxLength":2400');
 });
 
 test("fails closed when final selection still intersects its hard-root claim", async () => {
@@ -2376,7 +2714,7 @@ test("accepts one Witness challenge in each direction", async () => {
 	]);
 });
 
-test("accepts three exclude cards and one select card in one Witness call", async () => {
+test("accepts one typed Owner challenge, two remove cards, and one add card", async () => {
 	const blocks = Array.from({ length: 5 }, (_, blockId) => ({
 		blockId,
 		text: `Source block ${blockId}.`,
@@ -2399,9 +2737,8 @@ test("accepts three exclude cards and one select card in one Witness call", asyn
 	const submission = witnessSubmission([
 		witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
 		witnessChallenge("atom_membership", "exclude", ["段落1"], [1]),
-		witnessChallenge("atom_membership", "exclude", ["段落2"], [2]),
 		witnessChallenge("atom_membership", "select", ["段落3"], [3]),
-	]);
+	], [witnessOwnerBoundaryChallenge(0, 3, 2, [0, 2, 3])]);
 	const { result, scripted } = await runScenario(
 		[
 			{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
@@ -2416,30 +2753,47 @@ test("accepts three exclude cards and one select card in one Witness call", asyn
 
 	expect(scripted.callCount()).toBe(3);
 	expect(result.witness).toMatchObject({ status: "accepted", coverage: "full" });
+	expect(result.witness?.ownerBoundaryChallenges).toMatchObject([
+		{
+			challengeIndex: 0,
+			rootBlockId: 0,
+			exitBlockIdExclusive: 3,
+			anchorBlockId: 2,
+			projectedProvisionalRanges: ["段落0-段落2"],
+		},
+	]);
 	expect(result.witness?.challenges).toMatchObject([
 		{ cardSlot: "exclude", cardIndex: 0, ranges: ["段落0"] },
 		{ cardSlot: "exclude", cardIndex: 1, ranges: ["段落1"] },
-		{ cardSlot: "exclude", cardIndex: 2, ranges: ["段落2"] },
 		{ cardSlot: "select", cardIndex: 0, ranges: ["段落3"] },
+	]);
+	expect(witnessReviewPacket(scripted.observed[2]).owner_boundary_challenges).toMatchObject([
+		{
+			challenge_index: 0,
+			mechanical_projected_provisional_ranges: ["段落0-段落2"],
+		},
 	]);
 	expect(witnessReviewPacket(scripted.observed[2]).challenges).toMatchObject([
 		{ card_slot: "exclude", card_index: 0 },
 		{ card_slot: "exclude", card_index: 1 },
-		{ card_slot: "exclude", card_index: 2 },
 		{ card_slot: "select", card_index: 0 },
 	]);
 });
 
-test("rejects more than three exclude cards or one select card", async () => {
+test("rejects more than one Owner challenge, two remove cards, or one add card", async () => {
 	const invalidSubmissions = [
 		witnessSubmission(
-			Array.from({ length: 4 }, () =>
+			Array.from({ length: 3 }, () =>
 				witnessChallenge("atom_membership", "exclude", ["段落0"], [0]),
 			),
 		),
 		witnessSubmission([
 			witnessChallenge("atom_membership", "select", ["段落1"], [1]),
 			witnessChallenge("atom_membership", "select", ["段落1"], [1]),
+		]),
+		witnessSubmission([], [
+			witnessOwnerBoundaryChallenge(0, 2, 0, [0, 2]),
+			witnessOwnerBoundaryChallenge(0, 2, 0, [0, 2]),
 		]),
 	];
 	for (const invalidSubmission of invalidSubmissions) {
@@ -2537,7 +2891,10 @@ test("rejects a missing Witness lane", async () => {
 		{ role: "finalizer", response: toolSelection(selection(["段落0"]), "provisional") },
 		{
 			role: "witness",
-			response: toolWitness({ remove_from_provisional: [] }),
+			response: toolWitness({
+				owner_boundary_challenges: [],
+				remove_from_provisional: [],
+			}),
 		},
 		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
 	]);
@@ -2708,7 +3065,7 @@ test("rejects Witness evidence outside its bounded source focus", async () => {
 });
 
 test("authorizes a Witness target when the bounded focus can include the full selected island", async () => {
-	const blocks = Array.from({ length: 100 }, (_, blockId) => ({
+	const blocks = Array.from({ length: 500 }, (_, blockId) => ({
 		blockId,
 		text: `Source block ${blockId}.`,
 	}));
@@ -2892,7 +3249,7 @@ test("rejects a visible Witness target outside the audit universe", async () => 
 });
 
 test("abstains one lane when supporting source exists but was not visible in focus", async () => {
-	const blocks = Array.from({ length: 100 }, (_, blockId) => ({
+	const blocks = Array.from({ length: 600 }, (_, blockId) => ({
 		blockId,
 		text: `Source block ${blockId}.`,
 	}));
@@ -2908,12 +3265,12 @@ test("abstains one lane when supporting source exists but was not visible in foc
 		blockCount: blocks.length,
 		candidateId: "requirement_candidate_v120",
 		candidatePromptSha256: "7".repeat(64),
-		initialRanges: ["段落0-段落99"],
+		initialRanges: ["段落0-段落599"],
 		blocks,
 	});
 	const rejectedPremise = "REJECTED_UNSEEN_SUPPORT_PREMISE_MUST_NOT_BE_FORWARDED";
 	const provisionalNarrative =
-		"The provisional author claims block 50 independently proves the selected membership.";
+		"The provisional author claims block 550 independently proves the selected membership.";
 	const { result, scripted } = await runScenario(
 		[
 			{
@@ -2928,7 +3285,7 @@ test("abstains one lane when supporting source exists but was not visible in foc
 				response: toolWitness(
 					witnessSubmission([
 						{
-							...witnessChallenge("atom_membership", "exclude", ["段落0"], [50]),
+							...witnessChallenge("atom_membership", "exclude", ["段落0"], [550]),
 							source_conclusion: rejectedPremise,
 						},
 					]),
@@ -2958,10 +3315,10 @@ test("abstains one lane when supporting source exists but was not visible in foc
 				{
 					lane: "exclude",
 					cardIndex: 0,
-					rawCard: { supporting_block_ids: [50] },
+					rawCard: { supporting_block_ids: [550] },
 					forwarded: false,
 					reason: {
-						unseenSupportingBlockIds: [50],
+						unseenSupportingBlockIds: [550],
 						unseenTargetBlockIds: [],
 						wrongStateTargetBlockIds: [],
 						outOfGroupTargetBlockIds: [],
@@ -2972,9 +3329,11 @@ test("abstains one lane when supporting source exists but was not visible in foc
 	});
 	expect(scripted.callCount()).toBe(3);
 	const review = witnessReviewPacket(scripted.observed[2]);
-	expect(review).toEqual({
+	expect(review).toMatchObject({
 		coverage: "partial",
+		owner_boundary_status: "valid_none",
 		lane_status: { exclude: "rejected_source_focus", select: "valid_none" },
+		owner_boundary_challenges: [],
 		challenges: [],
 	});
 	expect(review).not.toHaveProperty("error");
@@ -3116,7 +3475,7 @@ test("fails closed only when both source-focus lanes mechanically abstain", asyn
 			exclude: { status: "rejected_source_focus", forwarded: false },
 			select: { status: "rejected_source_focus", forwarded: false },
 		},
-		error: "both Witness lanes failed source-focus authorization",
+		error: "all submitted Witness slots failed source-focus authorization",
 		trace: {
 			rejectedCards: [
 				{ lane: "exclude", cardIndex: 0, forwarded: false },
@@ -3126,12 +3485,14 @@ test("fails closed only when both source-focus lanes mechanically abstain", asyn
 	});
 	expect(result.failure).toMatchObject({ role: "witness", code: "contract_error" });
 	const review = witnessReviewPacket(scripted.observed[2]);
-	expect(review).toEqual({
+	expect(review).toMatchObject({
 		coverage: "none",
+		owner_boundary_status: "valid_none",
 		lane_status: {
 			exclude: "rejected_source_focus",
 			select: "rejected_source_focus",
 		},
+		owner_boundary_challenges: [],
 		challenges: [],
 	});
 	expect(JSON.stringify(review)).not.toContain(rejectedExcludePremise);

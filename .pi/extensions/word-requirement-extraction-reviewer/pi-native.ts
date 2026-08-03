@@ -52,13 +52,15 @@ const MAX_WITNESS_FOCUS_BLOCKS = 256;
 const MAX_WITNESS_FOCUS_BLOCK_CHARACTERS = 4_000;
 const MAX_WITNESS_FOCUS_CHARACTERS = 180_000;
 const MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS = 190_000;
-const MAX_WITNESS_EXCLUDE_CARDS = 3;
+const MAX_WITNESS_OWNER_BOUNDARY_CHALLENGES = 1;
+const MAX_WITNESS_EXCLUDE_CARDS = 2;
 const MAX_WITNESS_SELECT_CARDS = 1;
 const MAX_CANONICAL_WITNESS_CHALLENGES =
 	(MAX_WITNESS_EXCLUDE_CARDS + MAX_WITNESS_SELECT_CARDS) * 2;
 const MAX_FINALIZER_OWNER_REASON_CHARACTERS = 1_200;
 const TARGET_FINALIZER_RESIDUAL_REASON_CHARACTERS = 2_400;
-const MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS = 8_000;
+const MAX_PROVISIONAL_FINALIZER_RESIDUAL_REASON_CHARACTERS = 8_000;
+const MAX_FINAL_DELTA_RESIDUAL_REASON_CHARACTERS = 2_400;
 const MAX_JSON_SERIALIZED_UTF16_CODE_UNIT_CHARACTERS = 6;
 const WITNESS_PROVISIONAL_RATIONALE_MARKER = "UNTRUSTED_PROVISIONAL_RATIONALE=";
 const WITNESS_PROVISIONAL_RATIONALE_JSON_ENVELOPE_CHARACTERS = JSON.stringify({
@@ -69,12 +71,13 @@ const MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS =
 	WITNESS_PROVISIONAL_RATIONALE_MARKER.length +
 	WITNESS_PROVISIONAL_RATIONALE_JSON_ENVELOPE_CHARACTERS +
 	MAX_JSON_SERIALIZED_UTF16_CODE_UNIT_CHARACTERS *
-		(MAX_FINALIZER_OWNER_REASON_CHARACTERS + MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS);
+		(MAX_FINALIZER_OWNER_REASON_CHARACTERS +
+			MAX_PROVISIONAL_FINALIZER_RESIDUAL_REASON_CHARACTERS);
 const WITNESS_RESPONSE_FORMAT = "json_object";
 const FINALIZER_REVIEW_PACKET_TOKEN_RESERVE = 120_000;
 const WITNESS_STATIC_TOKEN_RESERVE = 32_000;
 const PI_NATIVE_RUNTIME_VERSION =
-	"pi-native-finalizer-witness-v50-rationale-owner-falsifiers";
+	"pi-native-finalizer-witness-v51-typed-owner-boundary";
 
 type RunKind = "AUDIT_ISLAND" | "AUDIT_UNIVERSE";
 type HardCarrierType =
@@ -85,6 +88,7 @@ type HardCarrierType =
 type PiNativeRole = "finalizer" | "witness" | "preflight";
 export type PiNativeWitnessThinkingMode = "disabled" | "enabled";
 type WitnessLaneName = "exclude" | "select";
+type WitnessTraceLaneName = WitnessLaneName | "owner_boundary";
 type WitnessLaneCoverageStatus =
 	| "valid_none"
 	| "valid_challenge"
@@ -106,9 +110,12 @@ interface WitnessSourceFocusRejectionReason {
 }
 
 interface RejectedWitnessCardTrace {
-	lane: WitnessLaneName;
+	lane: WitnessTraceLaneName;
 	cardIndex: number;
-	rawCard: Static<typeof WitnessCardSchema>;
+	rawCard:
+		| Static<typeof WitnessCardSchema>
+		| Static<typeof WitnessRemoveCardSchema>
+		| Static<typeof WitnessOwnerBoundaryChallengeSchema>;
 	reason: WitnessSourceFocusRejectionReason;
 	forwarded: false;
 }
@@ -212,6 +219,7 @@ export interface CanonicalPiNativeDecision {
 	removeFromProvisionalRanges: string[];
 	addToProvisionalBlockIds: number[];
 	addToProvisionalRanges: string[];
+	acceptedOwnerBoundaryChallengeIndices: number[];
 	finalBlockIds: number[];
 	finalRanges: string[];
 }
@@ -230,14 +238,29 @@ export interface CanonicalPiNativeWitnessChallenge {
 	sourceQuotes: Array<{ blockId: number; quote: string }>;
 }
 
+export interface CanonicalPiNativeWitnessOwnerBoundaryChallenge {
+	challengeIndex: number;
+	carrierType: HardCarrierType;
+	rootBlockId: number;
+	exitBlockIdExclusive: number | null;
+	anchorBlockId: number;
+	projectedProvisionalBlockIds: number[];
+	projectedProvisionalRanges: string[];
+	sourceConclusion: string;
+	supportingBlockIds: number[];
+	sourceQuotes: Array<{ blockId: number; quote: string }>;
+}
+
 export interface PiNativeWitnessResult {
 	status: "accepted" | "contract_failure" | "runner_failure";
 	coverage: WitnessCoverage | null;
+	ownerBoundaryCoverage: WitnessLaneCoverage | null;
 	laneCoverage: {
 		exclude: WitnessLaneCoverage;
 		select: WitnessLaneCoverage;
 	} | null;
 	summary: string | null;
+	ownerBoundaryChallenges: CanonicalPiNativeWitnessOwnerBoundaryChallenge[];
 	challenges: CanonicalPiNativeWitnessChallenge[];
 	error: string | null;
 	trace: {
@@ -307,7 +330,7 @@ export interface RunPiNativeRequirementReviewOptions {
 }
 
 export interface PiNativeRequirementReviewResult {
-	schemaVersion: "xique.word-requirement-review.pi-native-result.v5";
+	schemaVersion: "xique.word-requirement-review.pi-native-result.v6";
 	architecture: "pi_native_finalizer_witness";
 	status: "preserved" | "repaired" | "degraded";
 	resolution: "pi_native_preserved" | "pi_native_applied_repair" | "review_incomplete";
@@ -417,34 +440,71 @@ const RunDeltaSchema = Type.Object(
 	},
 	{ additionalProperties: false },
 );
+const WitnessCardCommonProperties = {
+	ranges: Type.Array(RangeSchema, {
+		minItems: 1,
+		maxItems: 1,
+		description: "Exactly one continuous target range for this independent counterexample.",
+	}),
+	source_conclusion: Type.String({
+		minLength: 1,
+		description:
+			"One source-grounded final conclusion sentence only; never analysis, self-questioning, or draft revisions.",
+	}),
+	supporting_block_ids: Type.Array(Type.Integer({ minimum: 0 }), {
+		minItems: 1,
+		maxItems: 8,
+		description:
+			"Copy 1-8 top-level block_id values from focus block objects. Never copy addresses embedded in layout, path, sc, vc, root, or parent metadata.",
+	}),
+} as const;
 const WitnessCardSchema = Type.Object(
 	{
 		kind: Type.Union([Type.Literal("owner_boundary"), Type.Literal("atom_membership")]),
-		ranges: Type.Array(RangeSchema, {
-			minItems: 1,
-			maxItems: 1,
-			description: "Exactly one continuous target range for this independent counterexample.",
-		}),
+		...WitnessCardCommonProperties,
+	},
+	{ additionalProperties: false },
+);
+const WitnessRemoveCardSchema = Type.Object(
+	{
+		kind: Type.Literal("atom_membership"),
+		...WitnessCardCommonProperties,
+	},
+	{ additionalProperties: false },
+);
+const WitnessOwnerBoundaryChallengeSchema = Type.Object(
+	{
+		carrier_type: Type.Union([
+			Type.Literal("announcement"),
+			Type.Literal("bidder_instruction"),
+			Type.Literal("response_format"),
+			Type.Literal("contract_terms"),
+		]),
+		root_block_id: Type.Integer({ minimum: 0 }),
+		exit_block_id_exclusive: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+		anchor_block_id: Type.Integer({ minimum: 0 }),
 		source_conclusion: Type.String({
 			minLength: 1,
-			description:
-				"One source-grounded final conclusion sentence only; never analysis, self-questioning, or draft revisions.",
+			description: "One source-grounded conclusion establishing the complete Owner span.",
 		}),
 		supporting_block_ids: Type.Array(Type.Integer({ minimum: 0 }), {
 			minItems: 1,
 			maxItems: 8,
-			description:
-				"Copy 1-8 top-level block_id values from focus block objects. Never copy addresses embedded in layout, path, sc, vc, root, or parent metadata.",
 		}),
 	},
 	{ additionalProperties: false },
 );
 export const PiNativeSemanticWitnessSchema = Type.Object(
 	{
-		remove_from_provisional: Type.Array(WitnessCardSchema, {
+		owner_boundary_challenges: Type.Array(WitnessOwnerBoundaryChallengeSchema, {
+			maxItems: MAX_WITNESS_OWNER_BOUNDARY_CHALLENGES,
+			description:
+				"Zero or one independently reconstructed hard-carrier root-to-exclusive-exit span, anchored by a provisional-selected address.",
+		}),
+		remove_from_provisional: Type.Array(WitnessRemoveCardSchema, {
 			maxItems: MAX_WITNESS_EXCLUDE_CARDS,
 			description:
-				"Zero to three source-grounded cards whose targets are currently provisional-selected and should be removed.",
+				"Zero to two atom-membership cards whose singleton targets are currently provisional-selected and should be removed.",
 		}),
 		add_to_provisional: Type.Array(WitnessCardSchema, {
 			maxItems: MAX_WITNESS_SELECT_CARDS,
@@ -454,24 +514,24 @@ export const PiNativeSemanticWitnessSchema = Type.Object(
 	},
 	{ additionalProperties: false },
 );
-const FinalSubmissionCommonProperties = {
+const FinalSubmissionSharedProperties = {
 	owner_reason: Type.String({
 		minLength: 1,
 		maxLength: MAX_FINALIZER_OWNER_REASON_CHARACTERS,
 		description: "Compact Owner root-to-exit summary; hard maximum 1200 characters.",
-	}),
-	residual_reason: Type.String({
-		minLength: 1,
-		maxLength: MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS,
-		description:
-			"Compact residual summary. Target at most 2400 characters; hard maximum 8000 characters. Do not emit a block ledger.",
 	}),
 	hard_root_claims: Type.Array(HardRootClaimSchema, { maxItems: 64 }),
 } as const;
 export const PiNativeProvisionalSubmissionSchema = Type.Object(
 	{
 		submission_kind: Type.Literal("provisional_selection"),
-		...FinalSubmissionCommonProperties,
+		...FinalSubmissionSharedProperties,
+		residual_reason: Type.String({
+			minLength: 1,
+			maxLength: MAX_PROVISIONAL_FINALIZER_RESIDUAL_REASON_CHARACTERS,
+			description:
+				"Compact provisional residual summary. Target at most 2400 characters; hard maximum 8000 characters. Do not emit a block ledger.",
+		}),
 		run_selections: Type.Array(RunSelectionSchema, { maxItems: 128 }),
 		run_deltas: Type.Array(RunDeltaSchema, {
 			maxItems: 0,
@@ -483,7 +543,21 @@ export const PiNativeProvisionalSubmissionSchema = Type.Object(
 export const PiNativeFinalDeltaSubmissionSchema = Type.Object(
 	{
 		submission_kind: Type.Literal("final_delta"),
-		...FinalSubmissionCommonProperties,
+		...FinalSubmissionSharedProperties,
+		residual_reason: Type.String({
+			minLength: 1,
+			maxLength: MAX_FINAL_DELTA_RESIDUAL_REASON_CHARACTERS,
+			description:
+				"Compact final delta adjudication summary; hard maximum 2400 characters. Do not emit a block ledger.",
+		}),
+		accepted_owner_boundary_challenge_indices: Type.Array(
+			Type.Integer({ minimum: 0 }),
+			{
+				maxItems: MAX_WITNESS_OWNER_BOUNDARY_CHALLENGES,
+				description:
+					"Zero or one Witness Owner challenge index. Acceptance is effective only with an exact matching final hard_root_claim.",
+			},
+		),
 		run_selections: Type.Array(RunSelectionSchema, {
 			maxItems: 0,
 			description: "Must be [] during the final_delta phase.",
@@ -505,7 +579,7 @@ type FinalizerToolSchema =
 const PROVISIONAL_FINALIZER_TOOL_DESCRIPTION =
 	"Active phase: provisional_selection. Submit one complete provisional selection; run_deltas must be [].";
 const FINAL_DELTA_FINALIZER_TOOL_DESCRIPTION =
-	"Active phase: final_delta. Submit only the sparse final delta against S0; run_selections must be [].";
+	"Active phase: final_delta. Submit the sparse delta against S0 and zero or one accepted typed Owner challenge index; run_selections must be [].";
 
 function errorAssistantStream(
 	model: Model<Api>,
@@ -735,14 +809,18 @@ export async function runPiNativeRequirementReview(
 				maxWitnessFocusBlocks: MAX_WITNESS_FOCUS_BLOCKS,
 				maxWitnessFocusBlockCharacters: MAX_WITNESS_FOCUS_BLOCK_CHARACTERS,
 				maxWitnessFocusCharacters: MAX_WITNESS_FOCUS_CHARACTERS,
+				maxWitnessOwnerBoundaryChallenges:
+					MAX_WITNESS_OWNER_BOUNDARY_CHALLENGES,
 				maxWitnessExcludeCards: MAX_WITNESS_EXCLUDE_CARDS,
 				maxWitnessSelectCards: MAX_WITNESS_SELECT_CARDS,
 				maxCanonicalWitnessChallenges: MAX_CANONICAL_WITNESS_CHALLENGES,
 				maxFinalizerOwnerReasonCharacters: MAX_FINALIZER_OWNER_REASON_CHARACTERS,
 				targetFinalizerResidualReasonCharacters:
 					TARGET_FINALIZER_RESIDUAL_REASON_CHARACTERS,
-				maxFinalizerResidualReasonCharacters:
-					MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS,
+				maxProvisionalFinalizerResidualReasonCharacters:
+					MAX_PROVISIONAL_FINALIZER_RESIDUAL_REASON_CHARACTERS,
+				maxFinalDeltaResidualReasonCharacters:
+					MAX_FINAL_DELTA_RESIDUAL_REASON_CHARACTERS,
 				maxWitnessProvisionalRationaleSerializedCharacters:
 					MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS,
 				maxWitnessCombinedFocusAndRationaleSerializedCharacters:
@@ -801,7 +879,7 @@ export async function runPiNativeRequirementReview(
 				| "failure"
 			>,
 		): PiNativeRequirementReviewResult => ({
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v5",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v6",
 			architecture: "pi_native_finalizer_witness",
 			packetSha256: options.packetSha256,
 			capabilitySha256,
@@ -963,6 +1041,7 @@ export async function runPiNativeRequirementReview(
 						submission,
 						prepared,
 						provisionalDecision,
+						witnessResult,
 					);
 					validateFinalDecisionConsistency(attemptedFinalDecision);
 					return terminalResult({ ok: true, status: "accepted" });
@@ -1187,7 +1266,7 @@ export async function runPiNativeRequirementReview(
 			options.packet.blocks,
 		);
 		return {
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v5",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v6",
 			architecture: "pi_native_finalizer_witness",
 			status: "degraded",
 			resolution: "review_incomplete",
@@ -1321,7 +1400,7 @@ NEUTRAL_LAYOUT_META=${JSON.stringify({
 })}
 
 TERMINAL_CONTRACT
-总共调用同名 submit_final_selection 两次，但每次 provider 只看到当前 phase 的严格 schema。第一次必须 submission_kind=provisional_selection：run_selections 按 run_index 对 RUN_REGISTRY 的每个 run 恰好提交一次，run_deltas=[]；每项只列该 run 内全部且仅有正向证明的 final_selected_ranges，完整排除则提交空数组。第二次 provider context 会把 provisional 与 Harness review packet 作为对称的非权威审查输入重新呈现，并在其外部提供权威 ACTIVE_FINALIZER_PHASE=final_delta 控制；第二次必须 submission_kind=final_delta：run_selections=[]，run_deltas 只列实际变化的 run，每个 remove_ranges 只能删除该 run 内的 provisional-selected 地址，每个 add_ranges 只能加入该 run 内的 provisional-excluded 地址，未列出的地址机械保持 S0。Harness 唯一计算 S=(S0-Δ-)∪Δ+ 并 compact；不得重写完整 final ranges。第二轮必须逐 claim 完成 typed claim reconciliation：派生 final selected 与 final hard_root_claims 的任何投影都必须零相交；保留地址时必须同步收窄或撤回覆盖它的 claim。不得静默复制 Candidate 地址；reason 只能位于工具参数内；每轮禁止任何可见文本。`;
+总共调用同名 submit_final_selection 两次，但每次 provider 只看到当前 phase 的严格 schema。第一次必须 submission_kind=provisional_selection：run_selections 按 run_index 对 RUN_REGISTRY 的每个 run 恰好提交一次，run_deltas=[]；每项只列该 run 内全部且仅有正向证明的 final_selected_ranges，完整排除则提交空数组。第二次 provider context 会把 provisional 与 Harness review packet 作为对称的非权威审查输入重新呈现，并在其外部提供权威 ACTIVE_FINALIZER_PHASE=final_delta 控制；第二次必须 submission_kind=final_delta：run_selections=[]，run_deltas 只列实际变化的 run，每个 remove_ranges 只能删除该 run 内的 provisional-selected 地址，每个 add_ranges 只能加入该 run 内的 provisional-excluded 地址，未列出的地址机械保持 S0。若接受 typed Owner challenge，必须在 accepted_owner_boundary_challenge_indices 提交其 index，并在 final hard_root_claims 提交 carrier/root/exit 完全一致的 claim；双钥匙同时成立时 Harness 自动删除 S0∩[root,exit)，无需在 run_deltas 逐段重复。Harness 唯一执行集合投影并 compact，不判断 challenge 或 claim 的语义真伪。第二轮 residual_reason 硬上限 2400 字符。第二轮必须逐 claim 完成 typed claim reconciliation：派生 final selected 与 final hard_root_claims 的任何投影都必须零相交；保留地址时必须同步收窄或撤回覆盖它的 claim。不得静默复制 Candidate 地址；reason 只能位于工具参数内；每轮禁止任何可见文本。`;
 	return {
 		packet,
 		neutralLayout,
@@ -1412,6 +1491,7 @@ function validateFinalDeltaDecision(
 	raw: RawFinalSubmission,
 	prepared: PreparedFinalSelection,
 	provisionalDecision: CanonicalPiNativeDecision,
+	witnessResult: PiNativeWitnessResult | null,
 ): CanonicalPiNativeDecision {
 	if (raw.submission_kind !== "final_delta") {
 		throw new Error("second Finalizer submission must use final_delta");
@@ -1423,6 +1503,36 @@ function validateFinalDeltaDecision(
 	const finalSet = new Set(provisionalDecision.finalBlockIds);
 	const removeBlockIds = new Set<number>();
 	const addBlockIds = new Set<number>();
+	const ownerBoundaryRemoveBlockIds = new Set<number>();
+	const acceptedOwnerBoundaryChallengeIndices = new Set<number>();
+	for (const challengeIndex of raw.accepted_owner_boundary_challenge_indices) {
+		if (acceptedOwnerBoundaryChallengeIndices.has(challengeIndex)) {
+			throw new Error(
+				`accepted_owner_boundary_challenge_indices duplicates index ${challengeIndex}`,
+			);
+		}
+		const challenge = witnessResult?.ownerBoundaryChallenges[challengeIndex];
+		if (challenge === undefined || challenge.challengeIndex !== challengeIndex) {
+			throw new Error(
+				`accepted_owner_boundary_challenge_indices references unknown index ${challengeIndex}`,
+			);
+		}
+		const exactClaim = raw.hard_root_claims.some(
+			(claim) =>
+				claim.carrier_type === challenge.carrierType &&
+				claim.root_block_id === challenge.rootBlockId &&
+				claim.exit_block_id_exclusive === challenge.exitBlockIdExclusive,
+		);
+		if (!exactClaim) {
+			throw new Error(
+				`accepted Owner challenge ${challengeIndex} requires an exact final hard_root_claim`,
+			);
+		}
+		acceptedOwnerBoundaryChallengeIndices.add(challengeIndex);
+		for (const blockId of challenge.projectedProvisionalBlockIds) {
+			ownerBoundaryRemoveBlockIds.add(blockId);
+		}
+	}
 	const seenRunIndices = new Set<number>();
 	for (const [deltaIndex, delta] of raw.run_deltas.entries()) {
 		if (seenRunIndices.has(delta.run_index)) {
@@ -1476,6 +1586,7 @@ function validateFinalDeltaDecision(
 		collectDelta(delta.remove_ranges, "remove", removeBlockIds);
 		collectDelta(delta.add_ranges, "add", addBlockIds);
 	}
+	for (const blockId of ownerBoundaryRemoveBlockIds) removeBlockIds.add(blockId);
 	for (const blockId of removeBlockIds) finalSet.delete(blockId);
 	for (const blockId of addBlockIds) finalSet.add(blockId);
 	return buildCanonicalDecision(
@@ -1575,6 +1686,12 @@ function buildCanonicalDecision(
 		removeFromProvisionalRanges: compactRanges(removeFromProvisionalBlockIds),
 		addToProvisionalBlockIds,
 		addToProvisionalRanges: compactRanges(addToProvisionalBlockIds),
+		acceptedOwnerBoundaryChallengeIndices:
+			raw.submission_kind === "final_delta"
+				? [...new Set(raw.accepted_owner_boundary_challenge_indices)].sort(
+						(left, right) => left - right,
+					)
+				: [],
 		finalBlockIds,
 		finalRanges: compactRanges(finalBlockIds),
 	};
@@ -1600,6 +1717,21 @@ function validateFinalDecisionConsistency(decision: CanonicalPiNativeDecision): 
 }
 
 function semanticWitnessCrossFieldError(raw: RawSemanticWitness): string | null {
+	for (const [challengeIndex, challenge] of raw.owner_boundary_challenges.entries()) {
+		if (challenge.source_conclusion.trim().length === 0) {
+			return `semantic witness owner_boundary_challenges[${challengeIndex}] must contain a non-blank source_conclusion`;
+		}
+		if (challenge.root_block_id > challenge.anchor_block_id) {
+			return `semantic witness owner_boundary_challenges[${challengeIndex}] root must not follow anchor`;
+		}
+		if (
+			challenge.exit_block_id_exclusive !== null &&
+			(challenge.exit_block_id_exclusive <= challenge.root_block_id ||
+				challenge.anchor_block_id >= challenge.exit_block_id_exclusive)
+		) {
+			return `semantic witness owner_boundary_challenges[${challengeIndex}] has an invalid exclusive exit`;
+		}
+	}
 	for (const [fieldName, cards] of [
 		["remove_from_provisional", raw.remove_from_provisional],
 		["add_to_provisional", raw.add_to_provisional],
@@ -1621,16 +1753,40 @@ function validateSemanticWitness(
 	witnessTargetAuthorization: WitnessTargetAuthorization,
 ): {
 	summary: string;
+	ownerBoundaryChallenges: CanonicalPiNativeWitnessOwnerBoundaryChallenge[];
 	challenges: CanonicalPiNativeWitnessChallenge[];
 	coverage: WitnessCoverage;
+	ownerBoundaryCoverage: WitnessLaneCoverage;
 	laneCoverage: { exclude: WitnessLaneCoverage; select: WitnessLaneCoverage };
 	rejectedCards: RejectedWitnessCardTrace[];
 } {
+	for (const [challengeIndex, challenge] of raw.owner_boundary_challenges.entries()) {
+		for (const [fieldName, blockId] of [
+			["root_block_id", challenge.root_block_id],
+			["anchor_block_id", challenge.anchor_block_id],
+			...(challenge.exit_block_id_exclusive === null
+				? []
+				: ([["exit_block_id_exclusive", challenge.exit_block_id_exclusive]] as const)),
+		] as const) {
+			if (!prepared.availableBlockIds.has(blockId)) {
+				throw new Error(
+					`semantic witness owner_boundary_challenges[${challengeIndex}].${fieldName} references unavailable block ${blockId}`,
+				);
+			}
+		}
+		for (const supportingBlockId of challenge.supporting_block_ids) {
+			if (!prepared.availableBlockIds.has(supportingBlockId)) {
+				throw new Error(
+					`semantic witness owner_boundary_challenges[${challengeIndex}].supporting_block_ids references unavailable block ${supportingBlockId}`,
+				);
+			}
+		}
+	}
 	const rawCards: Array<{
 		lane: WitnessLaneName;
 		direction: WitnessLaneName;
 		cardIndex: number;
-		rawCard: Static<typeof WitnessCardSchema>;
+		rawCard: Static<typeof WitnessCardSchema> | Static<typeof WitnessRemoveCardSchema>;
 	}> = [
 		...raw.remove_from_provisional.map((rawCard, cardIndex) => ({
 			lane: "exclude" as const,
@@ -1690,6 +1846,62 @@ function validateSemanticWitness(
 		}
 	}
 	const rejectedCards: RejectedWitnessCardTrace[] = [];
+	const authorizedOwnerBoundaryChallenges: Array<{
+		challengeIndex: number;
+		rawChallenge: Static<typeof WitnessOwnerBoundaryChallengeSchema>;
+	}> = [];
+	for (const [challengeIndex, rawChallenge] of raw.owner_boundary_challenges.entries()) {
+		const ownerAddressBlockIds = [
+			rawChallenge.root_block_id,
+			rawChallenge.anchor_block_id,
+			...(rawChallenge.exit_block_id_exclusive === null
+				? []
+				: [rawChallenge.exit_block_id_exclusive]),
+		];
+		const unseenTargetBlockIds = [
+			...new Set(ownerAddressBlockIds.filter((blockId) => !allFocusBlockIds.has(blockId))),
+		].sort((left, right) => left - right);
+		const unseenSupportingBlockIds = [
+			...new Set(
+				rawChallenge.supporting_block_ids.filter(
+					(supportingBlockId) => !allFocusBlockIds.has(supportingBlockId),
+				),
+			),
+		].sort((left, right) => left - right);
+		const wrongStateTargetBlockIds = provisionalBlockIds.has(rawChallenge.anchor_block_id)
+			? []
+			: [rawChallenge.anchor_block_id];
+		const outOfAuditUniverseTargetBlockIds = auditUniverse.has(rawChallenge.anchor_block_id)
+			? []
+			: [rawChallenge.anchor_block_id];
+		const removeGroupIndex = groupIndexByLane.exclude.get(rawChallenge.anchor_block_id);
+		const outOfGroupTargetBlockIds =
+			removeGroupIndex === undefined ? [rawChallenge.anchor_block_id] : [];
+		if (
+			unseenTargetBlockIds.length > 0 ||
+			outOfGroupTargetBlockIds.length > 0 ||
+			wrongStateTargetBlockIds.length > 0 ||
+			outOfAuditUniverseTargetBlockIds.length > 0 ||
+			unseenSupportingBlockIds.length > 0
+		) {
+			rejectedCards.push({
+				lane: "owner_boundary",
+				cardIndex: challengeIndex,
+				rawCard: rawChallenge,
+				reason: {
+					code: "source_focus_authorization",
+					unseenTargetBlockIds,
+					outOfGroupTargetBlockIds,
+					wrongStateTargetBlockIds,
+					outOfAuditUniverseTargetBlockIds,
+					unseenSupportingBlockIds,
+				},
+				forwarded: false,
+			});
+			continue;
+		}
+		authorizedOwnerBoundaryChallenges.push({ challengeIndex, rawChallenge });
+	}
 	const authorizedCards: typeof expandedCards = [];
 	for (const expandedCard of expandedCards) {
 		const { lane, cardIndex, rawCard, targetBlockIds } = expandedCard;
@@ -1765,6 +1977,12 @@ function validateSemanticWitness(
 			return [lane, coverage];
 		}),
 	) as { exclude: WitnessLaneCoverage; select: WitnessLaneCoverage };
+	const ownerBoundaryCoverage: WitnessLaneCoverage =
+		raw.owner_boundary_challenges.length === 0
+			? { status: "valid_none", forwarded: false }
+			: authorizedOwnerBoundaryChallenges.length > 0
+				? { status: "valid_challenge", forwarded: true }
+				: { status: "rejected_source_focus", forwarded: false };
 	const provisionalClaimedBlockIds = new Set(
 		provisionalDecision.hardRootClaims.flatMap((claim) =>
 			expandRanges(
@@ -1778,6 +1996,62 @@ function validateSemanticWitness(
 		prepared.packet.blocks.map((block) => [block.blockId, block.text]),
 	);
 	let sourceQuoteCharacters = 0;
+	const sourceQuotesForBlockIds = (
+		blockIds: readonly number[],
+	): Array<{ blockId: number; quote: string }> => {
+		const sourceQuotes: Array<{ blockId: number; quote: string }> = [];
+		for (const blockId of [...new Set(blockIds)].slice(0, 4)) {
+			const sourceText = sourceByBlockId.get(blockId);
+			if (sourceText === undefined) throw new Error(`missing source block ${blockId}`);
+			const remainingCharacters =
+				MAX_WITNESS_SOURCE_QUOTE_CHARACTERS - sourceQuoteCharacters;
+			if (remainingCharacters <= 0) break;
+			const quote = sourceText.slice(
+				0,
+				Math.min(MAX_WITNESS_SOURCE_QUOTE_BLOCK_CHARACTERS, remainingCharacters),
+			);
+			sourceQuoteCharacters += quote.length;
+			sourceQuotes.push({ blockId, quote });
+		}
+		return sourceQuotes;
+	};
+	const ownerBoundaryChallenges = authorizedOwnerBoundaryChallenges.map(
+		({ challengeIndex, rawChallenge }) => {
+			const projectedProvisionalBlockIds = [...auditUniverse]
+				.filter(
+					(blockId) =>
+						provisionalBlockIds.has(blockId) &&
+						blockId >= rawChallenge.root_block_id &&
+						(rawChallenge.exit_block_id_exclusive === null ||
+							blockId < rawChallenge.exit_block_id_exclusive),
+				)
+				.sort((left, right) => left - right);
+			if (!projectedProvisionalBlockIds.includes(rawChallenge.anchor_block_id)) {
+				throw new Error(
+					`semantic witness owner_boundary_challenges[${challengeIndex}] anchor is outside its projected provisional span`,
+				);
+			}
+			return {
+				challengeIndex,
+				carrierType: rawChallenge.carrier_type,
+				rootBlockId: rawChallenge.root_block_id,
+				exitBlockIdExclusive: rawChallenge.exit_block_id_exclusive,
+				anchorBlockId: rawChallenge.anchor_block_id,
+				projectedProvisionalBlockIds,
+				projectedProvisionalRanges: compactRanges(projectedProvisionalBlockIds),
+				sourceConclusion: rawChallenge.source_conclusion.trim(),
+				supportingBlockIds: [...new Set(rawChallenge.supporting_block_ids)],
+				sourceQuotes: sourceQuotesForBlockIds([
+					rawChallenge.root_block_id,
+					...(rawChallenge.exit_block_id_exclusive === null
+						? []
+						: [rawChallenge.exit_block_id_exclusive]),
+					rawChallenge.anchor_block_id,
+					...rawChallenge.supporting_block_ids,
+				]),
+			};
+		},
+	);
 	const challenges = authorizedCards.flatMap(
 		({ lane, direction, cardIndex, rawCard: challenge, targetBlockIds: blockIds }) => {
 		const claimedAddressedBlockIds = blockIds.filter((blockId) =>
@@ -1832,20 +2106,7 @@ function validateSemanticWitness(
 			for (const blockId of [...conflictBlockIds.slice(0, 2), ...conflictBlockIds.slice(-2)]) {
 				evidenceBlockIds.add(blockId);
 			}
-			const sourceQuotes: Array<{ blockId: number; quote: string }> = [];
-			for (const blockId of [...evidenceBlockIds].slice(0, 4)) {
-				const sourceText = sourceByBlockId.get(blockId);
-				if (sourceText === undefined) throw new Error(`missing source block ${blockId}`);
-				const remainingCharacters =
-					MAX_WITNESS_SOURCE_QUOTE_CHARACTERS - sourceQuoteCharacters;
-				if (remainingCharacters <= 0) break;
-				const quote = sourceText.slice(
-					0,
-					Math.min(MAX_WITNESS_SOURCE_QUOTE_BLOCK_CHARACTERS, remainingCharacters),
-				);
-				sourceQuoteCharacters += quote.length;
-				sourceQuotes.push({ blockId, quote });
-			}
+			const sourceQuotes = sourceQuotesForBlockIds([...evidenceBlockIds]);
 			return [
 				{
 					cardSlot: lane,
@@ -1868,6 +2129,7 @@ function validateSemanticWitness(
 		throw new Error("semantic witness canonical challenge limit exceeded");
 	}
 	const coverage: WitnessCoverage =
+		ownerBoundaryCoverage.status !== "valid_challenge" &&
 		laneCoverage.exclude.status === "rejected_source_focus" &&
 		laneCoverage.select.status === "rejected_source_focus"
 			? "none"
@@ -1878,9 +2140,11 @@ function validateSemanticWitness(
 		authorizedCards.map((card) => `${card.lane}:${card.cardIndex}`),
 	).size;
 	return {
-		summary: `${authorizedCardCount} bounded counterexample card${authorizedCardCount === 1 ? "" : "s"}; ${challenges.length} canonical partition${challenges.length === 1 ? "" : "s"}`,
+		summary: `${ownerBoundaryChallenges.length} Owner boundary challenge${ownerBoundaryChallenges.length === 1 ? "" : "s"}; ${authorizedCardCount} bounded atom card${authorizedCardCount === 1 ? "" : "s"}; ${challenges.length} canonical partition${challenges.length === 1 ? "" : "s"}`,
+		ownerBoundaryChallenges,
 		challenges,
 		coverage,
+		ownerBoundaryCoverage,
 		laneCoverage,
 		rejectedCards,
 	};
@@ -2084,6 +2348,20 @@ async function runSemanticWitness(
 	const sourceBlockById = new Map(
 		prepared.packet.blocks.map((block) => [block.blockId, block]),
 	);
+	const sourceOrderedBlockIds = prepared.packet.blocks.map((block) => block.blockId);
+	const sourceIndexByBlockId = new Map(
+		sourceOrderedBlockIds.map((blockId, sourceIndex) => [blockId, sourceIndex]),
+	);
+	const sourceWindowBlockIds = (centerBlockId: number, radius: number): number[] => {
+		const centerSourceIndex = sourceIndexByBlockId.get(centerBlockId);
+		if (centerSourceIndex === undefined) {
+			throw new Error(`source window center block ${centerBlockId} is unavailable`);
+		}
+		return sourceOrderedBlockIds.slice(
+			Math.max(0, centerSourceIndex - radius),
+			Math.min(sourceOrderedBlockIds.length, centerSourceIndex + radius + 1),
+		);
+	};
 	const runIndexByBlockId = new Map<number, number>();
 	for (const run of prepared.runs) {
 		for (const blockId of run.blockIds) runIndexByBlockId.set(blockId, run.runIndex);
@@ -2121,22 +2399,16 @@ async function runSemanticWitness(
 		...provisionalDecision.hardRootClaims,
 		...provisionalDecision.ignoredNoProjectionClaims,
 	]) {
-		for (let offset = -2; offset <= 2; offset += 1) {
-			const rootWindowBlockId = claim.rootBlockId + offset;
-			if (prepared.availableBlockIds.has(rootWindowBlockId)) {
-				mandatoryWitnessFocusBlockIds.add(rootWindowBlockId);
-			}
-			if (!addWitnessFocusBlock(rootWindowBlockId)) {
+		const claimWindowBlockIds = [
+			...sourceWindowBlockIds(claim.rootBlockId, 2),
+			...(claim.exitBlockIdExclusive === null
+				? []
+				: sourceWindowBlockIds(claim.exitBlockIdExclusive, 2)),
+		];
+		for (const blockId of claimWindowBlockIds) {
+			mandatoryWitnessFocusBlockIds.add(blockId);
+			if (!addWitnessFocusBlock(blockId)) {
 				throw new Error("required Witness hard-root source windows exceed focus budget");
-			}
-			if (claim.exitBlockIdExclusive !== null) {
-				const exitWindowBlockId = claim.exitBlockIdExclusive + offset;
-				if (prepared.availableBlockIds.has(exitWindowBlockId)) {
-					mandatoryWitnessFocusBlockIds.add(exitWindowBlockId);
-				}
-				if (!addWitnessFocusBlock(exitWindowBlockId)) {
-					throw new Error("required Witness hard-root source windows exceed focus budget");
-				}
 			}
 		}
 	}
@@ -2218,10 +2490,6 @@ async function runSemanticWitness(
 				const lastSelectedBlockId = selectedIsland.at(-1)!;
 				addWitnessFocusBlock(firstSelectedBlockId);
 				addWitnessFocusBlock(lastSelectedBlockId);
-				for (let offset = 1; offset <= 2; offset += 1) {
-					addWitnessFocusBlock(firstSelectedBlockId - offset);
-					addWitnessFocusBlock(lastSelectedBlockId + offset);
-				}
 			}
 			selectedIsland = blockId !== undefined && provisionalBlockIds.has(blockId) ? [blockId] : [];
 		}
@@ -2236,6 +2504,31 @@ async function runSemanticWitness(
 			addWitnessFocusBlock(selectedBlockId);
 		}
 		if (!foundBlock || witnessFocusBlockById.size >= MAX_WITNESS_FOCUS_BLOCKS) break;
+	}
+	const selectedIslandSourceSpans = selectedIslands.map((selectedIsland) => {
+		const firstSourceIndex = sourceIndexByBlockId.get(selectedIsland[0]!);
+		const lastSourceIndex = sourceIndexByBlockId.get(selectedIsland.at(-1)!);
+		if (firstSourceIndex === undefined || lastSourceIndex === undefined) {
+			throw new Error("selected island is missing from source-order index");
+		}
+		return { firstSourceIndex, lastSourceIndex };
+	});
+	for (let distance = 1; ; distance += 1) {
+		let foundBlock = false;
+		let addedBlock = false;
+		let capacityBlocked = false;
+		for (const { firstSourceIndex, lastSourceIndex } of selectedIslandSourceSpans) {
+			for (const sourceIndex of [firstSourceIndex - distance, lastSourceIndex + distance]) {
+				const blockId = sourceOrderedBlockIds[sourceIndex];
+				if (blockId === undefined) continue;
+				foundBlock = true;
+				const previousSize = witnessFocusBlockById.size;
+				if (!addWitnessFocusBlock(blockId)) capacityBlocked = true;
+				if (witnessFocusBlockById.size > previousSize) addedBlock = true;
+			}
+		}
+		if (!foundBlock || witnessFocusBlockById.size >= MAX_WITNESS_FOCUS_BLOCKS) break;
+		if (!addedBlock && capacityBlocked) break;
 	}
 	for (const partialRun of partialRuns) {
 		const run = prepared.runs[partialRun.run_index];
@@ -2395,8 +2688,10 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 		const contractFailure = (error: string): PiNativeWitnessResult => ({
 			status: "contract_failure",
 			coverage: decision?.coverage ?? null,
+			ownerBoundaryCoverage: decision?.ownerBoundaryCoverage ?? null,
 			laneCoverage: decision?.laneCoverage ?? null,
 			summary: decision?.summary ?? null,
+			ownerBoundaryChallenges: decision?.ownerBoundaryChallenges ?? [],
 			challenges: decision?.challenges ?? [],
 			error,
 			trace: {
@@ -2471,13 +2766,15 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 			return contractFailure("Witness did not produce a validated bounded counterexample result");
 		}
 		if (decision.coverage === "none") {
-			return contractFailure("both Witness lanes failed source-focus authorization");
+			return contractFailure("all submitted Witness slots failed source-focus authorization");
 		}
 		return {
 			status: "accepted",
 			coverage: decision.coverage,
+			ownerBoundaryCoverage: decision.ownerBoundaryCoverage,
 			laneCoverage: decision.laneCoverage,
 			summary: decision.summary,
+			ownerBoundaryChallenges: decision.ownerBoundaryChallenges,
 			challenges: decision.challenges,
 			error: null,
 			trace: {
@@ -2523,8 +2820,10 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 		return {
 			status: "runner_failure",
 			coverage: null,
+			ownerBoundaryCoverage: null,
 			laneCoverage: null,
 			summary: null,
+			ownerBoundaryChallenges: [],
 			challenges: [],
 			error: errorMessage(error),
 			trace: {
@@ -2704,7 +3003,10 @@ function buildReviewPacket(
 		provisional_final_ranges: decision.finalRanges,
 		mechanical_delta_contract: {
 			base_set: "S0=provisional_final_ranges",
-			formula: "S=(S0-remove_ranges) union add_ranges",
+			formula:
+				"A=S0 intersect [root,exit); S=(S0-A-remove_ranges) union add_ranges",
+			owner_boundary_acceptance:
+				"accepted_owner_boundary_challenge_indices plus an exact final hard_root_claim mechanically removes S0 intersect [root, exit); no repeated run delta is required",
 			run_selections_must_be_empty: true,
 			sparse_run_deltas_only: true,
 			remove_authority: "provisional-selected addresses inside the declared run only",
@@ -2729,6 +3031,7 @@ function buildReviewPacket(
 			selected_boundary_gaps: selectedBoundaryGaps.map(renderSelectedBoundaryGap),
 			independent_semantic_witness: {
 				coverage: witness.coverage,
+				owner_boundary_status: witness.ownerBoundaryCoverage?.status ?? null,
 				lane_status:
 					witness.laneCoverage === null
 						? null
@@ -2736,6 +3039,21 @@ function buildReviewPacket(
 							exclude: witness.laneCoverage.exclude.status,
 							select: witness.laneCoverage.select.status,
 						},
+				owner_boundary_challenges: witness.ownerBoundaryChallenges.map((challenge) => ({
+					challenge_index: challenge.challengeIndex,
+					carrier_type: challenge.carrierType,
+					root_block_id: challenge.rootBlockId,
+					exit_block_id_exclusive: challenge.exitBlockIdExclusive,
+					anchor_block_id: challenge.anchorBlockId,
+					mechanical_projected_provisional_ranges:
+						challenge.projectedProvisionalRanges,
+					source_conclusion: challenge.sourceConclusion,
+					supporting_block_ids: challenge.supportingBlockIds,
+					source_quotes: challenge.sourceQuotes.map((quote) => ({
+						block_id: quote.blockId,
+						quote: quote.quote,
+					})),
+				})),
 				challenges: witness.challenges.map((challenge) => ({
 					card_slot: challenge.cardSlot,
 					card_index: challenge.cardIndex,
@@ -2817,11 +3135,15 @@ function finalizerReasonCodeUnitError(value: unknown): string | null {
 	) {
 		return `owner_reason exceeds ${MAX_FINALIZER_OWNER_REASON_CHARACTERS} UTF-16 code units`;
 	}
+	const residualReasonLimit =
+		value.submission_kind === "final_delta"
+			? MAX_FINAL_DELTA_RESIDUAL_REASON_CHARACTERS
+			: MAX_PROVISIONAL_FINALIZER_RESIDUAL_REASON_CHARACTERS;
 	if (
 		typeof value.residual_reason === "string" &&
-		value.residual_reason.length > MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS
+		value.residual_reason.length > residualReasonLimit
 	) {
-		return `residual_reason exceeds ${MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS} UTF-16 code units`;
+		return `residual_reason exceeds ${residualReasonLimit} UTF-16 code units`;
 	}
 	return null;
 }
