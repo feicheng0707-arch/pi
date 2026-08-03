@@ -42,7 +42,7 @@ const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v10";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v11";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -1131,25 +1131,22 @@ function prepareTargetedFinalizer(
 			...challenge.removePartitions.map((partition) => ({
 				review_kind: "exact_remove_claim",
 				target_ranges: partition.targetRanges,
-				untrusted_challenger_claim: partition.sourceConclusion,
 				supporting_block_ids: partition.supportingBlockIds,
 			})),
 			...challenge.removeAuditPartitions.map((partition) => ({
 				review_kind: partition.auditKind,
 				target_ranges: partition.targetRanges,
 				mechanical_target_block_count: partition.targetBlockCount,
-				untrusted_challenger_claim: partition.auditBasis,
 				supporting_block_ids: partition.supportingBlockIds,
 			})),
 		],
 		add_review_groups: challenge.addPartitions.map((partition) => ({
 			review_kind: "exact_add_claim",
 			target_ranges: partition.targetRanges,
-			untrusted_challenger_claim: partition.sourceConclusion,
 			supporting_block_ids: partition.supportingBlockIds,
 		})),
 		challenger_partition_kind_forwarded: true,
-		challenger_claims_forwarded_as_untrusted: true,
+		challenger_claims_forwarded_as_untrusted: false,
 	});
 	return {
 		systemPrompt: [

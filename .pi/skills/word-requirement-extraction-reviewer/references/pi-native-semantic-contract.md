@@ -59,7 +59,7 @@ Heading/body closure 必须自底向上构造，并与 hard-carrier Owner exit �
 
 最终 admission invariant：每个 final selected block 必须且只能有一种 source-grounded provenance：`ATOM`，即目标自身含 requirement proposition；或 `HEADING`，即它通过上述 bottom-up closure。Owner、recovery、module/annex 身份、cluster、地址连续、父标题或相邻 survivor 都不能成为第三种 membership provenance。任何无法归入 `ATOM|HEADING` 的 selected block 必须排除。
 
-规范性纳入与裸 pointer 用“执行关系 / 查找关系”二分：目标要求当前工作、服务或成果按、遵守、符合、达到或执行某制度、标准、图纸或附件时，属于 operative baseline；若 X 只约束响应、证明、报价、采购程序或文档编制，仍按对应 excluded role 判断。技术附件或制度 intro 若同时确定适用对象，并指示受约束主体执行其后固定规则，本身是 applicability ATOM；说明性包装不能覆盖同 block 的执行或适用关系。只有纯目的说明、没有任何执行或适用关系时才是 meta。只要求另见未提供材料且自身没有执行关系时才是 bare pointer。当前履约标准的版本替代、适用集合和优先顺序同样是 operative applicability；只维护采购文件或文档法律效力时是 meta。边界证据资格永远不等于输出 membership。
+规范性纳入与裸 pointer 用“执行关系 / 查找关系”二分：目标要求当前工作、服务或成果按、遵守、符合、达到或执行某制度、标准、图纸或附件时，属于 operative baseline；若 X 只约束响应、证明、报价、采购程序或文档编制，仍按对应 excluded role 判断。技术附件或制度 intro 若同时确定适用对象，并指示受约束主体执行其后固定规则，本身是 applicability ATOM；说明性包装不能覆盖同 block 的执行或适用关系。只有纯目的说明、没有任何执行或适用关系时才是 meta。只要求另见未提供材料且自身没有执行关系时才是 bare pointer。名词型外置引用 heading 若只命名某材料、附件或另处载体，自身没有执行/采用/符合/适用关系，且到首个 source-proven 同级或更高 peer 前没有真实 descendant，则既不是 `ATOM` 也不是 `HEADING`；材料潜在重要、与项目相关或下一 sibling 自身含需求都不能救回它。当前履约标准的版本替代、适用集合和优先顺序同样是 operative applicability；只维护采购文件或文档法律效力时是 meta。边界证据资格永远不等于输出 membership。
 
 ## 必须攻击的通用边界
 

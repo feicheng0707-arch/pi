@@ -194,7 +194,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v10 flat-projection and orthogonal hard-root prompts aligned", () => {
+test("keeps the v11 flat-projection and orthogonal hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("先裁决全部 singleton");
@@ -1148,13 +1148,14 @@ test("continues after rejecting an audit that overlaps an exact remove challenge
 	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
-test("forwards the flat S0 projection only to Challenger and the run queue to both roles", async () => {
+test("keeps Challenger claims in trace while withholding them from the Finalizer", async () => {
 	const contexts: Context[] = [];
+	const traceOnlyClaim = "TRACE_ONLY_CHALLENGER_CLAIM_4E6D5A91";
 	const groupedChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [
 			{
 				target_ranges: ["段落1"],
-				source_conclusion: "EXACT_REMOVE_SECRET",
+				source_conclusion: traceOnlyClaim,
 				supporting_block_ids: [0, 1],
 			},
 		],
@@ -1162,14 +1163,14 @@ test("forwards the flat S0 projection only to Challenger and the run queue to bo
 			{
 				audit_kind: "recovery_boundary_scope",
 				target_ranges: ["段落2"],
-				audit_basis: "REMOVE_AUDIT_SECRET",
+				audit_basis: "The bounded scope requires independent recovery review.",
 				supporting_block_ids: [2],
 			},
 		],
 		add_partitions: [
 			{
 				target_ranges: ["段落3"],
-				source_conclusion: "EXACT_ADD_SECRET",
+				source_conclusion: "The excluded block requires independent add review.",
 				supporting_block_ids: [3],
 			},
 		],
@@ -1193,6 +1194,13 @@ test("forwards the flat S0 projection only to Challenger and the run queue to bo
 	});
 
 	expect(result.status).toBe("preserved");
+	expect(result.challenge?.removePartitions[0]?.sourceConclusion).toBe(
+		traceOnlyClaim,
+	);
+	expect(result.trace.challengerRawResponse).toContain(traceOnlyClaim);
+	expect(JSON.stringify(result.trace.challengerNormalizedResponse)).toContain(
+		traceOnlyClaim,
+	);
 	expect(contexts).toHaveLength(2);
 	const challengerMessage = contexts[0].messages.find(
 		(message) => message.role === "user",
@@ -1295,21 +1303,22 @@ test("forwards the flat S0 projection only to Challenger and the run queue to bo
 	});
 	expect(finalizerInput).toContain('"remove_review_ranges":["段落1-段落2"]');
 	expect(finalizerInput).toContain(
-		'"remove_review_groups":[{"review_kind":"exact_remove_claim","target_ranges":["段落1"],"untrusted_challenger_claim":"EXACT_REMOVE_SECRET","supporting_block_ids":[0,1]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"untrusted_challenger_claim":"REMOVE_AUDIT_SECRET","supporting_block_ids":[2]}]',
+		'"remove_review_groups":[{"review_kind":"exact_remove_claim","target_ranges":["段落1"],"supporting_block_ids":[0,1]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"supporting_block_ids":[2]}]',
 	);
 	expect(finalizerInput).toContain('"add_review_ranges":["段落3"]');
 	expect(finalizerInput).toContain(
-		'"add_review_groups":[{"review_kind":"exact_add_claim","target_ranges":["段落3"],"untrusted_challenger_claim":"EXACT_ADD_SECRET","supporting_block_ids":[3]}]',
+		'"add_review_groups":[{"review_kind":"exact_add_claim","target_ranges":["段落3"],"supporting_block_ids":[3]}]',
 	);
 	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":true');
 	expect(finalizerInput).toContain(
-		'"challenger_claims_forwarded_as_untrusted":true',
+		'"challenger_claims_forwarded_as_untrusted":false',
 	);
 	expect(finalizerInput).toContain('"candidate_s0_block_ids":[1,2,4]');
 	expect(finalizerInput).toContain('"anchor_must_be_in_s0_and_span":true');
-	expect(finalizerInput).toContain("EXACT_REMOVE_SECRET");
-	expect(finalizerInput).toContain("REMOVE_AUDIT_SECRET");
-	expect(finalizerInput).toContain("EXACT_ADD_SECRET");
+	expect(finalizerInput).not.toContain(traceOnlyClaim);
+	expect(finalizerInput).not.toContain("untrusted_challenger_claim");
+	expect(finalizerInput).not.toContain("source_conclusion");
+	expect(finalizerInput).not.toContain("audit_basis");
 	expect(finalizerInput).toContain("supporting_block_ids");
 });
 
@@ -1384,7 +1393,7 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 	expect(finalizerInput).not.toContain("target_block_ids");
 	expect(finalizerInput).not.toContain("audit_basis");
 	expect(finalizerInput).not.toContain("source_conclusion");
-	expect(finalizerInput).toContain("untrusted_challenger_claim");
+	expect(finalizerInput).not.toContain("untrusted_challenger_claim");
 	expect(finalizerInput).toContain("supporting_block_ids");
 });
 
