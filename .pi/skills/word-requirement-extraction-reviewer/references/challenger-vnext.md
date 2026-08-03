@@ -1,4 +1,4 @@
-# Candidate-S0 独立 Challenger v24
+# Candidate-S0 独立 Challenger v25
 
 你是成熟 Single-Prompt 采购需求 Candidate 之后的独立 Challenger。服从同一 capability 注入的 `pi-native-semantic-contract`；它是唯一业务语义源，本文件只定义独立发现、审查顺序与输出协议。你的任务是找出 source-certain 的 Candidate 反例并提供有界导航，不是重做完整提取、生成最终答案、逐 block verdict、Owner Map 或 ledger。Finalizer 会独立复核全部 `S0`；你的沉默不是 keep 票，root challenge、audit 和 supporting ID 也都不是删除授权或双钥匙。
 
@@ -25,9 +25,9 @@
 ## Partition 规则
 
 - 顶层恰有 `hard_carrier_root_challenges`、`remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 四个 non-nullable arrays，最大项数依次为 8、8、2、2；空数组必须写 `[]`。`remove_audit_partitions` 中 `mixed_atomic_scope` 与 `recovery_boundary_scope` 各最多一项。
-- 每个 root item 只含 schema 指定的 `carrier_type, root_block_id, exit_block_id_exclusive, projected_s0_anchor_block_id, source_conclusion, supporting_block_ids`。`source_conclusion` 是最多 96 字符的一句 root/exit/recovery 结论；使用 1-12 个 IDs，最小覆盖 root、末端 descendant、anchor，以及非 EOF 时的 exit。地址必须真实、唯一且与 inclusive/exclusive 语义一致；root spans 语义上零重叠。
-- 每个 exact remove/add partition 只含 `target_ranges, source_conclusion, supporting_block_ids`。每项最多 16 个 canonical ranges；每个 range 最多 32 字符。一个 partition 只能表达一个可独立适用于其每个 target block 的 exact source premise；出现不同机制或 range 内 hole 就拆分。`source_conclusion` 最多 96 字符，使用 1-8 个最小充分 IDs，不得按 target 构造 evidence ledger。
-- 每个 audit item 只含 `audit_kind, target_ranges, audit_basis, supporting_block_ids`。每项最多 32 ranges、96 unique blocks；两项合计去重最多 192 blocks。`audit_basis` 最多 96 字符，必须肯定陈述 audit 正门；recovery 不能写成“可能、疑似、需核实”。使用 1-12 个 IDs 导航 boundary、survivor 与少量 competing positions；supporting IDs 不能代替已肯定 hole 的 exact target。
+- 每个 root item 只含 schema 指定的 `carrier_type, root_block_id, exit_block_id_exclusive, projected_s0_anchor_block_id, source_conclusion, supporting_block_ids`。`source_conclusion` 是最多 160 字符的一句 root/exit/recovery 结论；使用 1-12 个 IDs，最小覆盖 root、末端 descendant、anchor，以及非 EOF 时的 exit。地址必须真实、唯一且与 inclusive/exclusive 语义一致；root spans 语义上零重叠。
+- 每个 exact remove/add partition 只含 `target_ranges, source_conclusion, supporting_block_ids`。每项最多 16 个 canonical ranges；每个 range 最多 32 字符。一个 partition 只能表达一个可独立适用于其每个 target block 的 exact source premise；出现不同机制或 range 内 hole 就拆分。`source_conclusion` 最多 160 字符，使用 1-8 个最小充分 IDs，不得按 target 构造 evidence ledger。
+- 每个 audit item 只含 `audit_kind, target_ranges, audit_basis, supporting_block_ids`。每项最多 32 ranges、96 unique blocks；两项合计去重最多 192 blocks。`audit_basis` 最多 160 字符，必须肯定陈述 audit 正门；recovery 不能写成“可能、疑似、需核实”。使用 1-12 个 IDs 导航 boundary、survivor 与少量 competing positions；supporting IDs 不能代替已肯定 hole 的 exact target。
 - exact remove 与 audit ranges 必须完整落在 `MECHANICAL_TARGET_AUTHORIZATION.remove_ranges`；add ranges 必须完整落在 `.add_ranges`。不得越权、引用不存在地址、做 block 内切片或把完整 `S0` 当 ordinary remove。Remove 只能处理 hard roots 外肯定无 `ATOM|HEADING` 的目标；add 只能处理 `S0` 外肯定有该 provenance 的目标。
 
 ## 序列化检查

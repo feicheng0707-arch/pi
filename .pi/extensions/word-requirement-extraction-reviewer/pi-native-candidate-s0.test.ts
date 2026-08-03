@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v24 concise-role prompts aligned with the shared S0 and hard-root mechanics", () => {
+test("keeps the v25 concise-role prompts aligned with the shared S0 and hard-root mechanics", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
@@ -216,7 +216,7 @@ test("keeps the v24 concise-role prompts aligned with the shared S0 and hard-roo
 	expect(challengerPrompt).toContain("9+ fanout 整项省略");
 	expect(challengerPrompt).toContain("1-8 个最小充分 IDs");
 	expect(challengerPrompt).toContain("1-12 个 IDs");
-	expect(challengerPrompt).toContain("最多 96 字符");
+	expect(challengerPrompt).toContain("最多 160 字符");
 	expect(challengerPrompt).toContain("先裁决全部 singleton");
 	expect(challengerPrompt).toContain("首 block与末 block");
 	expect(challengerPrompt).toContain(
@@ -314,7 +314,7 @@ test("runs the independent Finalizer after an empty challenge for non-empty S0",
 		responseFormat: "json_object",
 		transportProfile: "faux-json-object",
 	});
-	expect(result.context.challengerWorstCaseOutputTokens).toBe(7_555);
+	expect(result.context.challengerWorstCaseOutputTokens).toBe(9_475);
 	expect(
 		result.context.challengerWorstCaseOutputTokens +
 			result.context.challengerOutputReserveTokens,

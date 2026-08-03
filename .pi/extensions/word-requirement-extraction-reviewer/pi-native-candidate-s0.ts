@@ -39,7 +39,7 @@ const MAX_TOTAL_AUDIT_BLOCKS =
 	MAX_REMOVE_AUDIT_PARTITIONS * MAX_AUDIT_BLOCKS_PER_PARTITION;
 const MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION = 8;
 const MAX_ROOT_OR_AUDIT_SUPPORTING_BLOCK_IDS = 12;
-const MAX_CHALLENGE_CONCLUSION_CHARACTERS = 96;
+const MAX_CHALLENGE_CONCLUSION_CHARACTERS = 160;
 const MAX_HARD_CARRIER_ROOT_CHALLENGES = 8;
 const MAX_HARD_CARRIER_ROOT_VETOES = 32;
 const MAX_CHALLENGE_RANGE_CHARACTERS = 32;
@@ -52,7 +52,7 @@ const MAX_FINAL_REMOVE_RANGES =
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v24";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v25";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",

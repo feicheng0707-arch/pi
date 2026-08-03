@@ -55,11 +55,12 @@ test("loads the recovery eligibility and directional Owner challenge contract", 
 	);
 });
 
-test("keeps the v24 Challenger concise and mechanically complete", () => {
+test("keeps the v25 Challenger concise and mechanically complete", () => {
 	expect(Buffer.byteLength(challengerVNext, "utf8")).toBeLessThanOrEqual(
 		13 * 1024,
 	);
-	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v24");
+	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v25");
+	expect(challengerVNext).toContain("最多 160 字符");
 	expect(challengerVNext).toContain("它是唯一业务语义源");
 	expect(challengerVNext).not.toContain("## 共享语义门");
 
