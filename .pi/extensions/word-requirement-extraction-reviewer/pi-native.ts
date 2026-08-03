@@ -37,7 +37,8 @@ const CONTEXT_SAFETY_TOKENS = 8_000;
 const MAX_PROVIDER_CALLS = 3;
 const MAX_RUN_INPUT_TOKENS = 720_000;
 const MAX_RUN_OUTPUT_TOKENS = 20_000;
-const MAX_RUN_REASONING_TOKENS = 1_000;
+const MAX_RUN_REASONING_TOKENS_DISABLED = 1_000;
+const MAX_RUN_REASONING_TOKENS_ENABLED = 6_000;
 const MAX_SELECTION_RUNS = 16;
 const MAX_FOCUS_SELECTED_ISLAND_BLOCKS = 16;
 const MAX_FOCUS_SELECTED_ISLAND_CHARACTERS = 16_000;
@@ -61,7 +62,7 @@ const WITNESS_RESPONSE_FORMAT = "json_object";
 const FINALIZER_REVIEW_PACKET_TOKEN_RESERVE = 120_000;
 const WITNESS_STATIC_TOKEN_RESERVE = 32_000;
 const PI_NATIVE_RUNTIME_VERSION =
-	"pi-native-finalizer-witness-v46-source-auth-support-hygiene";
+	"pi-native-finalizer-witness-v47-frozen-witness-thinking-profile";
 
 type RunKind = "AUDIT_ISLAND" | "AUDIT_UNIVERSE";
 type HardCarrierType =
@@ -70,6 +71,7 @@ type HardCarrierType =
 	| "response_format"
 	| "contract_terms";
 type PiNativeRole = "finalizer" | "witness" | "preflight";
+export type PiNativeWitnessThinkingMode = "disabled" | "enabled";
 type WitnessLaneName = "exclude" | "select";
 type WitnessLaneCoverageStatus =
 	| "valid_none"
@@ -224,6 +226,12 @@ export interface PiNativeWitnessResult {
 	trace: {
 		model: { provider: string; id: string; contextWindow: number };
 		responseFormat: typeof WITNESS_RESPONSE_FORMAT;
+		thinking: {
+			mode: PiNativeWitnessThinkingMode;
+			blockCount: number;
+			characterCount: number;
+			forwarded: false;
+		};
 		inputSha256: string;
 		focusBlockCount: number;
 		focusCharacterCount: number;
@@ -261,19 +269,23 @@ export interface PiNativeRoleRuntime {
 	env?: ProviderEnv;
 }
 
+export interface PiNativeWitnessRuntime extends PiNativeRoleRuntime {
+	thinkingMode?: PiNativeWitnessThinkingMode;
+}
+
 export interface RunPiNativeRequirementReviewOptions {
 	packet: RequirementReviewPacket;
 	packetSha256: string;
 	prompts: RequirementReviewPrompts;
 	finalizerRuntime: PiNativeRoleRuntime;
-	witnessRuntime: PiNativeRoleRuntime;
+	witnessRuntime: PiNativeWitnessRuntime;
 	signal?: AbortSignal;
 	requestTimeoutMs?: number;
 	onProgress?: (progress: { role: "finalizer" | "witness"; tool: string }) => void;
 }
 
 export interface PiNativeRequirementReviewResult {
-	schemaVersion: "xique.word-requirement-review.pi-native-result.v4";
+	schemaVersion: "xique.word-requirement-review.pi-native-result.v5";
 	architecture: "pi_native_finalizer_witness";
 	status: "preserved" | "repaired" | "degraded";
 	resolution: "pi_native_preserved" | "pi_native_applied_repair" | "review_incomplete";
@@ -296,7 +308,12 @@ export interface PiNativeRequirementReviewResult {
 	witness: PiNativeWitnessResult | null;
 	models: {
 		finalizer: { provider: string; id: string; contextWindow: number };
-		witness: { provider: string; id: string; contextWindow: number };
+		witness: {
+			provider: string;
+			id: string;
+			contextWindow: number;
+			thinkingMode: PiNativeWitnessThinkingMode;
+		};
 	};
 	prompts: Pick<
 		RequirementReviewPrompts["hashes"],
@@ -534,7 +551,10 @@ function errorAssistantMessage(
 	};
 }
 
-export function buildDoubaoWitnessPayload(payload: unknown): unknown {
+export function buildDoubaoWitnessPayload(
+	payload: unknown,
+	thinkingMode: PiNativeWitnessThinkingMode = "disabled",
+): unknown {
 	if (!isRecord(payload)) return payload;
 	const next: Record<string, unknown> = { ...payload };
 	delete next.tools;
@@ -542,7 +562,7 @@ export function buildDoubaoWitnessPayload(payload: unknown): unknown {
 	delete next.parallel_tool_calls;
 	delete next.reasoning_effort;
 	next.response_format = { type: WITNESS_RESPONSE_FORMAT };
-	next.thinking = { type: "disabled" };
+	next.thinking = { type: thinkingMode };
 	return next;
 }
 
@@ -586,11 +606,15 @@ export const piNativeWitnessStreamFunction: StreamFn = (model, context, options)
 			options?.signal,
 		);
 	}
-	const { reasoning: _reasoning, ...streamOptions } = options ?? {};
+	const { reasoning, ...streamOptions } = options ?? {};
+	const thinkingMode: PiNativeWitnessThinkingMode =
+		reasoning === undefined || reasoning === "off" ? "disabled" : "enabled";
 	return guardedAssistantStream(model, options?.signal, () =>
 		stream(model as Model<"openai-completions">, context, {
 			...streamOptions,
-			onPayload: buildDoubaoWitnessPayload,
+			onPayload(payload) {
+				return buildDoubaoWitnessPayload(payload, thinkingMode);
+			},
 		}),
 	);
 };
@@ -607,6 +631,11 @@ export async function runPiNativeRequirementReview(
 		? AbortSignal.any([options.signal, timeoutController.signal])
 		: timeoutController.signal;
 	const usage: PiNativeRuntimeUsage = { finalizer: emptyUsage(), witness: emptyUsage() };
+	const witnessThinkingMode = options.witnessRuntime.thinkingMode ?? "disabled";
+	const maxRunReasoningTokens =
+		witnessThinkingMode === "enabled"
+			? MAX_RUN_REASONING_TOKENS_ENABLED
+			: MAX_RUN_REASONING_TOKENS_DISABLED;
 	let provisionalDecision: CanonicalPiNativeDecision | null = null;
 	let witnessResult: PiNativeWitnessResult | null = null;
 	let finalDecision: CanonicalPiNativeDecision | null = null;
@@ -630,6 +659,7 @@ export async function runPiNativeRequirementReview(
 			runtimeVersion: PI_NATIVE_RUNTIME_VERSION,
 			witnessTransport: {
 				responseFormat: WITNESS_RESPONSE_FORMAT,
+				thinkingMode: witnessThinkingMode,
 				localValidation: "native-json-parse+typebox+cross-field",
 				inputOrdering:
 					"source-then-mechanical-target-authorization-then-typed-hard-root-support",
@@ -644,7 +674,10 @@ export async function runPiNativeRequirementReview(
 			},
 			models: {
 				finalizer: modelIdentity(options.finalizerRuntime.model),
-				witness: modelIdentity(options.witnessRuntime.model),
+				witness: {
+					...modelIdentity(options.witnessRuntime.model),
+					thinkingMode: witnessThinkingMode,
+				},
 			},
 			finalizerTools: {
 				provisional: {
@@ -665,7 +698,7 @@ export async function runPiNativeRequirementReview(
 				maxProviderCalls: MAX_PROVIDER_CALLS,
 				maxRunInputTokens: MAX_RUN_INPUT_TOKENS,
 				maxRunOutputTokens: MAX_RUN_OUTPUT_TOKENS,
-				maxRunReasoningTokens: MAX_RUN_REASONING_TOKENS,
+				maxRunReasoningTokens,
 				maxSelectionRuns: MAX_SELECTION_RUNS,
 				maxFocusSelectedIslandBlocks: MAX_FOCUS_SELECTED_ISLAND_BLOCKS,
 				maxFocusSelectedIslandCharacters: MAX_FOCUS_SELECTED_ISLAND_CHARACTERS,
@@ -740,7 +773,7 @@ export async function runPiNativeRequirementReview(
 				| "failure"
 			>,
 		): PiNativeRequirementReviewResult => ({
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v4",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v5",
 			architecture: "pi_native_finalizer_witness",
 			packetSha256: options.packetSha256,
 			capabilitySha256,
@@ -752,7 +785,10 @@ export async function runPiNativeRequirementReview(
 			witness: witnessResult,
 			models: {
 				finalizer: modelIdentity(options.finalizerRuntime.model),
-				witness: modelIdentity(options.witnessRuntime.model),
+				witness: {
+					...modelIdentity(options.witnessRuntime.model),
+					thinkingMode: witnessThinkingMode,
+				},
 			},
 			prompts: promptHashes,
 			inputs: {
@@ -978,7 +1014,10 @@ export async function runPiNativeRequirementReview(
 								),
 								witness: usage.witness,
 							};
-							const budgetError = usageBudgetError(projectedUsage);
+							const budgetError = usageBudgetError(
+								projectedUsage,
+								maxRunReasoningTokens,
+							);
 							if (budgetError !== null) {
 								validationError ??= budgetError;
 								return true;
@@ -1019,7 +1058,7 @@ export async function runPiNativeRequirementReview(
 			recordUsage(usage.finalizer, message.usage);
 		}
 		usage.finalizer.providerCalls = finalizerInputSha256s.length;
-		assertUsageBudget(usage);
+		assertUsageBudget(usage, maxRunReasoningTokens);
 		if (signal.aborted) {
 			return finish({
 				status: "degraded",
@@ -1110,7 +1149,7 @@ export async function runPiNativeRequirementReview(
 			options.packet.blocks,
 		);
 		return {
-			schemaVersion: "xique.word-requirement-review.pi-native-result.v4",
+			schemaVersion: "xique.word-requirement-review.pi-native-result.v5",
 			architecture: "pi_native_finalizer_witness",
 			status: "degraded",
 			resolution: "review_incomplete",
@@ -1129,7 +1168,10 @@ export async function runPiNativeRequirementReview(
 			witness: witnessResult,
 			models: {
 				finalizer: modelIdentity(options.finalizerRuntime.model),
-				witness: modelIdentity(options.witnessRuntime.model),
+				witness: {
+					...modelIdentity(options.witnessRuntime.model),
+					thinkingMode: witnessThinkingMode,
+				},
 			},
 			prompts: promptHashes,
 			inputs: {
@@ -1939,11 +1981,12 @@ function renderSelectedBoundaryGap(gap: SelectedBoundaryGap): Record<string, unk
 async function runSemanticWitness(
 	prepared: PreparedFinalSelection,
 	provisionalDecision: CanonicalPiNativeDecision,
-	runtime: PiNativeRoleRuntime,
+	runtime: PiNativeWitnessRuntime,
 	usage: PiNativeRuntimeUsage,
 	signal: AbortSignal,
 	requestTimeoutMs: number,
 ): Promise<PiNativeWitnessResult> {
+	const thinkingMode = runtime.thinkingMode ?? "disabled";
 	const provisionalBlockIds = new Set(provisionalDecision.finalBlockIds);
 	const auditUniverseBlockIds = new Set(prepared.runs.flatMap((run) => run.blockIds));
 	const unclaimedExcludedBlockIds = collectUnclaimedExcludedBlockIds(
@@ -2216,6 +2259,8 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 	let usageRecorded = false;
 	let providerCalls = 0;
 	let structuredTerminal = false;
+	let thinkingBlockCount = 0;
+	let thinkingCharacterCount = 0;
 	const boundedWitnessStreamFunction: StreamFn = (model, context, streamOptions) => {
 		if (providerCalls >= 1) {
 			return errorAssistantStream(
@@ -2240,7 +2285,7 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 				model: runtime.model,
 				temperature: 0,
 				maxTokens: WITNESS_MAX_TOKENS,
-				reasoning: "off",
+				reasoning: thinkingMode === "enabled" ? "medium" : "off",
 				apiKey: runtime.apiKey,
 				headers: runtime.headers,
 				env: runtime.env,
@@ -2255,13 +2300,25 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 			boundedWitnessStreamFunction,
 		);
 		last = lastAssistant(messages);
+		const thinkingBlocks =
+			last?.content.filter((content) => content.type === "thinking") ?? [];
+		thinkingBlockCount = thinkingBlocks.length;
+		thinkingCharacterCount = thinkingBlocks.reduce(
+			(total, content) => total + content.thinking.length,
+			0,
+		);
 		assistantMessages = messages.filter(
 			(message): message is AssistantMessage => message.role === "assistant",
 		);
 		for (const message of assistantMessages) recordUsage(usage.witness, message.usage);
 		usage.witness.elapsedMs += Date.now() - startedAt;
 		usageRecorded = true;
-		assertUsageBudget(usage);
+		assertUsageBudget(
+			usage,
+			thinkingMode === "enabled"
+				? MAX_RUN_REASONING_TOKENS_ENABLED
+				: MAX_RUN_REASONING_TOKENS_DISABLED,
+		);
 		if (last?.stopReason === "error" || last?.stopReason === "aborted") {
 			throw new Error(last.errorMessage ?? last.stopReason);
 		}
@@ -2279,6 +2336,12 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 			trace: {
 				model: modelIdentity(runtime.model),
 				responseFormat: WITNESS_RESPONSE_FORMAT,
+				thinking: {
+					mode: thinkingMode,
+					blockCount: thinkingBlockCount,
+					characterCount: thinkingCharacterCount,
+					forwarded: false,
+				},
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
@@ -2297,10 +2360,10 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 				`expected one Witness provider call and one assistant response; received ${providerCalls} provider call(s) and ${assistantMessages.length} response(s)`,
 			);
 		}
-		const turnError = validateWitnessTurnShape(last);
+		const turnError = validateWitnessTurnShape(last, thinkingMode);
 		if (turnError !== null) return contractFailure(turnError);
-		const witnessContent = last.content[0];
-		if (witnessContent?.type !== "text") {
+		const witnessContent = last.content.find((content) => content.type === "text");
+		if (witnessContent === undefined) {
 			return contractFailure("Witness turn did not expose its validated JSON text block");
 		}
 		const rawText = witnessContent.text;
@@ -2345,6 +2408,12 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 			trace: {
 				model: modelIdentity(runtime.model),
 				responseFormat: WITNESS_RESPONSE_FORMAT,
+				thinking: {
+					mode: thinkingMode,
+					blockCount: thinkingBlockCount,
+					characterCount: thinkingCharacterCount,
+					forwarded: false,
+				},
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
@@ -2377,6 +2446,12 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 			trace: {
 				model: modelIdentity(runtime.model),
 				responseFormat: WITNESS_RESPONSE_FORMAT,
+				thinking: {
+					mode: thinkingMode,
+					blockCount: thinkingBlockCount,
+					characterCount: thinkingCharacterCount,
+					forwarded: false,
+				},
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
@@ -2641,12 +2716,21 @@ function validateFinalizerTurnShape(
 	return null;
 }
 
-function validateWitnessTurnShape(message: AssistantMessage): string | null {
+function validateWitnessTurnShape(
+	message: AssistantMessage,
+	thinkingMode: PiNativeWitnessThinkingMode,
+): string | null {
 	if (message.stopReason === "length") {
 		return "Witness JSON response was truncated by the output-token limit";
 	}
-	if (message.content.some((content) => content.type === "thinking")) {
+	const thinkingBlockCount = message.content.filter(
+		(content) => content.type === "thinking",
+	).length;
+	if (thinkingMode === "disabled" && thinkingBlockCount > 0) {
 		return "Witness turn must not contain thinking content";
+	}
+	if (thinkingMode === "enabled" && thinkingBlockCount > 1) {
+		return `Witness turn may contain at most one thinking block; received ${thinkingBlockCount}`;
 	}
 	const toolCalls = message.content.filter((content) => content.type === "toolCall");
 	if (toolCalls.length > 0) {
@@ -2655,8 +2739,9 @@ function validateWitnessTurnShape(message: AssistantMessage): string | null {
 	if (message.stopReason !== "stop") {
 		return `Witness JSON response must stop normally; received ${message.stopReason}`;
 	}
-	if (message.content.length !== 1 || message.content[0]?.type !== "text") {
-		return `Witness turn must contain exactly one JSON text block; received ${message.content.length} content block(s)`;
+	const textBlockCount = message.content.filter((content) => content.type === "text").length;
+	if (textBlockCount !== 1 || message.content.length !== textBlockCount + thinkingBlockCount) {
+		return `Witness turn must contain exactly one JSON text block and only its allowed thinking block; received ${textBlockCount} text and ${thinkingBlockCount} thinking block(s)`;
 	}
 	return null;
 }
@@ -3097,12 +3182,18 @@ function totalUsage(usage: PiNativeRuntimeUsage): RoleUsage {
 	return addRoleUsage(usage.finalizer, usage.witness);
 }
 
-function assertUsageBudget(usage: PiNativeRuntimeUsage): void {
-	const error = usageBudgetError(usage);
+function assertUsageBudget(
+	usage: PiNativeRuntimeUsage,
+	maxRunReasoningTokens: number,
+): void {
+	const error = usageBudgetError(usage, maxRunReasoningTokens);
 	if (error !== null) throw new Error(error);
 }
 
-function usageBudgetError(usage: PiNativeRuntimeUsage): string | null {
+function usageBudgetError(
+	usage: PiNativeRuntimeUsage,
+	maxRunReasoningTokens: number,
+): string | null {
 	const total = totalUsage(usage);
 	if (total.providerCalls > MAX_PROVIDER_CALLS) {
 		return "Pi-native requirement review provider-call budget exhausted";
@@ -3113,7 +3204,7 @@ function usageBudgetError(usage: PiNativeRuntimeUsage): string | null {
 	if (total.outputTokens > MAX_RUN_OUTPUT_TOKENS) {
 		return "Pi-native requirement review output-token budget exhausted";
 	}
-	if (total.reasoningTokens > MAX_RUN_REASONING_TOKENS) {
+	if (total.reasoningTokens > maxRunReasoningTokens) {
 		return "Pi-native requirement review reasoning-token budget exhausted";
 	}
 	return null;
