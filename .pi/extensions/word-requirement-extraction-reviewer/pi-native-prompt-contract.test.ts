@@ -1,9 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "vitest";
 import { loadRequirementReviewPrompts } from "./index.ts";
 
-const prompts = await loadRequirementReviewPrompts(
-	new URL("../../skills/word-requirement-extraction-reviewer/references", import.meta.url).pathname,
+const promptDirectory = new URL(
+	"../../skills/word-requirement-extraction-reviewer/references/",
+	import.meta.url,
 );
+const [prompts, challengerVNext] = await Promise.all([
+	loadRequirementReviewPrompts(promptDirectory.pathname),
+	readFile(new URL("challenger-vnext.md", promptDirectory), "utf8"),
+]);
 
 test("loads the recovery eligibility and directional Owner challenge contract", () => {
 	expect(prompts.piNativeSemanticContract).toContain("`recovery eligibility gate`");
@@ -45,4 +51,16 @@ test("loads the recovery eligibility and directional Owner challenge contract", 
 	expect(prompts.productPrinciples).toContain(
 		"`add_to_provisional kind=owner_boundary` 的释放通道",
 	);
+});
+
+test("loads the Challenger partition serialization checksum", () => {
+	expect(challengerVNext).toContain("`partition serialization checksum`");
+	expect(challengerVNext).toContain("只能保留 1-8 个最小充分证据");
+	expect(challengerVNext).toContain("不得按 target 逐项枚举");
+	expect(challengerVNext).toContain("同一 exact remove partition");
+	expect(challengerVNext).toContain("shared source premise");
+	expect(challengerVNext).toContain("必须围绕 survivor 拆洞");
+	expect(challengerVNext).toContain("supporting IDs 永远不能代替 exact hole");
+	expect(challengerVNext).toContain("完整 audit `target_ranges` 仍必须保持不裁剪");
+	expect(challengerVNext.trim().endsWith("绝不能提交 schema-invalid JSON。")).toBe(true);
 });
