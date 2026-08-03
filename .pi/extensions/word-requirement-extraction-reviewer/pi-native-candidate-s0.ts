@@ -23,8 +23,8 @@ import {
 	type PiNativeWitnessThinkingMode,
 } from "./pi-native.ts";
 
-const CHALLENGER_MAX_TOKENS = 4_000;
-const FINALIZER_MAX_TOKENS = 6_000;
+const CHALLENGER_MAX_TOKENS = 6_000;
+const FINALIZER_MAX_TOKENS = 12_000;
 const CONTEXT_SAFETY_TOKENS = 8_000;
 const REQUEST_TIMEOUT_MS = 300_000;
 const WORKFLOW_TIMEOUT_MS = 600_000;
@@ -32,16 +32,17 @@ const MAX_REMOVE_PARTITIONS = 8;
 const MAX_REMOVE_AUDIT_PARTITIONS = 2;
 const MAX_ADD_PARTITIONS = 2;
 const MAX_TARGET_RANGES_PER_PARTITION = 16;
-const MAX_AUDIT_RANGES_PER_PARTITION = 16;
+const MAX_AUDIT_RANGES_PER_PARTITION = 32;
 const MAX_AUDIT_BLOCKS_PER_PARTITION = 96;
-const MAX_TOTAL_AUDIT_BLOCKS = 128;
-const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 64;
+const MAX_TOTAL_AUDIT_BLOCKS =
+	MAX_REMOVE_AUDIT_PARTITIONS * MAX_AUDIT_BLOCKS_PER_PARTITION;
+const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 96;
 const MAX_HARD_CARRIER_ROOT_VETOES = 32;
 const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v4";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v5";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -57,7 +58,7 @@ export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 		}),
 		source_conclusion: Type.String({
 			minLength: 1,
-			maxLength: 600,
+			maxLength: 300,
 			description:
 				"One source-grounded conclusion shared by every target range in this partition.",
 		}),
@@ -73,15 +74,25 @@ export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 
 export const PiNativeCandidateS0RemoveAuditPartitionSchema = Type.Object(
 	{
+		audit_kind: Type.Union([
+			Type.Literal("mixed_atomic_scope"),
+			Type.Literal("recovery_boundary_scope"),
+		]),
 		target_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			minItems: 1,
 			maxItems: MAX_AUDIT_RANGES_PER_PARTITION,
 			description:
 				"A bounded Candidate-S0 scope whose exact atomic membership requires independent Finalizer audit.",
 		}),
+		target_block_count: Type.Integer({
+			minimum: 1,
+			maximum: MAX_AUDIT_BLOCKS_PER_PARTITION,
+			description:
+				"Exact number of unique canonical blocks expanded from target_ranges; the Harness verifies equality mechanically.",
+		}),
 		audit_basis: Type.String({
 			minLength: 1,
-			maxLength: 600,
+			maxLength: 300,
 			description:
 				"Source-grounded reason the selected scope may contain mixed atomic membership; this is not a remove conclusion.",
 		}),
@@ -104,6 +115,8 @@ export const PiNativeCandidateS0ChallengeSchema = Type.Object(
 			PiNativeCandidateS0RemoveAuditPartitionSchema,
 			{
 				maxItems: MAX_REMOVE_AUDIT_PARTITIONS,
+				description:
+					"At most one mixed_atomic_scope and one recovery_boundary_scope; both share the mechanical total audit-block budget.",
 			},
 		),
 		add_partitions: Type.Array(PiNativeCandidateS0ChallengePartitionSchema, {
@@ -128,6 +141,11 @@ export const PiNativeCandidateS0HardCarrierRootVetoSchema = Type.Object(
 			Type.Integer({ minimum: 0 }),
 			Type.Literal("EOF"),
 		]),
+		projected_s0_anchor_block_id: Type.Integer({
+			minimum: 0,
+			description:
+				"One exact Candidate-S0 block ID inside the submitted root span, proving the veto has a non-empty mechanical projection.",
+		}),
 	},
 	{ additionalProperties: false },
 );
@@ -137,7 +155,7 @@ export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 		accepted_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_REMOVE_RANGES,
 			description:
-				"Exact subset of the mechanically authorized remove challenge envelope. Every remove-envelope block covered by a submitted hard-carrier veto must also appear here; omission declares a challenged survivor and fails the decision.",
+				"Exact subset of the mechanically authorized Challenger remove envelope. Redundant remove IDs already covered by a mechanically valid submitted hard-carrier root veto are tolerated and canonicalized separately. Every Challenger exact/audit block covered by a valid veto must still appear here; omission declares a challenged survivor and fails the decision.",
 		}),
 		accepted_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_ADD_RANGES,
@@ -176,8 +194,10 @@ export interface CanonicalPiNativeCandidateS0ChallengePartition {
 
 export interface CanonicalPiNativeCandidateS0RemoveAuditPartition {
 	partitionIndex: number;
+	auditKind: "mixed_atomic_scope" | "recovery_boundary_scope";
 	targetRanges: string[];
 	targetBlockIds: number[];
+	declaredTargetBlockCount: number;
 	auditBasis: string;
 	supportingBlockIds: number[];
 }
@@ -214,16 +234,25 @@ export interface CanonicalPiNativeCandidateS0HardCarrierRootVeto {
 	carrierType: PiNativeCandidateS0HardCarrierType;
 	rootBlockId: number;
 	exitBlockIdExclusive: number | "EOF";
+	projectedS0AnchorBlockId: number;
 	projectedRanges: string[];
 	projectedBlockIds: number[];
+}
+
+export interface PiNativeCandidateS0RejectedHardCarrierRootVeto {
+	vetoIndex: number;
+	reason: string;
 }
 
 export interface CanonicalPiNativeCandidateS0FinalDecision {
 	submittedRemoveRanges: string[];
 	submittedAddRanges: string[];
 	hardCarrierRootVetoes: CanonicalPiNativeCandidateS0HardCarrierRootVeto[];
+	rejectedHardCarrierRootVetoes: PiNativeCandidateS0RejectedHardCarrierRootVeto[];
 	challengeRemoveRanges: string[];
 	challengeRemoveBlockIds: number[];
+	rootCoveredRedundantRemoveRanges: string[];
+	rootCoveredRedundantRemoveBlockIds: number[];
 	hardCarrierRemoveRanges: string[];
 	hardCarrierRemoveBlockIds: number[];
 	removeRanges: string[];
@@ -512,6 +541,8 @@ export async function runPiNativeCandidateS0Review(
 				maxHardCarrierRootVetoes: MAX_HARD_CARRIER_ROOT_VETOES,
 				hardCarrierProjection:
 					"candidate-S0-intersection-with-source-order-inclusive-root-exclusive-exit",
+				hardCarrierProjectionWitness:
+					"one-submitted-candidate-S0-anchor-inside-each-root-span",
 			},
 		}),
 	);
@@ -597,13 +628,14 @@ export async function runPiNativeCandidateS0Review(
 				? "not_run"
 				: !challengerCompleted
 					? "none"
-				: challengerRejectedPartitions.length === 0
-					? "complete"
-					: challenge !== null &&
-						(challenge.removeEnvelopeBlockIds.length > 0 ||
-							challenge.addEnvelopeBlockIds.length > 0)
-						? "partial"
-						: "none",
+					: challengerRejectedPartitions.length === 0
+						? "complete"
+						: challenge !== null &&
+							(challenge.removePartitions.length > 0 ||
+								challenge.removeAuditPartitions.length > 0 ||
+								challenge.addPartitions.length > 0)
+							? "partial"
+							: "none",
 			rejectedPartitionCount: challengerRejectedPartitions.length,
 		},
 		trace: {
@@ -690,10 +722,12 @@ export async function runPiNativeCandidateS0Review(
 					PiNativeCandidateS0FinalSubmissionSchema,
 				)}\n\nGLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
 					candidate_s0_ranges: prepared.candidateRanges,
+					candidate_s0_block_ids: prepared.candidateBlockIds,
 					projection:
 						"S0 intersection source-order [inclusive root, exclusive exit or EOF)",
 					root_may_be_outside_s0: true,
 					projection_must_be_nonempty: true,
+					anchor_must_be_in_s0_and_span: true,
 					max_vetoes: MAX_HARD_CARRIER_ROOT_VETOES,
 				})}`,
 			) +
@@ -760,7 +794,12 @@ export async function runPiNativeCandidateS0Review(
 		challengerStopReason = challengerResult.stopReason;
 		options.onProgress?.({ role: "challenger", tool: FINALIZER_TOOL_NAME });
 		throwIfAborted(signal);
-		if (challengerRejectedPartitions.length > 0) {
+		if (
+			challengerRejectedPartitions.length > 0 &&
+			challenge.removePartitions.length === 0 &&
+			challenge.removeAuditPartitions.length === 0 &&
+			challenge.addPartitions.length === 0
+		) {
 			validatorFailure = `${challengerRejectedPartitions.length} Challenger partition(s) failed mechanical authorization`;
 			return finish({
 				status: "degraded",
@@ -768,7 +807,7 @@ export async function runPiNativeCandidateS0Review(
 				reviewDegraded: true,
 				patch: null,
 				reason:
-					"The Challenger submission was only partially authorized; Candidate S0 preserved.",
+					"Every submitted Challenger partition failed mechanical authorization; Candidate S0 preserved.",
 				failure: {
 					role: "challenger",
 					code: "contract_error",
@@ -976,6 +1015,23 @@ function prepareCandidateS0Review(
 
 CANDIDATE_S0_RANGES=${JSON.stringify(candidateRanges)}
 
+MECHANICAL_AUDIT_BUDGET=${JSON.stringify({
+	max_partitions: MAX_REMOVE_AUDIT_PARTITIONS,
+	max_one_partition_per_kind: true,
+	max_ranges_per_partition: MAX_AUDIT_RANGES_PER_PARTITION,
+	max_blocks_per_partition: MAX_AUDIT_BLOCKS_PER_PARTITION,
+	max_total_unique_blocks: MAX_TOTAL_AUDIT_BLOCKS,
+	candidate_s0_runs: candidateRanges.map((range) => ({
+		range,
+		block_count: expandRanges(
+			[range],
+			availableBlockIds,
+			"candidate_s0_runs",
+			false,
+		).length,
+	})),
+})}
+
 MECHANICAL_TARGET_AUTHORIZATION=${targetAuthorization}
 `;
 	return {
@@ -1007,16 +1063,27 @@ function prepareTargetedFinalizer(
 		add_review_ranges: challenge.addEnvelopeRanges,
 		remove_review_groups: [
 			...challenge.removePartitions.map((partition) => ({
+				review_kind: "exact_remove_claim",
 				target_ranges: partition.targetRanges,
+				untrusted_challenger_claim: partition.sourceConclusion,
+				supporting_block_ids: partition.supportingBlockIds,
 			})),
 			...challenge.removeAuditPartitions.map((partition) => ({
+				review_kind: partition.auditKind,
 				target_ranges: partition.targetRanges,
+				declared_target_block_count: partition.declaredTargetBlockCount,
+				untrusted_challenger_claim: partition.auditBasis,
+				supporting_block_ids: partition.supportingBlockIds,
 			})),
 		],
 		add_review_groups: challenge.addPartitions.map((partition) => ({
+			review_kind: "exact_add_claim",
 			target_ranges: partition.targetRanges,
+			untrusted_challenger_claim: partition.sourceConclusion,
+			supporting_block_ids: partition.supportingBlockIds,
 		})),
-		challenger_partition_kind_forwarded: false,
+		challenger_partition_kind_forwarded: true,
+		challenger_claims_forwarded_as_untrusted: true,
 	});
 	return {
 		systemPrompt: [
@@ -1030,13 +1097,15 @@ CANDIDATE_S0_RANGES=${JSON.stringify(prepared.candidateRanges)}
 CHALLENGE_ENVELOPE=${envelope}
 
 GLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
-			candidate_s0_ranges: prepared.candidateRanges,
-			projection:
-				"S0 intersection source-order [inclusive root, exclusive exit or EOF)",
-			root_may_be_outside_s0: true,
-			projection_must_be_nonempty: true,
-			max_vetoes: MAX_HARD_CARRIER_ROOT_VETOES,
-		})}
+		candidate_s0_ranges: prepared.candidateRanges,
+		candidate_s0_block_ids: prepared.candidateBlockIds,
+		projection:
+			"S0 intersection source-order [inclusive root, exclusive exit or EOF)",
+		root_may_be_outside_s0: true,
+		projection_must_be_nonempty: true,
+		anchor_must_be_in_s0_and_span: true,
+		max_vetoes: MAX_HARD_CARRIER_ROOT_VETOES,
+	})}
 
 FINALIZER_TOOL_SCHEMA=${JSON.stringify(PiNativeCandidateS0FinalSubmissionSchema)}`,
 		finalizerSourceBlockCount: packet.blocks.length,
@@ -1462,8 +1531,16 @@ function validateChallengeSubmission(
 	const removePartitions = validateExactPartitions("remove", raw.remove_partitions);
 	const addPartitions = validateExactPartitions("add", raw.add_partitions);
 	const removeAuditPartitions: CanonicalPiNativeCandidateS0RemoveAuditPartition[] = [];
+	const auditKindsSeen = new Set<
+		CanonicalPiNativeCandidateS0RemoveAuditPartition["auditKind"]
+	>();
 	for (const [partitionIndex, partition] of raw.remove_audit_partitions.entries()) {
 		try {
+			if (auditKindsSeen.has(partition.audit_kind)) {
+				throw new CandidateS0ContractError(
+					`remove_audit_partitions[${partitionIndex}] duplicates audit kind ${partition.audit_kind}`,
+				);
+			}
 			if (partition.audit_basis.trim().length === 0) {
 				throw new CandidateS0ContractError(
 					`remove_audit_partitions[${partitionIndex}].audit_basis is blank`,
@@ -1478,6 +1555,11 @@ function validateChallengeSubmission(
 			if (targetBlockIds.length > MAX_AUDIT_BLOCKS_PER_PARTITION) {
 				throw new CandidateS0ContractError(
 					`remove_audit_partitions[${partitionIndex}] expands to ${targetBlockIds.length} blocks; maximum is ${MAX_AUDIT_BLOCKS_PER_PARTITION}`,
+				);
+			}
+			if (partition.target_block_count !== targetBlockIds.length) {
+				throw new CandidateS0ContractError(
+					`remove_audit_partitions[${partitionIndex}].target_block_count ${partition.target_block_count} does not match expanded target size ${targetBlockIds.length}`,
 				);
 			}
 			const nextAuditSeen = new Set(removeAuditSeen);
@@ -1510,10 +1592,13 @@ function validateChallengeSubmission(
 				`remove_audit_partitions[${partitionIndex}].supporting_block_ids`,
 			);
 			for (const blockId of targetBlockIds) removeAuditSeen.add(blockId);
+			auditKindsSeen.add(partition.audit_kind);
 			removeAuditPartitions.push({
 				partitionIndex,
+				auditKind: partition.audit_kind,
 				targetRanges: compactRanges(targetBlockIds),
 				targetBlockIds,
+				declaredTargetBlockCount: partition.target_block_count,
 				auditBasis: partition.audit_basis.trim(),
 				supportingBlockIds,
 			});
@@ -1525,9 +1610,9 @@ function validateChallengeSubmission(
 			});
 		}
 	}
-	const removeEnvelopeBlockIds = [...new Set([...removeSeen, ...removeAuditSeen])].sort(
-		(left, right) => left - right,
-	);
+	const removeEnvelopeBlockIds = [
+		...new Set([...removeSeen, ...removeAuditSeen]),
+	].sort((left, right) => left - right);
 	return {
 		challenge: {
 			removePartitions,
@@ -1555,7 +1640,7 @@ function validateFinalSubmission(
 	prepared: PreparedCandidateS0Review,
 	challenge: CanonicalPiNativeCandidateS0Challenge,
 ): CanonicalPiNativeCandidateS0FinalDecision {
-	const challengeRemoveBlockIds = expandRanges(
+	const submittedRemoveBlockIds = expandRanges(
 		raw.accepted_remove_ranges,
 		prepared.availableBlockIds,
 		"accepted_remove_ranges",
@@ -1569,13 +1654,6 @@ function validateFinalSubmission(
 	);
 	const removeEnvelope = new Set(challenge.removeEnvelopeBlockIds);
 	const addEnvelope = new Set(challenge.addEnvelopeBlockIds);
-	for (const blockId of challengeRemoveBlockIds) {
-		if (!removeEnvelope.has(blockId)) {
-			throw new CandidateS0ContractError(
-				`Finalizer remove block ${blockId} is outside the Challenger envelope`,
-			);
-		}
-	}
 	for (const blockId of addBlockIds) {
 		if (!addEnvelope.has(blockId)) {
 			throw new CandidateS0ContractError(
@@ -1583,19 +1661,52 @@ function validateFinalSubmission(
 			);
 		}
 	}
-	const hardCarrierRootVetoes = validateHardCarrierRootVetoes(
+	const rootValidation = validateHardCarrierRootVetoes(
 		raw.hard_carrier_root_vetoes,
 		prepared,
 		addBlockIds,
 	);
 	const hardCarrierRemoveBlockIds = [
 		...new Set(
-			hardCarrierRootVetoes.flatMap((veto) => veto.projectedBlockIds),
+			rootValidation.hardCarrierRootVetoes.flatMap(
+				(veto) => veto.projectedBlockIds,
+			),
 		),
 	].sort((left, right) => left - right);
+	const hardCarrierRemove = new Set(hardCarrierRemoveBlockIds);
+	const challengeRemoveBlockIds: number[] = [];
+	const rootCoveredRedundantRemoveBlockIds: number[] = [];
+	for (const blockId of submittedRemoveBlockIds) {
+		if (removeEnvelope.has(blockId)) {
+			challengeRemoveBlockIds.push(blockId);
+			continue;
+		}
+		if (hardCarrierRemove.has(blockId)) {
+			rootCoveredRedundantRemoveBlockIds.push(blockId);
+			continue;
+		}
+		throw new CandidateS0ContractError(
+			`Finalizer remove block ${blockId} is outside the Challenger envelope and every valid hard-carrier root veto`,
+		);
+	}
+	if (
+		rootValidation.rejectedHardCarrierRootVetoes.length > 0 &&
+		rootValidation.hardCarrierRootVetoes.length === 0 &&
+		challengeRemoveBlockIds.length === 0 &&
+		addBlockIds.length === 0
+	) {
+		throw new CandidateS0ContractError(
+			`all submitted hard-carrier root vetoes failed mechanical authorization: ${rootValidation.rejectedHardCarrierRootVetoes
+				.map((rejected) => rejected.reason)
+				.join("; ")}`,
+		);
+	}
 	const acceptedChallengeRemove = new Set(challengeRemoveBlockIds);
 	const challengedSurvivors = new Set(
-		challenge.removeEnvelopeBlockIds.filter(
+		[
+			...challenge.removeExactEnvelopeBlockIds,
+			...challenge.removeAuditEnvelopeBlockIds,
+		].filter(
 			(blockId) => !acceptedChallengeRemove.has(blockId),
 		),
 	);
@@ -1617,9 +1728,15 @@ function validateFinalSubmission(
 	return {
 		submittedRemoveRanges: raw.accepted_remove_ranges,
 		submittedAddRanges: raw.accepted_add_ranges,
-		hardCarrierRootVetoes,
+		hardCarrierRootVetoes: rootValidation.hardCarrierRootVetoes,
+		rejectedHardCarrierRootVetoes:
+			rootValidation.rejectedHardCarrierRootVetoes,
 		challengeRemoveRanges: compactRanges(challengeRemoveBlockIds),
 		challengeRemoveBlockIds,
+		rootCoveredRedundantRemoveRanges: compactRanges(
+			rootCoveredRedundantRemoveBlockIds,
+		),
+		rootCoveredRedundantRemoveBlockIds,
 		hardCarrierRemoveRanges: compactRanges(hardCarrierRemoveBlockIds),
 		hardCarrierRemoveBlockIds,
 		removeRanges: compactRanges(removeBlockIds),
@@ -1635,70 +1752,112 @@ function validateHardCarrierRootVetoes(
 	rawVetoes: readonly Static<typeof PiNativeCandidateS0HardCarrierRootVetoSchema>[],
 	prepared: PreparedCandidateS0Review,
 	addBlockIds: readonly number[],
-): CanonicalPiNativeCandidateS0HardCarrierRootVeto[] {
+): {
+	hardCarrierRootVetoes: CanonicalPiNativeCandidateS0HardCarrierRootVeto[];
+	rejectedHardCarrierRootVetoes: PiNativeCandidateS0RejectedHardCarrierRootVeto[];
+} {
 	const candidate = new Set(prepared.candidateBlockIds);
-	const validatedSpans: Array<{
-		vetoIndex: number;
+	const candidates: Array<{
+		veto: CanonicalPiNativeCandidateS0HardCarrierRootVeto;
 		rootIndex: number;
 		exitIndex: number;
 	}> = [];
-	return rawVetoes.map((raw, vetoIndex) => {
-		const rootIndex = prepared.sourceIndexByBlockId.get(raw.root_block_id);
-		if (rootIndex === undefined) {
-			throw new CandidateS0ContractError(
-				`hard_carrier_root_vetoes[${vetoIndex}] references unavailable root block ${raw.root_block_id}`,
-			);
-		}
-		const exitIndex = raw.exit_block_id_exclusive === "EOF"
-			? prepared.sourceOrderedBlockIds.length
-			: prepared.sourceIndexByBlockId.get(raw.exit_block_id_exclusive);
-		if (exitIndex === undefined) {
-			throw new CandidateS0ContractError(
-				`hard_carrier_root_vetoes[${vetoIndex}] references unavailable exit block ${raw.exit_block_id_exclusive}`,
-			);
-		}
-		if (exitIndex <= rootIndex) {
-			throw new CandidateS0ContractError(
-				`hard_carrier_root_vetoes[${vetoIndex}] exit position ${exitIndex} must follow root position ${rootIndex} in source order`,
-			);
-		}
-		for (const existing of validatedSpans) {
-			if (rootIndex < existing.exitIndex && existing.rootIndex < exitIndex) {
+	const rejectedHardCarrierRootVetoes: PiNativeCandidateS0RejectedHardCarrierRootVeto[] = [];
+	for (const [vetoIndex, raw] of rawVetoes.entries()) {
+		try {
+			const rootIndex = prepared.sourceIndexByBlockId.get(raw.root_block_id);
+			if (rootIndex === undefined) {
 				throw new CandidateS0ContractError(
-					`hard_carrier_root_vetoes[${vetoIndex}] overlaps veto ${existing.vetoIndex} in source order`,
+					`hard_carrier_root_vetoes[${vetoIndex}] references unavailable root block ${raw.root_block_id}`,
+				);
+			}
+			const exitIndex = raw.exit_block_id_exclusive === "EOF"
+				? prepared.sourceOrderedBlockIds.length
+				: prepared.sourceIndexByBlockId.get(raw.exit_block_id_exclusive);
+			if (exitIndex === undefined) {
+				throw new CandidateS0ContractError(
+					`hard_carrier_root_vetoes[${vetoIndex}] references unavailable exit block ${raw.exit_block_id_exclusive}`,
+				);
+			}
+			if (exitIndex <= rootIndex) {
+				throw new CandidateS0ContractError(
+					`hard_carrier_root_vetoes[${vetoIndex}] exit position ${exitIndex} must follow root position ${rootIndex} in source order`,
+				);
+			}
+			const anchorIndex = prepared.sourceIndexByBlockId.get(
+				raw.projected_s0_anchor_block_id,
+			);
+			if (anchorIndex === undefined) {
+				throw new CandidateS0ContractError(
+					`hard_carrier_root_vetoes[${vetoIndex}] references unavailable Candidate-S0 anchor block ${raw.projected_s0_anchor_block_id}`,
+				);
+			}
+			if (!candidate.has(raw.projected_s0_anchor_block_id)) {
+				throw new CandidateS0ContractError(
+					`hard_carrier_root_vetoes[${vetoIndex}] anchor block ${raw.projected_s0_anchor_block_id} is outside Candidate S0`,
+				);
+			}
+			if (anchorIndex < rootIndex || anchorIndex >= exitIndex) {
+				throw new CandidateS0ContractError(
+					`hard_carrier_root_vetoes[${vetoIndex}] anchor block ${raw.projected_s0_anchor_block_id} is outside the submitted root span`,
+				);
+			}
+			const projectedBlockIds = prepared.sourceOrderedBlockIds
+				.slice(rootIndex, exitIndex)
+				.filter((blockId) => candidate.has(blockId));
+			if (projectedBlockIds.length === 0) {
+				throw new CandidateS0ContractError(
+					`hard_carrier_root_vetoes[${vetoIndex}] has an empty Candidate-S0 projection`,
+				);
+			}
+			candidates.push({
+				rootIndex,
+				exitIndex,
+				veto: {
+					vetoIndex,
+					carrierType: raw.carrier_type,
+					rootBlockId: raw.root_block_id,
+					exitBlockIdExclusive: raw.exit_block_id_exclusive,
+					projectedS0AnchorBlockId: raw.projected_s0_anchor_block_id,
+					projectedRanges: compactRanges(projectedBlockIds),
+					projectedBlockIds,
+				},
+			});
+		} catch (error) {
+			rejectedHardCarrierRootVetoes.push({
+				vetoIndex,
+				reason: errorMessage(error),
+			});
+		}
+	}
+	for (const [index, candidateVeto] of candidates.entries()) {
+		for (const existing of candidates.slice(0, index)) {
+			if (
+				candidateVeto.rootIndex < existing.exitIndex &&
+				existing.rootIndex < candidateVeto.exitIndex
+			) {
+				throw new CandidateS0ContractError(
+					`hard_carrier_root_vetoes[${candidateVeto.veto.vetoIndex}] overlaps veto ${existing.veto.vetoIndex} in source order`,
 				);
 			}
 		}
-		validatedSpans.push({ vetoIndex, rootIndex, exitIndex });
 		for (const blockId of addBlockIds) {
 			const blockIndex = prepared.sourceIndexByBlockId.get(blockId);
 			if (
 				blockIndex !== undefined &&
-				blockIndex >= rootIndex &&
-				blockIndex < exitIndex
+				blockIndex >= candidateVeto.rootIndex &&
+				blockIndex < candidateVeto.exitIndex
 			) {
 				throw new CandidateS0ContractError(
-					`Finalizer add block ${blockId} conflicts with hard-carrier root veto ${vetoIndex}`,
+					`Finalizer add block ${blockId} conflicts with hard-carrier root veto ${candidateVeto.veto.vetoIndex}`,
 				);
 			}
 		}
-		const projectedBlockIds = prepared.sourceOrderedBlockIds
-			.slice(rootIndex, exitIndex)
-			.filter((blockId) => candidate.has(blockId));
-		if (projectedBlockIds.length === 0) {
-			throw new CandidateS0ContractError(
-				`hard_carrier_root_vetoes[${vetoIndex}] has an empty Candidate-S0 projection`,
-			);
-		}
-		return {
-			vetoIndex,
-			carrierType: raw.carrier_type,
-			rootBlockId: raw.root_block_id,
-			exitBlockIdExclusive: raw.exit_block_id_exclusive,
-			projectedRanges: compactRanges(projectedBlockIds),
-			projectedBlockIds,
-		};
-	});
+	}
+	return {
+		hardCarrierRootVetoes: candidates.map((candidateVeto) => candidateVeto.veto),
+		rejectedHardCarrierRootVetoes,
+	};
 }
 
 function validateSupportingBlockIds(

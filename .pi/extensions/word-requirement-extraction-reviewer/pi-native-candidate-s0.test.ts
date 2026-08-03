@@ -110,7 +110,9 @@ function auditChallenge(): PiNativeCandidateS0ChallengeSubmission {
 		remove_partitions: [],
 		remove_audit_partitions: [
 			{
+				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落4"],
+				target_block_count: 4,
 				audit_basis:
 					"The bounded selected scope contains competing atomic membership roles requiring exact independent adjudication.",
 				supporting_block_ids: [1, 2, 3, 4],
@@ -290,6 +292,7 @@ test("allows the Finalizer to remove an S0 hard-carrier span outside the challen
 					carrier_type: "contract_terms_and_formats",
 					root_block_id: 3,
 					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 3,
 				},
 			],
 		}),
@@ -315,6 +318,7 @@ test("allows the Finalizer to remove an S0 hard-carrier span outside the challen
 				carrierType: "contract_terms_and_formats",
 				rootBlockId: 3,
 				exitBlockIdExclusive: "EOF",
+				projectedS0AnchorBlockId: 3,
 				projectedRanges: ["段落3-段落4"],
 			},
 		],
@@ -332,6 +336,7 @@ test("projects hard-carrier vetoes by source order when block IDs are sparse", a
 					carrier_type: "announcement_notice",
 					root_block_id: 5,
 					exit_block_id_exclusive: 40,
+					projected_s0_anchor_block_id: 10,
 				},
 			],
 		}),
@@ -348,6 +353,86 @@ test("projects hard-carrier vetoes by source order when block IDs are sparse", a
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual([]);
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([10, 30]);
+});
+
+test("canonicalizes a redundant submitted remove already covered by a valid root veto", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落3"],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 3,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.decision).toMatchObject({
+		challengeRemoveRanges: [],
+		rootCoveredRedundantRemoveRanges: ["段落3"],
+		hardCarrierRemoveRanges: ["段落3-段落4"],
+	});
+});
+
+test("continues after rejecting an effectless root veto when valid effects remain", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			remove_partitions: [
+				{
+					target_ranges: ["段落2"],
+					source_conclusion: "One bounded atom requires review.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落2"],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 0,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 1,
+				},
+				{
+					carrier_type: "bidder_instructions",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 1,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.decision).toMatchObject({
+		rejectedHardCarrierRootVetoes: [
+			{
+				vetoIndex: 1,
+				reason:
+					"hard_carrier_root_vetoes[1] anchor block 1 is outside the submitted root span",
+			},
+		],
+	});
 });
 
 test("fails closed when an accepted add conflicts with a hard-carrier root veto", async () => {
@@ -371,6 +456,7 @@ test("fails closed when an accepted add conflicts with a hard-carrier root veto"
 					carrier_type: "contract_terms_and_formats",
 					root_block_id: 2,
 					exit_block_id_exclusive: 4,
+					projected_s0_anchor_block_id: 2,
 				},
 			],
 		}),
@@ -400,6 +486,7 @@ test("fails closed when a hard-carrier veto removes a challenged survivor", asyn
 					carrier_type: "contract_terms_and_formats",
 					root_block_id: 3,
 					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 3,
 				},
 			],
 		}),
@@ -427,11 +514,13 @@ test("fails closed when hard-carrier veto spans overlap", async () => {
 					carrier_type: "announcement_notice",
 					root_block_id: 0,
 					exit_block_id_exclusive: 3,
+					projected_s0_anchor_block_id: 1,
 				},
 				{
 					carrier_type: "bidder_instructions",
 					root_block_id: 2,
 					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 2,
 				},
 			],
 		}),
@@ -445,7 +534,7 @@ test("fails closed when hard-carrier veto spans overlap", async () => {
 	);
 });
 
-test("fails closed when a hard-carrier veto has an empty S0 projection", async () => {
+test("fails closed when a hard-carrier veto anchor is outside Candidate S0", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({
@@ -456,6 +545,7 @@ test("fails closed when a hard-carrier veto has an empty S0 projection", async (
 					carrier_type: "response_format",
 					root_block_id: 3,
 					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 3,
 				},
 			],
 		}),
@@ -465,7 +555,32 @@ test("fails closed when a hard-carrier veto has an empty S0 projection", async (
 
 	expect(result.status).toBe("degraded");
 	expect(result.failure?.message).toContain(
-		"hard_carrier_root_vetoes[0] has an empty Candidate-S0 projection",
+		"hard_carrier_root_vetoes[0] anchor block 3 is outside Candidate S0",
+	);
+});
+
+test("fails closed when a hard-carrier veto anchor is outside its root span", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			accepted_remove_ranges: [],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "response_format",
+					root_block_id: 2,
+					exit_block_id_exclusive: 3,
+					projected_s0_anchor_block_id: 1,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure?.message).toContain(
+		"hard_carrier_root_vetoes[0] anchor block 1 is outside the submitted root span",
 	);
 });
 
@@ -576,9 +691,7 @@ test("fails closed when the Finalizer leaves the Challenger envelope", async () 
 	expect(result.patch).toBeNull();
 	expect(result.decision).toBeNull();
 	expect(result.failure).toMatchObject({ role: "finalizer", code: "contract_error" });
-	expect(result.failure?.message).toContain(
-		"Finalizer remove block 1 is outside the Challenger envelope",
-	);
+	expect(result.failure?.message).toContain("outside the Challenger envelope");
 	expect(result.trace.finalizerRawSubmissions).toEqual([
 		{
 			accepted_remove_ranges: ["段落1"],
@@ -697,7 +810,7 @@ test("records the raw Challenger response when target authorization fails", asyn
 	expect(result.inputs.challengerSha256).toMatch(/^[a-f0-9]{64}$/u);
 });
 
-test("fails closed when one partition is unauthorized", async () => {
+test("continues with partial coverage when one partition is unauthorized", async () => {
 	const mixedChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [boundedChallenge().remove_partitions[0]],
 		remove_audit_partitions: [],
@@ -719,13 +832,10 @@ test("fails closed when one partition is unauthorized", async () => {
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("degraded");
-	expect(result.finalRanges).toEqual(["段落1-段落2"]);
-	expect(result.patch).toBeNull();
-	expect(result.failure).toMatchObject({
-		role: "challenger",
-		code: "contract_error",
-	});
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落2"] });
+	expect(result.failure).toBeNull();
 	expect(result.trace.challengerRejectedPartitions).toEqual([
 		{
 			direction: "add",
@@ -738,16 +848,18 @@ test("fails closed when one partition is unauthorized", async () => {
 		challenger: "partial",
 		rejectedPartitionCount: 1,
 	});
-	expect(result.budget.providerCalls).toBe(1);
-	expect(registration.getPendingResponseCount()).toBe(1);
+	expect(result.budget.providerCalls).toBe(2);
+	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
-test("rejects a neutral audit that overlaps an exact remove challenge", async () => {
+test("continues after rejecting an audit that overlaps an exact remove challenge", async () => {
 	const overlappingChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [boundedChallenge().remove_partitions[0]],
 		remove_audit_partitions: [
 			{
+				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落2"],
+				target_block_count: 2,
 				audit_basis: "The audit intentionally overlaps an exact remove target.",
 				supporting_block_ids: [1, 2],
 			},
@@ -764,9 +876,9 @@ test("rejects a neutral audit that overlaps an exact remove challenge", async ()
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("degraded");
-	expect(result.finalRanges).toEqual(["段落1-段落2"]);
-	expect(result.patch).toBeNull();
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落2"] });
 	expect(result.challenge?.removeAuditPartitions).toEqual([]);
 	expect(result.trace.challengerRejectedPartitions).toEqual([
 		{
@@ -779,11 +891,11 @@ test("rejects a neutral audit that overlaps an exact remove challenge", async ()
 		challenger: "partial",
 		rejectedPartitionCount: 1,
 	});
-	expect(result.budget.providerCalls).toBe(1);
-	expect(registration.getPendingResponseCount()).toBe(1);
+	expect(result.budget.providerCalls).toBe(2);
+	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
-test("forwards neutral range groups without Challenger semantics", async () => {
+test("forwards typed groups and untrusted Challenger claims without transformation", async () => {
 	const contexts: Context[] = [];
 	const groupedChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [
@@ -795,7 +907,9 @@ test("forwards neutral range groups without Challenger semantics", async () => {
 		],
 		remove_audit_partitions: [
 			{
+				audit_kind: "recovery_boundary_scope",
 				target_ranges: ["段落2"],
+				target_block_count: 1,
 				audit_basis: "REMOVE_AUDIT_SECRET",
 				supporting_block_ids: [2],
 			},
@@ -840,17 +954,22 @@ test("forwards neutral range groups without Challenger semantics", async () => {
 					.join("");
 	expect(finalizerInput).toContain('"remove_review_ranges":["段落1-段落2"]');
 	expect(finalizerInput).toContain(
-		'"remove_review_groups":[{"target_ranges":["段落1"]},{"target_ranges":["段落2"]}]',
+		'"remove_review_groups":[{"review_kind":"exact_remove_claim","target_ranges":["段落1"],"untrusted_challenger_claim":"EXACT_REMOVE_SECRET","supporting_block_ids":[0,1]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"declared_target_block_count":1,"untrusted_challenger_claim":"REMOVE_AUDIT_SECRET","supporting_block_ids":[2]}]',
 	);
 	expect(finalizerInput).toContain('"add_review_ranges":["段落3"]');
 	expect(finalizerInput).toContain(
-		'"add_review_groups":[{"target_ranges":["段落3"]}]',
+		'"add_review_groups":[{"review_kind":"exact_add_claim","target_ranges":["段落3"],"untrusted_challenger_claim":"EXACT_ADD_SECRET","supporting_block_ids":[3]}]',
 	);
-	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":false');
-	expect(finalizerInput).not.toContain("EXACT_REMOVE_SECRET");
-	expect(finalizerInput).not.toContain("REMOVE_AUDIT_SECRET");
-	expect(finalizerInput).not.toContain("EXACT_ADD_SECRET");
-	expect(finalizerInput).not.toContain("supporting_block_ids");
+	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":true');
+	expect(finalizerInput).toContain(
+		'"challenger_claims_forwarded_as_untrusted":true',
+	);
+	expect(finalizerInput).toContain('"candidate_s0_block_ids":[1,2]');
+	expect(finalizerInput).toContain('"anchor_must_be_in_s0_and_span":true');
+	expect(finalizerInput).toContain("EXACT_REMOVE_SECRET");
+	expect(finalizerInput).toContain("REMOVE_AUDIT_SECRET");
+	expect(finalizerInput).toContain("EXACT_ADD_SECRET");
+	expect(finalizerInput).toContain("supporting_block_ids");
 });
 
 test("keeps expanded audit block IDs internal to the Finalizer context", async () => {
@@ -859,7 +978,9 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 		remove_partitions: [],
 		remove_audit_partitions: [
 			{
+				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落96"],
+				target_block_count: 96,
 				audit_basis: "The bounded scope contains competing atomic roles.",
 				supporting_block_ids: [1, 48, 96],
 			},
@@ -915,13 +1036,121 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 	expect(finalizerInput).toContain(
 		'"remove_review_ranges":["段落1-段落96"]',
 	);
-	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":false');
+	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":true');
+	expect(finalizerInput).toContain('"review_kind":"mixed_atomic_scope"');
 	expect(finalizerInput).not.toContain("remove_partitions");
 	expect(finalizerInput).not.toContain("remove_audit_partitions");
 	expect(finalizerInput).not.toContain("target_block_ids");
 	expect(finalizerInput).not.toContain("audit_basis");
 	expect(finalizerInput).not.toContain("source_conclusion");
-	expect(finalizerInput).not.toContain("supporting_block_ids");
+	expect(finalizerInput).toContain("untrusted_challenger_claim");
+	expect(finalizerInput).toContain("supporting_block_ids");
+});
+
+test("keeps the two typed audit channels independently bounded", async () => {
+	const auditBlockIds = [
+		...Array.from({ length: 77 }, (_, index) => index + 1),
+		...Array.from({ length: 52 }, (_, index) => index + 100),
+	];
+	const largeAudit: PiNativeCandidateS0ChallengeSubmission = {
+		remove_partitions: [],
+		remove_audit_partitions: [
+			{
+				audit_kind: "mixed_atomic_scope",
+				target_ranges: ["段落1-段落77"],
+				target_block_count: 77,
+				audit_basis:
+					"One bounded ordinary Candidate scope has mixed atomic-membership risk.",
+				supporting_block_ids: Array.from({ length: 65 }, (_, index) => index + 1),
+			},
+			{
+				audit_kind: "recovery_boundary_scope",
+				target_ranges: ["段落100-段落151"],
+				target_block_count: 52,
+				audit_basis:
+					"One independently bounded recovered module requires atomic review.",
+				supporting_block_ids: [100, 151],
+			},
+		],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		challengerResponse(largeAudit),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落2", "段落151"],
+			accepted_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落1-段落77", "段落100-段落151"],
+			texts: Array.from({ length: 160 }, (_, blockId) =>
+				`Source block ${blockId}`,
+			),
+		}),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.coverage).toEqual({
+		challenger: "complete",
+		rejectedPartitionCount: 0,
+	});
+	expect(result.challenge?.removeAuditEnvelopeBlockIds).toEqual(auditBlockIds);
+	expect(result.challenge?.removeAuditPartitions[0]?.supportingBlockIds).toHaveLength(
+		65,
+	);
+	expect(result.patch).toEqual({
+		addRanges: [],
+		removeRanges: ["段落2", "段落151"],
+	});
+});
+
+test("continues after rejecting a duplicate typed audit kind", async () => {
+	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		remove_partitions: [],
+		remove_audit_partitions: [
+			{
+				audit_kind: "mixed_atomic_scope",
+				target_ranges: ["段落1"],
+				target_block_count: 1,
+				audit_basis: "The first bounded mixed scope requires independent review.",
+				supporting_block_ids: [1],
+			},
+			{
+				audit_kind: "mixed_atomic_scope",
+				target_ranges: ["段落2"],
+				target_block_count: 1,
+				audit_basis: "The second mixed scope attempts to reuse the typed slot.",
+				supporting_block_ids: [2],
+			},
+		],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		challengerResponse(challenge),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落1"],
+			accepted_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("repaired");
+	expect(result.coverage).toEqual({
+		challenger: "partial",
+		rejectedPartitionCount: 1,
+	});
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "remove_audit",
+			partitionIndex: 1,
+			reason:
+				"remove_audit_partitions[1] duplicates audit kind mixed_atomic_scope",
+		},
+	]);
+	expect(result.finalRanges).toEqual(["段落2"]);
 });
 
 test("fails capacity preflight before the first provider call", async () => {
