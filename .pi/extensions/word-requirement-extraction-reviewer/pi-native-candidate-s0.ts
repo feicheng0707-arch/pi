@@ -32,13 +32,14 @@ const WORKFLOW_TIMEOUT_MS = 600_000;
 const MAX_REMOVE_PARTITIONS = 8;
 const MAX_REMOVE_AUDIT_PARTITIONS = 2;
 const MAX_ADD_PARTITIONS = 2;
-const MAX_TARGET_RANGES_PER_PARTITION = 16;
+const MAX_EXACT_TARGET_RANGES_PER_PARTITION = 1;
 const MAX_AUDIT_RANGES_PER_PARTITION = 32;
 const MAX_AUDIT_BLOCKS_PER_PARTITION = 96;
 const MAX_TOTAL_AUDIT_BLOCKS =
 	MAX_REMOVE_AUDIT_PARTITIONS * MAX_AUDIT_BLOCKS_PER_PARTITION;
-const MAX_SUPPORTING_BLOCK_IDS_TRANSPORT = 32;
-const MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION = 8;
+const MAX_EXACT_SUPPORTING_BLOCK_IDS_TRANSPORT = 4;
+const MAX_AUDIT_SUPPORTING_BLOCK_IDS_TRANSPORT = 32;
+const MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION = 4;
 const MAX_AUDIT_SUPPORTING_BLOCK_IDS_PER_PARTITION = 12;
 const MAX_CHALLENGE_CONCLUSION_CHARACTERS = 160;
 const MAX_HARD_CARRIER_ROOT_VETOES = 32;
@@ -47,12 +48,11 @@ const MAX_EXACT_DELIMITED_STRING_SEEDS = 256;
 const MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES = 24;
 const MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE = 8;
 const MAX_EXACT_DELIMITED_STRING_TOTAL_BLOCK_OCCURRENCES = 8;
-const MAX_FINAL_REMOVE_RANGES =
-	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
-const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
+const MAX_FINAL_REMOVE_RANGES = 320;
+const MAX_FINAL_ADD_RANGES = 32;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v27";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v33";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -66,6 +66,14 @@ const PiNativeCandidateS0ChallengeRangeSchema = Type.String({
 		"One canonical top-level source range such as 段落12 or 段落12-段落18. Invalid syntax fails the whole Challenger response before partition-level authorization.",
 });
 
+const PiNativeCandidateS0ExactChallengeRangeSchema = Type.String({
+	minLength: 1,
+	maxLength: MAX_CHALLENGE_RANGE_CHARACTERS,
+	pattern: "^段落\\d+$",
+	description:
+		"Exactly one canonical top-level source block address such as 段落12. Canonical table blocks use the same unique block address; multi-block ranges and block-internal slices are invalid.",
+});
+
 const PiNativeCandidateS0BlockIdSchema = Type.Integer({
 	minimum: 0,
 	maximum: Number.MAX_SAFE_INTEGER,
@@ -73,23 +81,23 @@ const PiNativeCandidateS0BlockIdSchema = Type.Integer({
 
 export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 	{
-		target_ranges: Type.Array(PiNativeCandidateS0ChallengeRangeSchema, {
+		target_ranges: Type.Array(PiNativeCandidateS0ExactChallengeRangeSchema, {
 			minItems: 1,
-			maxItems: MAX_TARGET_RANGES_PER_PARTITION,
+			maxItems: MAX_EXACT_TARGET_RANGES_PER_PARTITION,
 			description:
-				"One or more exact source-address ranges governed by the same conclusion and supporting evidence.",
+				"Exactly one singleton canonical block address governed by one source conclusion.",
 		}),
 		source_conclusion: Type.String({
 			minLength: 1,
 			maxLength: MAX_CHALLENGE_CONCLUSION_CHARACTERS,
 			description:
-				"One source-grounded conclusion shared by every target range in this partition.",
+				"One source-grounded conclusion proving only this singleton target.",
 		}),
 		supporting_block_ids: Type.Array(PiNativeCandidateS0BlockIdSchema, {
 			minItems: 1,
-			maxItems: MAX_SUPPORTING_BLOCK_IDS_TRANSPORT,
+			maxItems: MAX_EXACT_SUPPORTING_BLOCK_IDS_TRANSPORT,
 			description:
-				"Existing top-level source block IDs shared as evidence for every target range in this partition. The transport accepts at most 32 IDs; mechanical protocol validation rejects the whole exact partition above 8 without truncation.",
+				"One to four existing top-level source block IDs. The singleton target block must be included; remaining IDs only provide minimal source context.",
 		}),
 	},
 	{ additionalProperties: false },
@@ -115,7 +123,7 @@ export const PiNativeCandidateS0RemoveAuditPartitionSchema = Type.Object(
 		}),
 		supporting_block_ids: Type.Array(PiNativeCandidateS0BlockIdSchema, {
 			minItems: 1,
-			maxItems: MAX_SUPPORTING_BLOCK_IDS_TRANSPORT,
+			maxItems: MAX_AUDIT_SUPPORTING_BLOCK_IDS_TRANSPORT,
 			description:
 				"Existing top-level source block IDs that locate the scope and its competing membership evidence. The transport accepts at most 32 IDs; mechanical protocol validation rejects the whole audit partition above 12 without truncation.",
 		}),
@@ -729,7 +737,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-root-free-three-array-json-object-challenger-with-partition-local-exact-and-typed-audit-navigation->single-canonical-S0-authorization->challenge-last-full-S0-finalizer-with-independent-tentative-closure-delete-only-sparse-ordinary-delta-global-hard-carrier-veto-root-owned-same-direction-redundancy-normalization-and-strict-audit-subset-checksum",
+				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-root-free-three-array-json-object-challenger-with-singleton-exact-cards-and-typed-audit-navigation->single-canonical-S0-authorization->challenge-last-full-S0-finalizer-with-independent-tentative-closure-delete-only-sparse-ordinary-delta-global-hard-carrier-veto-root-owned-same-direction-redundancy-normalization-and-strict-audit-subset-checksum",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -758,7 +766,7 @@ export async function runPiNativeCandidateS0Review(
 				),
 				challengerOutputReserveTokens: CHALLENGER_OUTPUT_RESERVE_TOKENS,
 				challengerOutputBoundEstimator:
-					"root-free-transport-schema-max-items-max-length-json-stringify-fixed-estimator-and-packet-max-block-id-v4",
+					"root-free-transport-schema-max-items-max-length-json-stringify-fixed-estimator-and-packet-max-block-id-v5",
 				finalizerMaxTokens: FINALIZER_MAX_TOKENS,
 				contextSafetyTokens: CONTEXT_SAFETY_TOKENS,
 				requestTimeoutMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
@@ -767,19 +775,29 @@ export async function runPiNativeCandidateS0Review(
 				maxRemovePartitions: MAX_REMOVE_PARTITIONS,
 				maxRemoveAuditPartitions: MAX_REMOVE_AUDIT_PARTITIONS,
 				maxAddPartitions: MAX_ADD_PARTITIONS,
-				maxTargetRangesPerPartition: MAX_TARGET_RANGES_PER_PARTITION,
+				maxExactTargetRangesPerPartition:
+					MAX_EXACT_TARGET_RANGES_PER_PARTITION,
 				maxAuditRangesPerPartition: MAX_AUDIT_RANGES_PER_PARTITION,
 				maxAuditBlocksPerPartition: MAX_AUDIT_BLOCKS_PER_PARTITION,
 				maxTotalAuditBlocks: MAX_TOTAL_AUDIT_BLOCKS,
-				maxSupportingBlockIdsTransport: MAX_SUPPORTING_BLOCK_IDS_TRANSPORT,
+				maxExactSupportingBlockIdsTransport:
+					MAX_EXACT_SUPPORTING_BLOCK_IDS_TRANSPORT,
+				maxAuditSupportingBlockIdsTransport:
+					MAX_AUDIT_SUPPORTING_BLOCK_IDS_TRANSPORT,
 				maxExactSupportingBlockIdsPerPartition:
 					MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION,
 				maxAuditSupportingBlockIdsPerPartition:
 					MAX_AUDIT_SUPPORTING_BLOCK_IDS_PER_PARTITION,
-				supportingBlockIdsOverflowPolicy:
-					"whole-partition-reject-without-truncation-or-semantic-selection",
+				supportingBlockIdsOverflowPolicy: {
+					exact:
+						"transport-schema-fail-closed-above-four-without-retry-or-partial-salvage",
+					audit:
+						"whole-partition-reject-above-twelve-through-thirty-two-without-truncation-or-semantic-selection",
+				},
 				maxChallengeConclusionCharacters:
 					MAX_CHALLENGE_CONCLUSION_CHARACTERS,
+				maxFinalRemoveRanges: MAX_FINAL_REMOVE_RANGES,
+				maxFinalAddRanges: MAX_FINAL_ADD_RANGES,
 				maxHardCarrierRootVetoes: MAX_HARD_CARRIER_ROOT_VETOES,
 				maxExactDelimitedStringSeeds: MAX_EXACT_DELIMITED_STRING_SEEDS,
 				maxExactDelimitedStringOccurrenceEntries:
@@ -2037,6 +2055,17 @@ function validateChallengeSubmission(
 				const targetBlockIds = targetRangeGroups
 					.flatMap((rangeGroup) => rangeGroup.targetBlockIds)
 					.sort((left, right) => left - right);
+				if (targetBlockIds.length !== 1) {
+					throw new CandidateS0ContractError(
+						`${direction}_partitions[${partitionIndex}] must target exactly one canonical block`,
+					);
+				}
+				const targetBlockId = targetBlockIds[0];
+				if (targetBlockId === undefined) {
+					throw new CandidateS0ContractError(
+						`${direction}_partitions[${partitionIndex}] resolved to no target block`,
+					);
+				}
 				const directionSeen = direction === "remove" ? removeSeen : addSeen;
 				for (const blockId of targetBlockIds) {
 					if (directionSeen.has(blockId)) {
@@ -2053,14 +2082,19 @@ function validateChallengeSubmission(
 						throw new CandidateS0ContractError(
 							`add challenge block ${blockId} already belongs to Candidate S0`,
 						);
-						}
 					}
+				}
 				const supportingBlockIds = validateSupportingBlockIds(
 					partition.supporting_block_ids,
 					prepared.availableBlockIds,
 					`${direction}_partitions[${partitionIndex}].supporting_block_ids`,
 					MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION,
 				);
+				if (!supportingBlockIds.includes(targetBlockId)) {
+					throw new CandidateS0ContractError(
+						`${direction}_partitions[${partitionIndex}].supporting_block_ids must include target block ${targetBlockId}`,
+					);
+				}
 				for (const blockId of targetBlockIds) directionSeen.add(blockId);
 				validated.push({
 					direction,
@@ -2614,33 +2648,40 @@ function estimateTextTokens(value: string): number {
 }
 
 function estimateWorstCaseChallengeTransportPayloadTokens(): number {
-	const rangeCandidates = [
-		`段落${"9".repeat(MAX_CHALLENGE_RANGE_CHARACTERS - "段落".length)}`,
+	const exactRange = `段落${"9".repeat(
+		MAX_CHALLENGE_RANGE_CHARACTERS - "段落".length,
+	)}`;
+	const auditRangeCandidates = [
+		exactRange,
 		`段落${"9".repeat(13)}-段落${"9".repeat(14)}`,
 	];
 	const conclusion = "\u0000".repeat(MAX_CHALLENGE_CONCLUSION_CHARACTERS);
-	const transportSupportingBlockIds = Array.from(
-		{ length: MAX_SUPPORTING_BLOCK_IDS_TRANSPORT },
+	const exactTransportSupportingBlockIds = Array.from(
+		{ length: MAX_EXACT_SUPPORTING_BLOCK_IDS_TRANSPORT },
+		() => Number.MAX_SAFE_INTEGER,
+	);
+	const auditTransportSupportingBlockIds = Array.from(
+		{ length: MAX_AUDIT_SUPPORTING_BLOCK_IDS_TRANSPORT },
 		() => Number.MAX_SAFE_INTEGER,
 	);
 	return Math.max(
-		...rangeCandidates.map((range) => {
+		...auditRangeCandidates.map((auditRange) => {
 			const exactPartition = {
 				target_ranges: Array.from(
-					{ length: MAX_TARGET_RANGES_PER_PARTITION },
-					() => range,
+					{ length: MAX_EXACT_TARGET_RANGES_PER_PARTITION },
+					() => exactRange,
 				),
 				source_conclusion: conclusion,
-				supporting_block_ids: transportSupportingBlockIds,
+				supporting_block_ids: exactTransportSupportingBlockIds,
 			};
 			const auditPartition = {
 				audit_kind: "recovery_boundary_scope" as const,
 				target_ranges: Array.from(
 					{ length: MAX_AUDIT_RANGES_PER_PARTITION },
-					() => range,
+					() => auditRange,
 				),
 				audit_basis: conclusion,
-				supporting_block_ids: transportSupportingBlockIds,
+				supporting_block_ids: auditTransportSupportingBlockIds,
 			};
 			const worstCase: PiNativeCandidateS0ChallengeSubmission = {
 				remove_partitions: Array.from(

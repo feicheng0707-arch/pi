@@ -55,11 +55,11 @@ test("loads the recovery eligibility and directional Owner challenge contract", 
 	);
 });
 
-test("keeps the v26 root-free Challenger concise and mechanically complete", () => {
+test("keeps the v33 root-free Challenger concise and mechanically complete", () => {
 	expect(Buffer.byteLength(challengerVNext, "utf8")).toBeLessThanOrEqual(
 		13 * 1024,
 	);
-	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v26");
+	expect(challengerVNext).toContain("# Candidate-S0 独立 Challenger v33");
 	expect(challengerVNext).toContain("最多 160 字符");
 	expect(challengerVNext).toContain("它是唯一业务语义源");
 	expect(challengerVNext).not.toContain("## 共享语义门");
@@ -71,7 +71,7 @@ test("keeps the v26 root-free Challenger concise and mechanically complete", () 
 		"**Internal root suppression map**",
 		"**Atomic closure**",
 		"**Heading fixed point**",
-		"**Audit routing**",
+		"**Audit-first routing**",
 	].map((marker) => challengerVNext.indexOf(marker));
 	expect(orderedStages.every((index) => index >= 0)).toBe(true);
 	expect(orderedStages).toEqual(
@@ -81,19 +81,22 @@ test("keeps the v26 root-free Challenger concise and mechanically complete", () 
 	expect(challengerVNext).toContain(
 		"其 source-proven descendants 必须对 exact remove、neutral audit 和 add 完全沉默",
 	);
-	expect(challengerVNext).toContain("supporting IDs不能代替 exact hole");
+	expect(challengerVNext).toContain("supporting IDs 不能代替 exact hole");
 	expect(challengerVNext).toContain("严格子集");
 	expect(challengerVNext).toContain("`recovery/root XOR checksum`");
 	expect(challengerVNext).toContain("必须满足 `H∩Q=∅`");
 	expect(challengerVNext).toContain(
 		"顶层恰有 `remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 三个 non-nullable arrays",
 	);
+	expect(challengerVNext).toContain("schema/transport hard cap 是 4");
 	expect(challengerVNext).toContain(
-		"schema/transport hard cap 都是 `maxItems=32`",
+		"`target_ranges` 恰有一个 singleton `段落N`",
 	);
-	expect(challengerVNext).toContain("exact partition 必须为 1-8 个");
-	expect(challengerVNext).toContain("audit partition 必须为 1-12 个");
-	expect(challengerVNext).toContain("protocol overflow 拒绝整个 partition");
+	expect(challengerVNext).toContain("必须包含 target");
+	expect(challengerVNext).toContain("合计 1-4 个");
+	expect(challengerVNext).toContain("协议 cap 仍是 12");
+	expect(challengerVNext).toContain("提交 13-32 个会拒绝该完整 audit");
+	expect(challengerVNext).toContain("容量未超限时");
 	expect(challengerVNext).toContain("不截断、不挑选、不保留前 N 个");
 	expect(challengerVNext).toContain('`response_format={"type":"json_object"}`');
 });

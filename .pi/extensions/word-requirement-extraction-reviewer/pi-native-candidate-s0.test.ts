@@ -16,6 +16,7 @@ import { loadRequirementReviewPrompts, parseRequirementReviewPacket } from "./in
 import {
 	PiNativeCandidateS0ChallengePartitionSchema,
 	PiNativeCandidateS0ChallengeSchema,
+	PiNativeCandidateS0FinalSubmissionSchema,
 	PiNativeCandidateS0RemoveAuditPartitionSchema,
 	type PiNativeCandidateS0ChallengeSubmission,
 	runPiNativeCandidateS0Review,
@@ -203,7 +204,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v27 concise-role prompts aligned with root-free Challenger mechanics", () => {
+test("keeps the v33 concise-role prompts aligned with singleton Challenger mechanics", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain(
@@ -214,15 +215,17 @@ test("keeps the v27 concise-role prompts aligned with root-free Challenger mecha
 	expect(challengerPrompt).toContain("不得调用工具");
 	expect(challengerPrompt).toContain("`S0↔S0` 与 `S0↔OUT`");
 	expect(challengerPrompt).toContain("9+ fanout 整项省略");
+	expect(challengerPrompt).toContain("schema/transport hard cap 是 4");
 	expect(challengerPrompt).toContain(
-		"schema/transport hard cap 都是 `maxItems=32`",
+		"`target_ranges` 恰有一个 singleton `段落N`",
 	);
-	expect(challengerPrompt).toContain("exact partition 必须为 1-8 个");
-	expect(challengerPrompt).toContain("audit partition 必须为 1-12 个");
-	expect(challengerPrompt).toContain("protocol overflow 拒绝整个 partition");
+	expect(challengerPrompt).toContain("必须包含 target");
+	expect(challengerPrompt).toContain("合计 1-4 个");
+	expect(challengerPrompt).toContain("协议 cap 仍是 12");
+	expect(challengerPrompt).toContain("提交 13-32 个会拒绝该完整 audit");
 	expect(challengerPrompt).toContain("不截断、不挑选、不保留前 N 个");
 	expect(challengerPrompt).toContain("最多 160 字符");
-	expect(challengerPrompt).toContain("先裁决全部 singleton");
+	expect(challengerPrompt).toContain("容量未超限时");
 	expect(challengerPrompt).toContain("首 block与末 block");
 	expect(challengerPrompt).not.toContain("sentinel");
 	expect(challengerPrompt).toContain("heading/pointer/consequence residue fixed-point");
@@ -234,8 +237,12 @@ test("keeps the v27 concise-role prompts aligned with root-free Challenger mecha
 	expect(candidateS0RuntimeContract).toContain(
 		"把完整 `S0` 统一作为 ordinary remove 的机械 authorization",
 	);
+	expect(candidateS0RuntimeContract).toContain("singleton exact remove cards");
 	expect(candidateS0RuntimeContract).toContain(
-		"exact partition 在 canonical 合并前按原始 submitted range 拆成独立 group",
+		"每个有效 exact partition 直接形成一个稳定 singleton navigation group",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		"不再做 canonical merge、按 range 拆组",
 	);
 	expect(candidateS0RuntimeContract).toContain(
 		"不要求 seed 的定界符首次出现在 `S0`",
@@ -302,20 +309,58 @@ test("keeps the v27 concise-role prompts aligned with root-free Challenger mecha
 	);
 });
 
-test("exposes a root-free three-array Challenger schema with a 32-ID transport cap", () => {
-	expect(Object.keys(PiNativeCandidateS0ChallengeSchema.properties)).toEqual([
+test("exposes singleton exact cards without shrinking the independent Finalizer", () => {
+	const challengeSchema = JSON.parse(
+		JSON.stringify(PiNativeCandidateS0ChallengeSchema),
+	) as {
+		properties: {
+			remove_partitions: { maxItems: number };
+			remove_audit_partitions: { maxItems: number };
+			add_partitions: { maxItems: number };
+		};
+	};
+	const exactPartitionSchema = JSON.parse(
+		JSON.stringify(PiNativeCandidateS0ChallengePartitionSchema),
+	) as {
+		properties: {
+			target_ranges: {
+				minItems: number;
+				maxItems: number;
+				items: { pattern: string };
+			};
+			supporting_block_ids: { maxItems: number };
+		};
+	};
+	const auditPartitionSchema = JSON.parse(
+		JSON.stringify(PiNativeCandidateS0RemoveAuditPartitionSchema),
+	) as { properties: { supporting_block_ids: { maxItems: number } } };
+	const finalSubmissionSchema = JSON.parse(
+		JSON.stringify(PiNativeCandidateS0FinalSubmissionSchema),
+	) as {
+		properties: {
+			ordinary_remove_ranges: { maxItems: number };
+			ordinary_add_ranges: { maxItems: number };
+		};
+	};
+
+	expect(Object.keys(challengeSchema.properties)).toEqual([
 		"remove_partitions",
 		"remove_audit_partitions",
 		"add_partitions",
 	]);
-	expect(
-		PiNativeCandidateS0ChallengePartitionSchema.properties.supporting_block_ids
-			.maxItems,
-	).toBe(32);
-	expect(
-		PiNativeCandidateS0RemoveAuditPartitionSchema.properties.supporting_block_ids
-			.maxItems,
-	).toBe(32);
+	expect(challengeSchema.properties.remove_partitions.maxItems).toBe(8);
+	expect(challengeSchema.properties.add_partitions.maxItems).toBe(2);
+	expect(exactPartitionSchema.properties.target_ranges.minItems).toBe(1);
+	expect(exactPartitionSchema.properties.target_ranges.maxItems).toBe(1);
+	expect(exactPartitionSchema.properties.target_ranges.items.pattern).toBe(
+		"^段落\\d+$",
+	);
+	expect(exactPartitionSchema.properties.supporting_block_ids.maxItems).toBe(4);
+	expect(auditPartitionSchema.properties.supporting_block_ids.maxItems).toBe(32);
+	expect(finalSubmissionSchema.properties.ordinary_remove_ranges.maxItems).toBe(
+		320,
+	);
+	expect(finalSubmissionSchema.properties.ordinary_add_ranges.maxItems).toBe(32);
 });
 
 test("runs the independent Finalizer after an empty challenge for non-empty S0", async () => {
@@ -338,7 +383,7 @@ test("runs the independent Finalizer after an empty challenge for non-empty S0",
 		responseFormat: "json_object",
 		transportProfile: "faux-json-object",
 	});
-	expect(result.context.challengerWorstCaseOutputTokens).toBe(7_893);
+	expect(result.context.challengerWorstCaseOutputTokens).toBe(4_926);
 	expect(
 		result.context.challengerWorstCaseOutputTokens +
 			result.context.challengerOutputReserveTokens,
@@ -1278,31 +1323,63 @@ test("allows a typed hard-carrier root veto to own an entire recovery audit scop
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([1, 2, 3, 4]);
 });
 
-test("normalizes mechanically equivalent compact range syntax", async () => {
+test("fails closed on a multi-block exact range at the transport schema", async () => {
 	const challenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [
 			{
 				target_ranges: ["段落1-2"],
-				source_conclusion: "The exact selected range requires bounded review.",
+				source_conclusion:
+					"The exact card intentionally submits a multi-block range.",
 				supporting_block_ids: [1, 2],
 			},
 		],
 		remove_audit_partitions: [],
 		add_partitions: [],
 	};
+	const registration = createFaux([challengerResponse(challenge)]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
+	});
+	expect(result.failure?.message).toContain(
+		"/remove_partitions/0/target_ranges/0",
+	);
+	expect(result.challenge).toBeNull();
+	expect(result.budget.providerCalls).toBe(1);
+});
+
+test("fails closed when one exact card contains multiple singleton targets", async () => {
 	const registration = createFaux([
-		challengerResponse(challenge),
-		finalizerResponse({
-			ordinary_remove_ranges: ["段落2"],
-			ordinary_add_ranges: [],
+		challengerResponse({
+			remove_partitions: [
+				{
+					target_ranges: ["段落1", "段落2"],
+					source_conclusion:
+						"The exact card intentionally submits multiple singleton targets.",
+					supporting_block_ids: [1, 2],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
 		}),
 	]);
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("repaired");
-	expect(result.challenge?.removeExactEnvelopeRanges).toEqual(["段落1-段落2"]);
-	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
+	});
+	expect(result.failure?.message).toContain(
+		"/remove_partitions/0/target_ranges",
+	);
+	expect(result.challenge).toBeNull();
+	expect(result.budget.providerCalls).toBe(1);
 });
 
 test("continues to the independent Finalizer when the sole mixed audit leaves Candidate S0", async () => {
@@ -1438,7 +1515,7 @@ test.each([
 		expectedCalls: 1,
 	},
 	{
-		name: "Challenger supporting evidence exceeds the transport hard cap",
+		name: "exact Challenger supporting evidence exceeds the four-ID transport cap",
 		responses: [
 			challengerResponse({
 				remove_partitions: [
@@ -1446,10 +1523,7 @@ test.each([
 						target_ranges: ["段落1"],
 						source_conclusion:
 							"The partition intentionally exceeds the transport evidence-ID cap.",
-						supporting_block_ids: Array.from(
-							{ length: 33 },
-							(_, blockId) => blockId,
-						),
+						supporting_block_ids: [0, 1, 2, 3, 4],
 					},
 				],
 				remove_audit_partitions: [],
@@ -1623,14 +1697,62 @@ test("continues with partial coverage when one partition is unauthorized", async
 	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
-test("rejects an exact partition whole above the 8-ID protocol limit", async () => {
+test("rejects an exact card without its target support while preserving valid cards", async () => {
 	const registration = createFaux([
 		challengerResponse({
 			remove_partitions: [
 				{
 					target_ranges: ["段落1"],
-					source_conclusion: "This exact partition exceeds its protocol limit.",
-					supporting_block_ids: Array.from({ length: 9 }, (_, blockId) => blockId),
+					source_conclusion:
+						"This exact card intentionally omits its target from support.",
+					supporting_block_ids: [0],
+				},
+				{
+					target_ranges: ["段落2"],
+					source_conclusion: "This independent exact card remains valid.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.challenge?.removePartitions).toMatchObject([
+		{ partitionIndex: 1, targetBlockIds: [2], supportingBlockIds: [2] },
+	]);
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "remove",
+			partitionIndex: 0,
+			reason:
+				"remove_partitions[0].supporting_block_ids must include target block 1",
+		},
+	]);
+	expect(result.coverage).toEqual({
+		challenger: "partial",
+		rejectedPartitionCount: 1,
+	});
+	expect(result.budget.providerCalls).toBe(2);
+});
+
+test("accepts an exact partition at the four-ID transport boundary", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			remove_partitions: [
+				{
+					target_ranges: ["段落1"],
+					source_conclusion:
+						"This exact partition uses the complete transport allowance.",
+					supporting_block_ids: [0, 1, 2, 3],
 				},
 				{
 					target_ranges: ["段落2"],
@@ -1657,21 +1779,66 @@ test("rejects an exact partition whole above the 8-ID protocol limit", async () 
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual(["段落1"]);
 	expect(result.challenge?.removePartitions).toMatchObject([
+		{
+			partitionIndex: 0,
+			targetBlockIds: [1],
+			supportingBlockIds: [0, 1, 2, 3],
+		},
 		{ partitionIndex: 1, targetBlockIds: [2], supportingBlockIds: [2] },
 	]);
-	expect(result.trace.challengerRejectedPartitions).toEqual([
-		{
-			direction: "remove",
-			partitionIndex: 0,
-			reason:
-				"remove_partitions[0].supporting_block_ids contains 9 block IDs; protocol maximum is 8",
-		},
-	]);
+	expect(result.trace.challengerRejectedPartitions).toEqual([]);
 	expect(result.coverage).toEqual({
-		challenger: "partial",
-		rejectedPartitionCount: 1,
+		challenger: "complete",
+		rejectedPartitionCount: 0,
 	});
 	expect(result.budget.providerCalls).toBe(2);
+});
+
+test("fails the whole Challenger response above the four-ID exact transport cap", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			remove_partitions: [
+				{
+					target_ranges: ["段落1"],
+					source_conclusion:
+						"This exact card intentionally exceeds the transport schema.",
+					supporting_block_ids: [0, 1, 2, 3, 4],
+				},
+				{
+					target_ranges: ["段落2"],
+					source_conclusion:
+						"This otherwise-valid card must not be partially salvaged.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落2"],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落1-段落2"],
+			texts: Array.from({ length: 6 }, (_, blockId) => `Source block ${blockId}`),
+		}),
+	});
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
+	});
+	expect(result.failure?.message).toContain(
+		"/remove_partitions/0/supporting_block_ids",
+	);
+	expect(result.challenge).toBeNull();
+	expect(result.trace.challengerRejectedPartitions).toEqual([]);
+	expect(result.budget.providerCalls).toBe(1);
+	expect(registration.getPendingResponseCount()).toBe(1);
 });
 
 test("rejects a mixed audit whole above the 12-ID protocol limit", async () => {
@@ -1729,23 +1896,6 @@ test("rejects a mixed audit whole above the 12-ID protocol limit", async () => {
 });
 
 test.each([
-	{
-		name: "exact remove",
-		challenge: {
-			remove_partitions: [
-				{
-					target_ranges: ["段落1"],
-					source_conclusion: "This sole exact partition exceeds its protocol limit.",
-					supporting_block_ids: Array.from({ length: 9 }, (_, blockId) => blockId),
-				},
-			],
-			remove_audit_partitions: [],
-			add_partitions: [],
-		},
-		expectedDirection: "remove",
-		expectedReason:
-			"remove_partitions[0].supporting_block_ids contains 9 block IDs; protocol maximum is 8",
-	},
 	{
 		name: "mixed audit",
 		challenge: {
@@ -2024,9 +2174,16 @@ test("rejects a mixed audit whose exact remove overlap covers its complete targe
 		challengerResponse({
 			remove_partitions: [
 				{
-					target_ranges: ["段落1-段落2"],
-					source_conclusion: "Every submitted audit block is also exact-remove challenged.",
-					supporting_block_ids: [1, 2],
+					target_ranges: ["段落1"],
+					source_conclusion:
+						"The first submitted audit block is exact-remove challenged.",
+					supporting_block_ids: [1],
+				},
+				{
+					target_ranges: ["段落2"],
+					source_conclusion:
+						"The second submitted audit block is exact-remove challenged.",
+					supporting_block_ids: [2],
 				},
 			],
 			remove_audit_partitions: [
@@ -2048,7 +2205,7 @@ test("rejects a mixed audit whose exact remove overlap covers its complete targe
 	const result = await runReview(registration);
 
 	expect(result.status).toBe("preserved");
-	expect(result.challenge?.removePartitions).toHaveLength(1);
+	expect(result.challenge?.removePartitions).toHaveLength(2);
 	expect(result.challenge?.removeAuditPartitions).toEqual([]);
 	expect(result.trace.challengerRejectedPartitions).toEqual([
 		{
@@ -2070,9 +2227,16 @@ test("fails closed when a recovery audit exact overlap covers its complete targe
 		challengerResponse({
 			remove_partitions: [
 				{
-					target_ranges: ["段落1-段落2"],
-					source_conclusion: "Every submitted recovery block is exact-remove challenged.",
-					supporting_block_ids: [1, 2],
+					target_ranges: ["段落1"],
+					source_conclusion:
+						"The first submitted recovery block is exact-remove challenged.",
+					supporting_block_ids: [1],
+				},
+				{
+					target_ranges: ["段落2"],
+					source_conclusion:
+						"The second submitted recovery block is exact-remove challenged.",
+					supporting_block_ids: [2],
 				},
 			],
 			remove_audit_partitions: [
@@ -2337,14 +2501,19 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 	]);
 });
 
-test("splits exact target ranges into stable groups with source-order neighbor context", async () => {
+test("keeps singleton exact cards as stable groups with source-order neighbor context", async () => {
 	const contexts: Context[] = [];
 	const challenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [
 			{
-				target_ranges: ["段落259", "段落265"],
-				source_conclusion: "Two independent exact addresses require review.",
-				supporting_block_ids: [100],
+				target_ranges: ["段落259"],
+				source_conclusion: "The first exact address requires review.",
+				supporting_block_ids: [100, 259],
+			},
+			{
+				target_ranges: ["段落265"],
+				source_conclusion: "The second exact address requires review.",
+				supporting_block_ids: [265, 300],
 			},
 		],
 		remove_audit_partitions: [],
@@ -2383,7 +2552,9 @@ test("splits exact target ranges into stable groups with source-order neighbor c
 	expect(result.status).toBe("preserved");
 	expect(result.challenge?.removePartitions[0]?.targetRangeGroups).toEqual([
 		{ rangeIndex: 0, targetRange: "段落259", targetBlockIds: [259] },
-		{ rangeIndex: 1, targetRange: "段落265", targetBlockIds: [265] },
+	]);
+	expect(result.challenge?.removePartitions[1]?.targetRangeGroups).toEqual([
+		{ rangeIndex: 0, targetRange: "段落265", targetBlockIds: [265] },
 	]);
 	const finalizerMessage = contexts[1]?.messages.find(
 		(message) => message.role === "user",
@@ -2417,8 +2588,8 @@ test("splits exact target ranges into stable groups with source-order neighbor c
 		},
 		{
 			review_kind: "exact_remove_claim",
-			partition_index: 0,
-			range_index: 1,
+			partition_index: 1,
+			range_index: 0,
 			target_ranges: ["段落265"],
 			mechanical_context_block_ids: [257, 259, 300, 400],
 		},
