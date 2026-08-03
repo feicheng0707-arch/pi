@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { Context } from "@earendil-works/pi-ai";
 import {
 	fauxAssistantMessage,
+	fauxText,
 	fauxToolCall,
 	registerFauxProvider,
 	streamSimple,
@@ -61,17 +62,15 @@ test("forwards the same mechanical occurrence index to Challenger and Finalizer"
 		(context) => {
 			contexts.push(context);
 			return fauxAssistantMessage(
-				fauxToolCall(
-					"submit_final_selection",
-					{
+				fauxText(
+					JSON.stringify({
 						hard_carrier_root_challenges: [],
 						remove_partitions: [],
 						remove_audit_partitions: [],
 						add_partitions: [],
-					},
-					{ id: "candidate-s0-occurrence-challenger" },
+					}),
 				),
-				{ stopReason: "toolUse" },
+				{ stopReason: "stop" },
 			);
 		},
 		(context) => {
@@ -126,6 +125,7 @@ test("forwards the same mechanical occurrence index to Challenger and Finalizer"
 			challengerRuntime: {
 				model,
 				streamFunction: streamSimple,
+				transportProfile: "faux-json-object",
 				apiKey: "faux-key",
 			},
 			finalizerRuntime: {
@@ -137,6 +137,12 @@ test("forwards the same mechanical occurrence index to Challenger and Finalizer"
 
 		expect(result.status).toBe("preserved");
 		expect(contexts).toHaveLength(2);
+		expect(contexts[0]?.tools).toEqual([]);
+		expect(result.models.challenger).toMatchObject({
+			thinkingMode: "disabled",
+			responseFormat: "json_object",
+			transportProfile: "faux-json-object",
+		});
 		const challengerInput = userText(contexts[0] as Context);
 		const finalizerInput = userText(contexts[1] as Context);
 		const label = "MECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON";
@@ -145,6 +151,8 @@ test("forwards the same mechanical occurrence index to Challenger and Finalizer"
 		expect(finalizerIndex).toEqual(challengerIndex);
 		expect(challengerIndex).toMatchObject({
 			semantic_authority: false,
+			eligibility_rule:
+				"seed scan prioritizes Candidate-S0 blocks before outside blocks; an emitted seed appears in at least one Candidate-S0 block and two to eight distinct source blocks total",
 			bounded_and_non_exhaustive: true,
 			absence_is_not_evidence: true,
 			max_scanned_seeds: 256,
@@ -152,6 +160,9 @@ test("forwards the same mechanical occurrence index to Challenger and Finalizer"
 			seed_scan_truncated: false,
 			eligible_entry_count: 1,
 			entry_scan_truncated: false,
+			max_entries: 24,
+			max_total_occurrence_blocks: 8,
+			fanout_omitted_entry_count: 0,
 			candidate_side_truncated_entry_count: 0,
 			outside_side_truncated_entry_count: 0,
 			entries: [
@@ -181,6 +192,7 @@ test("forwards the same mechanical occurrence index to Challenger and Finalizer"
 		expect(
 			result.context.exactDelimitedStringOutsideSideTruncatedEntryCount,
 		).toBe(0);
+		expect(result.context.exactDelimitedStringFanoutOmittedEntryCount).toBe(0);
 		expect(
 			result.context.exactDelimitedStringOccurrenceSerializedCharacterCount,
 		).toBeGreaterThan(0);
@@ -203,17 +215,15 @@ test("includes the occurrence index in both deterministic capacity estimates", a
 	});
 	const challengerResponse = () =>
 		fauxAssistantMessage(
-			fauxToolCall(
-				"submit_final_selection",
-				{
+			fauxText(
+				JSON.stringify({
 					hard_carrier_root_challenges: [],
 					remove_partitions: [],
 					remove_audit_partitions: [],
 					add_partitions: [],
-				},
-				{ id: "candidate-s0-occurrence-capacity-challenger" },
+				}),
 			),
-			{ stopReason: "toolUse" },
+			{ stopReason: "stop" },
 		);
 	const finalizerResponse = () =>
 		fauxAssistantMessage(
@@ -269,6 +279,7 @@ test("includes the occurrence index in both deterministic capacity estimates", a
 				challengerRuntime: {
 					model,
 					streamFunction: streamSimple,
+					transportProfile: "faux-json-object",
 					apiKey: "faux-key",
 				},
 				finalizerRuntime: {

@@ -20,10 +20,11 @@ import { Value } from "typebox/value";
 import type { RequirementReviewPacket, RequirementReviewPrompts } from "./index.ts";
 import {
 	piNativeFinalizerStreamFunction,
-	type PiNativeWitnessThinkingMode,
+	piNativeWitnessStreamFunction,
 } from "./pi-native.ts";
 
 const CHALLENGER_MAX_TOKENS = 12_000;
+const CHALLENGER_OUTPUT_RESERVE_TOKENS = 2_000;
 const FINALIZER_MAX_TOKENS = 12_000;
 const CONTEXT_SAFETY_TOKENS = 8_000;
 const REQUEST_TIMEOUT_MS = 300_000;
@@ -36,17 +37,22 @@ const MAX_AUDIT_RANGES_PER_PARTITION = 32;
 const MAX_AUDIT_BLOCKS_PER_PARTITION = 96;
 const MAX_TOTAL_AUDIT_BLOCKS =
 	MAX_REMOVE_AUDIT_PARTITIONS * MAX_AUDIT_BLOCKS_PER_PARTITION;
-const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 24;
+const MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION = 8;
+const MAX_ROOT_OR_AUDIT_SUPPORTING_BLOCK_IDS = 12;
+const MAX_CHALLENGE_CONCLUSION_CHARACTERS = 96;
 const MAX_HARD_CARRIER_ROOT_CHALLENGES = 8;
 const MAX_HARD_CARRIER_ROOT_VETOES = 32;
+const MAX_CHALLENGE_RANGE_CHARACTERS = 32;
 const MAX_EXACT_DELIMITED_STRING_SEEDS = 256;
-const MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES = 64;
+const MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES = 24;
 const MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE = 8;
+const MAX_EXACT_DELIMITED_STRING_TOTAL_BLOCK_OCCURRENCES = 8;
 const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
+const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v15";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v16";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -54,9 +60,15 @@ export const PiNativeCandidateS0RangeSchema = Type.String({
 
 const PiNativeCandidateS0ChallengeRangeSchema = Type.String({
 	minLength: 1,
-	maxLength: 64,
+	maxLength: MAX_CHALLENGE_RANGE_CHARACTERS,
+	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
 	description:
-		"One canonical top-level source range such as 段落12 or 段落12-段落18. The Harness rejects an invalid partition independently.",
+		"One canonical top-level source range such as 段落12 or 段落12-段落18. Invalid syntax fails the whole Challenger response before partition-level authorization.",
+});
+
+const PiNativeCandidateS0BlockIdSchema = Type.Integer({
+	minimum: 0,
+	maximum: Number.MAX_SAFE_INTEGER,
 });
 
 export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
@@ -69,13 +81,13 @@ export const PiNativeCandidateS0ChallengePartitionSchema = Type.Object(
 		}),
 		source_conclusion: Type.String({
 			minLength: 1,
-			maxLength: 200,
+			maxLength: MAX_CHALLENGE_CONCLUSION_CHARACTERS,
 			description:
 				"One source-grounded conclusion shared by every target range in this partition.",
 		}),
-		supporting_block_ids: Type.Array(Type.Integer({ minimum: 0 }), {
+		supporting_block_ids: Type.Array(PiNativeCandidateS0BlockIdSchema, {
 			minItems: 1,
-			maxItems: MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION,
+			maxItems: MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION,
 			description:
 				"Existing top-level source block IDs shared as evidence for every target range in this partition.",
 		}),
@@ -97,13 +109,13 @@ export const PiNativeCandidateS0RemoveAuditPartitionSchema = Type.Object(
 		}),
 		audit_basis: Type.String({
 			minLength: 1,
-			maxLength: 200,
+			maxLength: MAX_CHALLENGE_CONCLUSION_CHARACTERS,
 			description:
 				"Source-grounded reason the selected scope may contain mixed atomic membership; this is not a remove conclusion.",
 		}),
-		supporting_block_ids: Type.Array(Type.Integer({ minimum: 0 }), {
+		supporting_block_ids: Type.Array(PiNativeCandidateS0BlockIdSchema, {
 			minItems: 1,
-			maxItems: MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION,
+			maxItems: MAX_ROOT_OR_AUDIT_SUPPORTING_BLOCK_IDS,
 			description:
 				"Existing top-level source block IDs that locate the scope and its competing membership evidence.",
 		}),
@@ -121,21 +133,21 @@ export const PiNativeCandidateS0HardCarrierTypeSchema = Type.Union([
 export const PiNativeCandidateS0HardCarrierRootChallengeSchema = Type.Object(
 	{
 		carrier_type: PiNativeCandidateS0HardCarrierTypeSchema,
-		root_block_id: Type.Integer({ minimum: 0 }),
+		root_block_id: PiNativeCandidateS0BlockIdSchema,
 		exit_block_id_exclusive: Type.Union([
-			Type.Integer({ minimum: 0 }),
+			PiNativeCandidateS0BlockIdSchema,
 			Type.Literal("EOF"),
 		]),
-		projected_s0_anchor_block_id: Type.Integer({ minimum: 0 }),
+		projected_s0_anchor_block_id: PiNativeCandidateS0BlockIdSchema,
 		source_conclusion: Type.String({
 			minLength: 1,
-			maxLength: 200,
+			maxLength: MAX_CHALLENGE_CONCLUSION_CHARACTERS,
 			description:
 				"One source-grounded root-boundary conclusion retained in trace but never forwarded to the Finalizer.",
 		}),
-		supporting_block_ids: Type.Array(Type.Integer({ minimum: 0 }), {
+		supporting_block_ids: Type.Array(PiNativeCandidateS0BlockIdSchema, {
 			minItems: 1,
-			maxItems: MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION,
+			maxItems: MAX_ROOT_OR_AUDIT_SUPPORTING_BLOCK_IDS,
 			description:
 				"Existing top-level source block IDs that locate the proposed root, boundary, projection, and counterevidence.",
 		}),
@@ -178,13 +190,14 @@ export const PiNativeCandidateS0ChallengeSchema = Type.Object(
 export const PiNativeCandidateS0HardCarrierRootVetoSchema = Type.Object(
 	{
 		carrier_type: PiNativeCandidateS0HardCarrierTypeSchema,
-		root_block_id: Type.Integer({ minimum: 0 }),
+		root_block_id: PiNativeCandidateS0BlockIdSchema,
 		exit_block_id_exclusive: Type.Union([
-			Type.Integer({ minimum: 0 }),
+			PiNativeCandidateS0BlockIdSchema,
 			Type.Literal("EOF"),
 		]),
 		projected_s0_anchor_block_id: Type.Integer({
 			minimum: 0,
+			maximum: Number.MAX_SAFE_INTEGER,
 			description:
 				"One exact Candidate-S0 block ID inside the submitted root span, proving the veto has a non-empty mechanical projection.",
 		}),
@@ -341,10 +354,7 @@ export interface PiNativeCandidateS0RoleRuntime {
 	env?: ProviderEnv;
 }
 
-export interface PiNativeCandidateS0ChallengerRuntime
-	extends PiNativeCandidateS0RoleRuntime {
-	thinkingMode?: PiNativeWitnessThinkingMode;
-}
+export type PiNativeCandidateS0ChallengerRuntime = PiNativeCandidateS0RoleRuntime;
 
 export interface RunPiNativeCandidateS0ReviewOptions {
 	packet: RequirementReviewPacket;
@@ -362,7 +372,7 @@ export interface RunPiNativeCandidateS0ReviewOptions {
 	requestTimeoutMs?: number;
 	onProgress?: (progress: {
 		role: "challenger" | "finalizer";
-		tool: typeof FINALIZER_TOOL_NAME;
+		tool: typeof CHALLENGER_OUTPUT_NAME | typeof FINALIZER_TOOL_NAME;
 	}) => void;
 }
 
@@ -419,9 +429,16 @@ export interface PiNativeCandidateS0ReviewResult {
 			provider: string;
 			id: string;
 			contextWindow: number;
-			thinkingMode: PiNativeWitnessThinkingMode;
+			thinkingMode: "disabled";
+			responseFormat: typeof CHALLENGER_OUTPUT_NAME;
+			transportProfile: string;
 		};
-		finalizer: { provider: string; id: string; contextWindow: number };
+		finalizer: {
+			provider: string;
+			id: string;
+			contextWindow: number;
+			transportProfile: string;
+		};
 	};
 	prompts: {
 		productPrinciples: string;
@@ -444,11 +461,15 @@ export interface PiNativeCandidateS0ReviewResult {
 		exactDelimitedStringEntryScanTruncated: boolean;
 		exactDelimitedStringCandidateSideTruncatedEntryCount: number;
 		exactDelimitedStringOutsideSideTruncatedEntryCount: number;
+		exactDelimitedStringFanoutOmittedEntryCount: number;
 		exactDelimitedStringOccurrenceEntryCount: number;
 		exactDelimitedStringOccurrenceSerializedCharacterCount: number;
 		finalizerSourceBlockCount: number;
 		finalizerSourceSerializedCharacterCount: number;
 		challengerEstimatedTokens: number;
+		challengerWorstCaseOutputTokens: number;
+		challengerOutputReserveTokens: number;
+		challengerOutputTokenLimit: number;
 		challengerContextWindow: number;
 		finalizerPreflightEstimatedTokens: number;
 		finalizerEstimatedTokens: number | null;
@@ -461,6 +482,7 @@ export interface PiNativeCandidateS0ReviewResult {
 	trace: {
 		challengerRawResponse: string | null;
 		challengerNormalizedResponse: unknown;
+		challengerClaimsForwarded: false;
 		challengerRejectedPartitions: PiNativeCandidateS0RejectedChallengePartition[];
 		finalizerRawSubmissions: unknown[];
 		finalizerAuxiliaryText: PiNativeCandidateS0AuxiliaryTextTrace;
@@ -492,6 +514,7 @@ interface PreparedCandidateS0Review {
 	exactDelimitedStringEntryScanTruncated: boolean;
 	exactDelimitedStringCandidateSideTruncatedEntryCount: number;
 	exactDelimitedStringOutsideSideTruncatedEntryCount: number;
+	exactDelimitedStringFanoutOmittedEntryCount: number;
 	exactDelimitedStringOccurrenceEntryCount: number;
 	fullSourceSerializedCharacterCount: number;
 	sourceTextCharacterCount: number;
@@ -540,6 +563,7 @@ interface PiNativeCandidateS0ExactDelimitedStringOccurrenceIndexBuild {
 	entryScanTruncated: boolean;
 	candidateSideTruncatedEntryCount: number;
 	outsideSideTruncatedEntryCount: number;
+	fanoutOmittedEntryCount: number;
 }
 
 export function buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndex(
@@ -558,15 +582,19 @@ function buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndexReport(
 ): PiNativeCandidateS0ExactDelimitedStringOccurrenceIndexBuild {
 	const delimitedStrings = new Set<string>();
 	const patterns = [
-		/《[^《》]{2,120}》/gu,
-		/“[^“”]{2,120}”/gu,
-		/「[^「」]{2,120}」/gu,
-		/『[^『』]{2,120}』/gu,
-		/"[^"]{2,120}"/gu,
+		/《[^《》]{2,80}》/gu,
+		/“[^“”]{2,80}”/gu,
+		/「[^「」]{2,80}」/gu,
+		/『[^『』]{2,80}』/gu,
+		/"[^"]{2,80}"/gu,
 	];
 	let seedScanTruncated = false;
 	let reachedSeedLimit = false;
-	for (const block of blocks) {
+	const seedScanBlocks = [
+		...blocks.filter((block) => candidateBlockIds.has(block.blockId)),
+		...blocks.filter((block) => !candidateBlockIds.has(block.blockId)),
+	];
+	for (const block of seedScanBlocks) {
 		const blockDelimitedStrings: Array<{
 			sourceIndex: number;
 			matchedSourceText: string;
@@ -609,8 +637,10 @@ function buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndexReport(
 			const outsideCandidateS0BlockIds: number[] = [];
 			let candidateS0BlockIdsTruncated = false;
 			let outsideCandidateS0BlockIdsTruncated = false;
+			let totalOccurrenceBlockCount = 0;
 			for (const block of normalizedBlocks) {
 				if (!block.text.includes(matchedSourceText)) continue;
+				totalOccurrenceBlockCount += 1;
 				if (candidateBlockIds.has(block.blockId)) {
 					if (
 						candidateS0BlockIds.length <
@@ -629,38 +659,45 @@ function buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndexReport(
 					outsideCandidateS0BlockIdsTruncated = true;
 				}
 			}
-			if (
-				candidateS0BlockIds.length === 0 ||
-				outsideCandidateS0BlockIds.length === 0
-			) {
+			if (candidateS0BlockIds.length === 0 || totalOccurrenceBlockCount < 2) {
 				return [];
 			}
 			return [
 				{
-					matchedSourceText,
-					candidateS0BlockIds,
-					candidateS0BlockIdsTruncated,
-					outsideCandidateS0BlockIds,
-					outsideCandidateS0BlockIdsTruncated,
+					entry: {
+						matchedSourceText,
+						candidateS0BlockIds,
+						candidateS0BlockIdsTruncated,
+						outsideCandidateS0BlockIds,
+						outsideCandidateS0BlockIdsTruncated,
+					},
+					totalOccurrenceBlockCount,
 				},
 			];
 		});
+	const boundedFanoutEntries = eligibleEntries.filter(
+		(entry) =>
+			entry.totalOccurrenceBlockCount <=
+			MAX_EXACT_DELIMITED_STRING_TOTAL_BLOCK_OCCURRENCES,
+	);
 	return {
-		entries: eligibleEntries.slice(
-			0,
-			MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
-		),
+		entries: boundedFanoutEntries
+			.slice(0, MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES)
+			.map((entry) => entry.entry),
 		scannedSeedCount: delimitedStrings.size,
 		seedScanTruncated,
 		eligibleEntryCount: eligibleEntries.length,
 		entryScanTruncated:
-			eligibleEntries.length > MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
+			boundedFanoutEntries.length >
+			MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
 		candidateSideTruncatedEntryCount: eligibleEntries.filter(
-			(entry) => entry.candidateS0BlockIdsTruncated,
+			(entry) => entry.entry.candidateS0BlockIdsTruncated,
 		).length,
 		outsideSideTruncatedEntryCount: eligibleEntries.filter(
-			(entry) => entry.outsideCandidateS0BlockIdsTruncated,
+			(entry) => entry.entry.outsideCandidateS0BlockIdsTruncated,
 		).length,
+		fanoutOmittedEntryCount:
+			eligibleEntries.length - boundedFanoutEntries.length,
 	};
 }
 
@@ -720,7 +757,7 @@ export async function runPiNativeCandidateS0Review(
 	const signal = options.signal
 		? AbortSignal.any([options.signal, timeoutController.signal])
 		: timeoutController.signal;
-	const thinkingMode = options.challengerRuntime.thinkingMode ?? "disabled";
+	const thinkingMode = "disabled" as const;
 	const usage: PiNativeCandidateS0RuntimeUsage = {
 		challenger: emptyUsage(),
 		finalizer: emptyUsage(),
@@ -736,14 +773,16 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-strict-tool-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto",
+				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-json-object-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
 						options.challengerRuntime,
-						"pi_native_challenger_strict_tool_v1",
+						"pi_native_challenger_json_object_thinking_disabled_v1",
 					),
 					thinkingMode,
+					responseFormat: CHALLENGER_OUTPUT_NAME,
+					localValidation: "json-parse+typebox+cross-field",
 				},
 				finalizer: runtimeCapabilityIdentity(
 					options.finalizerRuntime,
@@ -757,6 +796,13 @@ export async function runPiNativeCandidateS0Review(
 			},
 			limits: {
 				challengerMaxTokens: CHALLENGER_MAX_TOKENS,
+				challengerEffectiveMaxTokens: Math.min(
+					CHALLENGER_MAX_TOKENS,
+					options.challengerRuntime.model.maxTokens,
+				),
+				challengerOutputReserveTokens: CHALLENGER_OUTPUT_RESERVE_TOKENS,
+				challengerOutputBoundEstimator:
+					"canonical-normalized-schema-max-items-max-length-json-stringify-fixed-estimator-and-packet-max-block-id-v3",
 				finalizerMaxTokens: FINALIZER_MAX_TOKENS,
 				contextSafetyTokens: CONTEXT_SAFETY_TOKENS,
 				requestTimeoutMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
@@ -769,8 +815,12 @@ export async function runPiNativeCandidateS0Review(
 				maxAuditRangesPerPartition: MAX_AUDIT_RANGES_PER_PARTITION,
 				maxAuditBlocksPerPartition: MAX_AUDIT_BLOCKS_PER_PARTITION,
 				maxTotalAuditBlocks: MAX_TOTAL_AUDIT_BLOCKS,
-				maxSupportingBlockIdsPerPartition:
-					MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION,
+				maxExactSupportingBlockIdsPerPartition:
+					MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION,
+				maxRootOrAuditSupportingBlockIds:
+					MAX_ROOT_OR_AUDIT_SUPPORTING_BLOCK_IDS,
+				maxChallengeConclusionCharacters:
+					MAX_CHALLENGE_CONCLUSION_CHARACTERS,
 				maxHardCarrierRootChallenges: MAX_HARD_CARRIER_ROOT_CHALLENGES,
 				maxHardCarrierRootVetoes: MAX_HARD_CARRIER_ROOT_VETOES,
 				maxExactDelimitedStringSeeds: MAX_EXACT_DELIMITED_STRING_SEEDS,
@@ -778,19 +828,25 @@ export async function runPiNativeCandidateS0Review(
 					MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
 				maxExactDelimitedStringBlockIdsPerSide:
 					MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE,
+				maxExactDelimitedStringTotalBlockOccurrences:
+					MAX_EXACT_DELIMITED_STRING_TOTAL_BLOCK_OCCURRENCES,
 				exactDelimitedStringOccurrenceIndex:
-					"paired-delimiter-seeded-whitespace-collapsed-exact-literal-source-block-occurrences-on-candidate-and-outside-sides",
+					"S0-first-seed-scan-paired-delimiter-whitespace-collapsed-exact-literal-source-block-occurrences-with-bounded-total-fanout",
 				exactDelimitedStringOccurrenceAlgorithm: {
-					version: 1,
+					version: 2,
 					delimiters: ["《》", "“”", "「」", "『』", '\"\"'],
-					seedInnerCharacterLength: { minimum: 2, maximum: 120 },
+					seedInnerCharacterLength: { minimum: 2, maximum: 80 },
 					seedMaySpanBlockLineBreaks: true,
 					normalization:
 						"collapse-unicode-whitespace-to-one-ascii-space-and-trim",
 					matching: "case-sensitive-literal-substring-in-normalized-block",
 					perBlockDedupe: true,
 					order:
-						"first-delimited-seed-source-order-then-packet-block-source-order",
+						"S0-blocks-first-seed-scan-then-OUT-blocks-then-packet-block-source-order-occurrences",
+					eligibility:
+						"at-least-one-candidate-S0-occurrence-and-two-to-eight-total-distinct-source-block-occurrences",
+					highFanoutPolicy:
+						"omit-the-entire-entry-when-total-distinct-source-block-occurrences-exceed-eight",
 				},
 				ordinaryRemoveAuthorization: "all-candidate-S0",
 				exactRangeMechanicalContextNeighborsPerSide: 2,
@@ -833,11 +889,17 @@ export async function runPiNativeCandidateS0Review(
 	let exactDelimitedStringEntryScanTruncated = false;
 	let exactDelimitedStringCandidateSideTruncatedEntryCount = 0;
 	let exactDelimitedStringOutsideSideTruncatedEntryCount = 0;
+	let exactDelimitedStringFanoutOmittedEntryCount = 0;
 	let exactDelimitedStringOccurrenceEntryCount = 0;
 	let exactDelimitedStringOccurrenceSerializedCharacterCount = 0;
 	let finalizerSourceBlockCount = 0;
 	let finalizerSourceSerializedCharacterCount = 0;
 	let challengerEstimatedTokens = 0;
+	let challengerWorstCaseOutputTokens = 0;
+	const challengerOutputTokenLimit = Math.min(
+		CHALLENGER_MAX_TOKENS,
+		options.challengerRuntime.model.maxTokens,
+	);
 	let finalizerPreflightEstimatedTokens = 0;
 	let finalizerEstimatedTokens: number | null = null;
 
@@ -866,8 +928,19 @@ export async function runPiNativeCandidateS0Review(
 			challenger: {
 				...modelIdentity(options.challengerRuntime.model),
 				thinkingMode,
+				responseFormat: CHALLENGER_OUTPUT_NAME,
+				transportProfile: resolvedTransportProfile(
+					options.challengerRuntime,
+					"pi_native_challenger_json_object_thinking_disabled_v1",
+				),
 			},
-			finalizer: modelIdentity(options.finalizerRuntime.model),
+			finalizer: {
+				...modelIdentity(options.finalizerRuntime.model),
+				transportProfile: resolvedTransportProfile(
+					options.finalizerRuntime,
+					"pi_native_finalizer_strict_tool_v1",
+				),
+			},
 		},
 		prompts: promptHashes,
 		inputs: {
@@ -884,11 +957,15 @@ export async function runPiNativeCandidateS0Review(
 			exactDelimitedStringEntryScanTruncated,
 			exactDelimitedStringCandidateSideTruncatedEntryCount,
 			exactDelimitedStringOutsideSideTruncatedEntryCount,
+			exactDelimitedStringFanoutOmittedEntryCount,
 			exactDelimitedStringOccurrenceEntryCount,
 			exactDelimitedStringOccurrenceSerializedCharacterCount,
 			finalizerSourceBlockCount,
 			finalizerSourceSerializedCharacterCount,
 			challengerEstimatedTokens,
+			challengerWorstCaseOutputTokens,
+			challengerOutputReserveTokens: CHALLENGER_OUTPUT_RESERVE_TOKENS,
+			challengerOutputTokenLimit,
 			challengerContextWindow: options.challengerRuntime.model.contextWindow,
 			finalizerPreflightEstimatedTokens,
 			finalizerEstimatedTokens,
@@ -913,6 +990,7 @@ export async function runPiNativeCandidateS0Review(
 		trace: {
 			challengerRawResponse,
 			challengerNormalizedResponse,
+			challengerClaimsForwarded: false,
 			challengerRejectedPartitions,
 			finalizerRawSubmissions,
 			finalizerAuxiliaryText,
@@ -926,6 +1004,27 @@ export async function runPiNativeCandidateS0Review(
 
 	try {
 		throwIfAborted(signal);
+		if (
+			options.challengerRuntime.streamFunction !== undefined &&
+			(options.challengerRuntime.transportProfile === undefined ||
+				options.challengerRuntime.transportProfile.trim().length === 0)
+		) {
+			validatorFailure =
+				"Custom Challenger streamFunction requires an explicit transportProfile";
+			return finish({
+				status: "degraded",
+				resolution: "review_incomplete",
+				reviewDegraded: true,
+				patch: null,
+				reason:
+					"Candidate S0 Challenger transport profile was not frozen; original Candidate preserved.",
+				failure: {
+					role: "preflight",
+					code: "contract_error",
+					message: validatorFailure,
+				},
+			});
+		}
 		let prepared: PreparedCandidateS0Review;
 		try {
 			prepared = prepareCandidateS0Review(
@@ -970,20 +1069,39 @@ export async function runPiNativeCandidateS0Review(
 			prepared.exactDelimitedStringCandidateSideTruncatedEntryCount;
 		exactDelimitedStringOutsideSideTruncatedEntryCount =
 			prepared.exactDelimitedStringOutsideSideTruncatedEntryCount;
+		exactDelimitedStringFanoutOmittedEntryCount =
+			prepared.exactDelimitedStringFanoutOmittedEntryCount;
 		exactDelimitedStringOccurrenceEntryCount =
 			prepared.exactDelimitedStringOccurrenceEntryCount;
 		exactDelimitedStringOccurrenceSerializedCharacterCount =
 			prepared.exactDelimitedStringOccurrenceIndex.length;
 		finalizerSourceBlockCount = options.packet.blocks.length;
 		finalizerSourceSerializedCharacterCount = prepared.fullSource.length;
+		challengerWorstCaseOutputTokens =
+			estimateWorstCaseCanonicalChallengePayloadTokens();
+		if (
+			challengerWorstCaseOutputTokens + CHALLENGER_OUTPUT_RESERVE_TOKENS >
+			challengerOutputTokenLimit
+		) {
+			return finish({
+				status: "degraded",
+				resolution: "review_incomplete",
+				reviewDegraded: true,
+				patch: null,
+				reason:
+					"Bounded Challenger canonical JSON payload exceeds the effective model output-token budget; Candidate preserved.",
+				failure: {
+					role: "preflight",
+					code: "capacity",
+					message: `fixed canonical Challenger output estimate ${challengerWorstCaseOutputTokens} tokens plus reserve ${CHALLENGER_OUTPUT_RESERVE_TOKENS} exceeds effective max ${challengerOutputTokenLimit} (runtime cap ${CHALLENGER_MAX_TOKENS}, model maxTokens ${options.challengerRuntime.model.maxTokens})`,
+				},
+			});
+		}
 		challengerEstimatedTokens =
 			estimateTextTokens(
-				`${prepared.challengerSystemPrompt}\n${prepared.challengerUserPrompt}\n${JSON.stringify({
-					name: FINALIZER_TOOL_NAME,
-					parameters: PiNativeCandidateS0ChallengeSchema,
-				})}`,
+				`${prepared.challengerSystemPrompt}\n${prepared.challengerUserPrompt}`,
 			) +
-			CHALLENGER_MAX_TOKENS +
+			challengerOutputTokenLimit +
 			CONTEXT_SAFETY_TOKENS;
 		if (challengerEstimatedTokens > options.challengerRuntime.model.contextWindow) {
 			return finish({
@@ -1022,7 +1140,7 @@ export async function runPiNativeCandidateS0Review(
 					max_vetoes: MAX_HARD_CARRIER_ROOT_VETOES,
 				})}`,
 			) +
-			CHALLENGER_MAX_TOKENS +
+			challengerOutputTokenLimit +
 			FINALIZER_MAX_TOKENS +
 			CONTEXT_SAFETY_TOKENS;
 		if (
@@ -1050,7 +1168,6 @@ export async function runPiNativeCandidateS0Review(
 			challengerResult = await runCandidateS0Challenger(
 				prepared,
 				options.challengerRuntime,
-				thinkingMode,
 				usage,
 				signal,
 				options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
@@ -1083,7 +1200,7 @@ export async function runPiNativeCandidateS0Review(
 		challengerRawResponse = challengerResult.rawResponse;
 		challengerNormalizedResponse = challengerResult.normalizedResponse;
 		challengerStopReason = challengerResult.stopReason;
-		options.onProgress?.({ role: "challenger", tool: FINALIZER_TOOL_NAME });
+		options.onProgress?.({ role: "challenger", tool: CHALLENGER_OUTPUT_NAME });
 		throwIfAborted(signal);
 		if (challengerResult.rejectedRecoveryBoundary) {
 			validatorFailure =
@@ -1348,6 +1465,8 @@ function prepareCandidateS0Review(
 		semantic_authority: false,
 		matching_rule:
 			"seed inner text from explicit paired delimiters, collapse whitespace only, then locate exact case-sensitive literal occurrences in source blocks",
+		eligibility_rule:
+			"seed scan prioritizes Candidate-S0 blocks before outside blocks; an emitted seed appears in at least one Candidate-S0 block and two to eight distinct source blocks total",
 		bounded_and_non_exhaustive: true,
 		absence_is_not_evidence: true,
 		max_scanned_seeds: MAX_EXACT_DELIMITED_STRING_SEEDS,
@@ -1360,6 +1479,10 @@ function prepareCandidateS0Review(
 		entry_scan_truncated:
 			exactDelimitedStringOccurrenceIndexBuild.entryScanTruncated,
 		max_block_ids_per_side: MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE,
+		max_total_occurrence_blocks:
+			MAX_EXACT_DELIMITED_STRING_TOTAL_BLOCK_OCCURRENCES,
+		fanout_omitted_entry_count:
+			exactDelimitedStringOccurrenceIndexBuild.fanoutOmittedEntryCount,
 		candidate_side_truncated_entry_count:
 			exactDelimitedStringOccurrenceIndexBuild.candidateSideTruncatedEntryCount,
 		outside_side_truncated_entry_count:
@@ -1404,6 +1527,8 @@ MECHANICAL_AUDIT_BUDGET=${JSON.stringify({
 })}
 
 MECHANICAL_TARGET_AUTHORIZATION=${targetAuthorization}
+
+CHALLENGER_JSON_SCHEMA=${JSON.stringify(PiNativeCandidateS0ChallengeSchema)}
 `;
 	return {
 		availableBlockIds,
@@ -1426,6 +1551,8 @@ MECHANICAL_TARGET_AUTHORIZATION=${targetAuthorization}
 			exactDelimitedStringOccurrenceIndexBuild.candidateSideTruncatedEntryCount,
 		exactDelimitedStringOutsideSideTruncatedEntryCount:
 			exactDelimitedStringOccurrenceIndexBuild.outsideSideTruncatedEntryCount,
+		exactDelimitedStringFanoutOmittedEntryCount:
+			exactDelimitedStringOccurrenceIndexBuild.fanoutOmittedEntryCount,
 		exactDelimitedStringOccurrenceEntryCount:
 			exactDelimitedStringOccurrenceIndexBuild.entries.length,
 		fullSourceSerializedCharacterCount: fullSource.length,
@@ -1558,7 +1685,6 @@ function mechanicalContextBlockIds(
 async function runCandidateS0Challenger(
 	prepared: PreparedCandidateS0Review,
 	runtime: PiNativeCandidateS0ChallengerRuntime,
-	thinkingMode: PiNativeWitnessThinkingMode,
 	usage: PiNativeCandidateS0RuntimeUsage,
 	signal: AbortSignal,
 	requestTimeoutMs: number,
@@ -1572,49 +1698,7 @@ async function runCandidateS0Challenger(
 			schema: PiNativeCandidateS0ChallengeSchema,
 		}),
 	);
-	let challengeResult:
-		| ReturnType<typeof validateChallengeSubmission>
-		| undefined;
-	let contractError: string | null = null;
-	const rawSubmissions: unknown[] = [];
-	const submitTool: AgentTool<
-		typeof PiNativeCandidateS0ChallengeSchema,
-		Record<string, unknown>
-	> = {
-		name: FINALIZER_TOOL_NAME,
-		label: "Submit bounded Candidate S0 challenge",
-		description:
-			"Submit the complete bounded Candidate S0 challenge once through this strict structured tool.",
-		parameters: PiNativeCandidateS0ChallengeSchema,
-		executionMode: "sequential",
-		prepareArguments(args) {
-			rawSubmissions.push(args);
-			if (!Value.Check(PiNativeCandidateS0ChallengeSchema, args)) {
-				contractError = schemaErrors(PiNativeCandidateS0ChallengeSchema, args);
-				throw new CandidateS0ContractError(contractError);
-			}
-			return args as PiNativeCandidateS0ChallengeSubmission;
-		},
-		async execute(_toolCallId, params) {
-			try {
-				if (challengeResult !== undefined) {
-					throw new CandidateS0ContractError(
-						"received more than one Challenger submission",
-					);
-				}
-				challengeResult = validateChallengeSubmission(params, prepared);
-				return terminalResult({ ok: true, status: "accepted" });
-			} catch (error) {
-				contractError = errorMessage(error);
-				return terminalResult({
-					ok: false,
-					status: "contract_failure",
-					validationError: contractError,
-				});
-			}
-		},
-	};
-	const streamFunction = runtime.streamFunction ?? piNativeFinalizerStreamFunction;
+	const streamFunction = runtime.streamFunction ?? piNativeWitnessStreamFunction;
 	const boundedStreamFunction: StreamFn = (model, context, streamOptions) => {
 		if (providerCalls >= 1) {
 			throw new CandidateS0ProviderError(
@@ -1635,13 +1719,13 @@ async function runCandidateS0Challenger(
 			{
 				systemPrompt: prepared.challengerSystemPrompt,
 				messages: [],
-				tools: [submitTool],
+				tools: [],
 			},
 			{
 				model: runtime.model,
 				temperature: 0,
-				maxTokens: CHALLENGER_MAX_TOKENS,
-				reasoning: thinkingMode === "enabled" ? "medium" : undefined,
+				maxTokens: Math.min(CHALLENGER_MAX_TOKENS, runtime.model.maxTokens),
+				reasoning: "off",
 				apiKey: runtime.apiKey,
 				headers: runtime.headers,
 				env: runtime.env,
@@ -1667,19 +1751,17 @@ async function runCandidateS0Challenger(
 	if (providerCalls !== 1 || assistantMessages.length !== 1) {
 		throw new CandidateS0ChallengerContractError(
 			`expected one Challenger provider call and response; received ${providerCalls} call(s) and ${assistantMessages.length} response(s)`,
-			rawSubmissions.length === 0 ? null : JSON.stringify(rawSubmissions[0]),
-			rawSubmissions[0] ?? null,
+			null,
+			null,
 			null,
 		);
 	}
 	const last = assistantMessages[0];
-	const rawResponse =
-		rawSubmissions.length === 0 ? null : JSON.stringify(rawSubmissions[0]);
-	const turnError = validateChallengerTurnShape(
-		last,
-		thinkingMode,
-		submitTool.name,
-	);
+	const textBlocks = last.content.filter((content) => content.type === "text");
+	const rawResponse = textBlocks.length === 0
+		? null
+		: textBlocks.map((content) => content.text).join("");
+	const turnError = validateChallengerTurnShape(last);
 	if (turnError !== null) {
 		if (last.stopReason === "error" || last.stopReason === "aborted") {
 			throw new CandidateS0ProviderError(last.errorMessage ?? turnError);
@@ -1687,23 +1769,45 @@ async function runCandidateS0Challenger(
 		throw new CandidateS0ChallengerContractError(
 			turnError,
 			rawResponse,
-			rawSubmissions[0] ?? null,
+			null,
 			last.stopReason,
 		);
 	}
-	if (contractError !== null) {
+	if (rawResponse === null) {
 		throw new CandidateS0ChallengerContractError(
-			contractError,
-			rawResponse,
-			rawSubmissions[0] ?? null,
+			"Challenger turn did not expose its validated JSON text block",
+			null,
+			null,
 			last.stopReason,
 		);
 	}
-	if (challengeResult === undefined || rawSubmissions.length !== 1) {
+	let normalizedResponse: unknown;
+	try {
+		normalizedResponse = JSON.parse(rawResponse);
+	} catch (error) {
 		throw new CandidateS0ChallengerContractError(
-			"Challenger tool call did not produce one mechanically valid submission",
+			`Challenger JSON parse failed: ${errorMessage(error)}`,
 			rawResponse,
-			rawSubmissions[0] ?? null,
+			null,
+			last.stopReason,
+		);
+	}
+	if (!Value.Check(PiNativeCandidateS0ChallengeSchema, normalizedResponse)) {
+		throw new CandidateS0ChallengerContractError(
+			schemaErrors(PiNativeCandidateS0ChallengeSchema, normalizedResponse),
+			rawResponse,
+			normalizedResponse,
+			last.stopReason,
+		);
+	}
+	let challengeResult: ReturnType<typeof validateChallengeSubmission>;
+	try {
+		challengeResult = validateChallengeSubmission(normalizedResponse, prepared);
+	} catch (error) {
+		throw new CandidateS0ChallengerContractError(
+			errorMessage(error),
+			rawResponse,
+			normalizedResponse,
 			last.stopReason,
 		);
 	}
@@ -1712,7 +1816,7 @@ async function runCandidateS0Challenger(
 		rejectedPartitions: challengeResult.rejectedPartitions,
 		rejectedRecoveryBoundary: challengeResult.rejectedRecoveryBoundary,
 		rawResponse,
-		normalizedResponse: rawSubmissions[0],
+		normalizedResponse,
 		inputSha256,
 		stopReason: last.stopReason,
 	};
@@ -1993,6 +2097,35 @@ function validateChallengeSubmission(
 			});
 		}
 	}
+	const rejectHardCarrierRootOverlap = (
+		blockIds: readonly number[],
+		fieldName: string,
+	): void => {
+		for (const blockId of blockIds) {
+			const blockIndex = prepared.sourceIndexByBlockId.get(blockId);
+			if (blockIndex === undefined) continue;
+			for (const rootChallenge of hardCarrierRootChallenges) {
+				const rootIndex = prepared.sourceIndexByBlockId.get(
+					rootChallenge.rootBlockId,
+				);
+				const exitIndex = rootChallenge.exitBlockIdExclusive === "EOF"
+					? prepared.sourceOrderedBlockIds.length
+					: prepared.sourceIndexByBlockId.get(
+							rootChallenge.exitBlockIdExclusive,
+						);
+				if (
+					rootIndex !== undefined &&
+					exitIndex !== undefined &&
+					blockIndex >= rootIndex &&
+					blockIndex < exitIndex
+				) {
+					throw new CandidateS0ContractError(
+						`${fieldName} block ${blockId} overlaps hard_carrier_root_challenges[${rootChallenge.challengeIndex}]`,
+					);
+				}
+			}
+		}
+	};
 	const validateExactPartitions = (
 		direction: "remove" | "add",
 		partitions: PiNativeCandidateS0ChallengeSubmission[
@@ -2053,8 +2186,12 @@ function validateChallengeSubmission(
 						throw new CandidateS0ContractError(
 							`add challenge block ${blockId} already belongs to Candidate S0`,
 						);
+						}
 					}
-				}
+				rejectHardCarrierRootOverlap(
+					targetBlockIds,
+					`${direction}_partitions[${partitionIndex}]`,
+				);
 				const supportingBlockIds = validateSupportingBlockIds(
 					partition.supporting_block_ids,
 					prepared.availableBlockIds,
@@ -2129,8 +2266,12 @@ function validateChallengeSubmission(
 						`remove audit duplicates block ${blockId} across audit partitions`,
 					);
 				}
-				nextAuditSeen.add(blockId);
-			}
+					nextAuditSeen.add(blockId);
+				}
+			rejectHardCarrierRootOverlap(
+				targetBlockIds,
+				`remove_audit_partitions[${partitionIndex}]`,
+			);
 			if (nextAuditSeen.size > MAX_TOTAL_AUDIT_BLOCKS) {
 				throw new CandidateS0ContractError(
 					`remove audit envelope expands to ${nextAuditSeen.size} blocks; maximum is ${MAX_TOTAL_AUDIT_BLOCKS}`,
@@ -2514,42 +2655,29 @@ function compactRanges(blockIds: readonly number[]): string[] {
 	return ranges;
 }
 
-function validateChallengerTurnShape(
-	message: AssistantMessage,
-	thinkingMode: PiNativeWitnessThinkingMode,
-	toolName: string,
-): string | null {
+function validateChallengerTurnShape(message: AssistantMessage): string | null {
 	if (message.stopReason === "length") {
-		return "Challenger tool call was truncated by the output-token limit";
+		return "Challenger JSON response was truncated by the output-token limit";
 	}
 	const thinkingBlockCount = message.content.filter(
 		(content) => content.type === "thinking",
 	).length;
-	if (thinkingMode === "disabled" && thinkingBlockCount > 0) {
+	if (thinkingBlockCount > 0) {
 		return "Challenger turn must not contain thinking content";
 	}
-	if (thinkingMode === "enabled" && thinkingBlockCount > 1) {
-		return `Challenger turn may contain at most one thinking block; received ${thinkingBlockCount}`;
-	}
 	const toolCalls = message.content.filter((content) => content.type === "toolCall");
-	if (toolCalls.length !== 1) {
-		return `Challenger turn must contain exactly one tool call; received ${toolCalls.length}`;
+	if (toolCalls.length > 0) {
+		return `Challenger turn must not contain tool calls; received ${toolCalls.length}`;
 	}
-	if (toolCalls[0].name !== toolName) {
-		return `Challenger turn called unexpected tool ${toolCalls[0].name}`;
-	}
-	if (!Value.Check(PiNativeCandidateS0ChallengeSchema, toolCalls[0].arguments)) {
-		return schemaErrors(PiNativeCandidateS0ChallengeSchema, toolCalls[0].arguments);
-	}
-	if (message.stopReason !== "toolUse") {
-		return `Challenger tool response must stop after tool use; received ${message.stopReason}`;
+	if (message.stopReason !== "stop") {
+		return `Challenger JSON response must stop normally; received ${message.stopReason}`;
 	}
 	const textBlockCount = message.content.filter((content) => content.type === "text").length;
 	if (
-		textBlockCount !== 0 ||
-		message.content.length !== toolCalls.length + thinkingBlockCount
+		textBlockCount !== 1 ||
+		message.content.length !== textBlockCount + thinkingBlockCount
 	) {
-		return `Challenger turn must contain only its tool call and allowed thinking block; received ${textBlockCount} text and ${thinkingBlockCount} thinking block(s)`;
+		return `Challenger turn must contain exactly one JSON text block and only its allowed thinking block; received ${textBlockCount} text and ${thinkingBlockCount} thinking block(s)`;
 	}
 	return null;
 }
@@ -2632,6 +2760,70 @@ function estimateTextTokens(value: string): number {
 		else nonAscii += 1;
 	}
 	return nonAscii + Math.ceil(ascii / 4) + 512;
+}
+
+function estimateWorstCaseCanonicalChallengePayloadTokens(): number {
+	const rangeCandidates = [
+		`段落${"9".repeat(MAX_CHALLENGE_RANGE_CHARACTERS - "段落".length)}`,
+		`段落${"9".repeat(13)}-段落${"9".repeat(14)}`,
+	];
+	const conclusion = "\u0000".repeat(MAX_CHALLENGE_CONCLUSION_CHARACTERS);
+	const exactSupportingBlockIds = Array.from(
+		{ length: MAX_EXACT_SUPPORTING_BLOCK_IDS_PER_PARTITION },
+		() => Number.MAX_SAFE_INTEGER,
+	);
+	const rootOrAuditSupportingBlockIds = Array.from(
+		{ length: MAX_ROOT_OR_AUDIT_SUPPORTING_BLOCK_IDS },
+		() => Number.MAX_SAFE_INTEGER,
+	);
+	const rootChallenge = {
+		carrier_type: "contract_terms_and_formats" as const,
+		root_block_id: Number.MAX_SAFE_INTEGER,
+		exit_block_id_exclusive: Number.MAX_SAFE_INTEGER,
+		projected_s0_anchor_block_id: Number.MAX_SAFE_INTEGER,
+		source_conclusion: conclusion,
+		supporting_block_ids: rootOrAuditSupportingBlockIds,
+	};
+	return Math.max(
+		...rangeCandidates.map((range) => {
+			const exactPartition = {
+				target_ranges: Array.from(
+					{ length: MAX_TARGET_RANGES_PER_PARTITION },
+					() => range,
+				),
+				source_conclusion: conclusion,
+				supporting_block_ids: exactSupportingBlockIds,
+			};
+			const auditPartition = {
+				audit_kind: "recovery_boundary_scope" as const,
+				target_ranges: Array.from(
+					{ length: MAX_AUDIT_RANGES_PER_PARTITION },
+					() => range,
+				),
+				audit_basis: conclusion,
+				supporting_block_ids: rootOrAuditSupportingBlockIds,
+			};
+			const worstCase: PiNativeCandidateS0ChallengeSubmission = {
+				hard_carrier_root_challenges: Array.from(
+					{ length: MAX_HARD_CARRIER_ROOT_CHALLENGES },
+					() => rootChallenge,
+				),
+				remove_partitions: Array.from(
+					{ length: MAX_REMOVE_PARTITIONS },
+					() => exactPartition,
+				),
+				remove_audit_partitions: [
+					{ ...auditPartition, audit_kind: "mixed_atomic_scope" },
+					auditPartition,
+				],
+				add_partitions: Array.from(
+					{ length: MAX_ADD_PARTITIONS },
+					() => exactPartition,
+				),
+			};
+			return estimateTextTokens(JSON.stringify(worstCase));
+		}),
+	);
 }
 
 function validateExternalPrompt(name: string, prompt: string, expectedSha256: string): void {
@@ -2728,14 +2920,20 @@ function runtimeCapabilityIdentity(
 		input: runtime.model.input,
 		thinkingLevelMap: runtime.model.thinkingLevelMap ?? null,
 		compat: runtime.model.compat ?? null,
-		transportProfile:
-			runtime.transportProfile ??
-			(runtime.streamFunction === undefined
-				? defaultTransportProfile
-				: "custom_stream_function"),
+		transportProfile: resolvedTransportProfile(runtime, defaultTransportProfile),
 		headerNames: Object.keys(runtime.headers ?? {}).sort(),
 		envNames: Object.keys(runtime.env ?? {}).sort(),
 	};
+}
+
+function resolvedTransportProfile(
+	runtime: PiNativeCandidateS0RoleRuntime,
+	defaultTransportProfile: string,
+): string {
+	return runtime.transportProfile ??
+		(runtime.streamFunction === undefined
+			? defaultTransportProfile
+			: "custom_stream_function");
 }
 
 function errorMessage(error: unknown): string {

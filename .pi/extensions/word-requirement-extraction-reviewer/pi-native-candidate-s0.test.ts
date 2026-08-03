@@ -4,6 +4,7 @@ import type { Context } from "@earendil-works/pi-ai";
 import {
 	fauxAssistantMessage,
 	fauxText,
+	fauxThinking,
 	fauxToolCall,
 	registerFauxProvider,
 	streamSimple,
@@ -115,8 +116,7 @@ function auditChallenge(): PiNativeCandidateS0ChallengeSubmission {
 			{
 				audit_kind: "mixed_atomic_scope",
 				target_ranges: ["段落1-段落4"],
-				audit_basis:
-					"The bounded selected scope contains competing atomic membership roles requiring exact independent adjudication.",
+				audit_basis: "The selected scope has competing atomic roles.",
 				supporting_block_ids: [1, 2, 3, 4],
 			},
 		],
@@ -126,10 +126,8 @@ function auditChallenge(): PiNativeCandidateS0ChallengeSubmission {
 
 function challengerResponse(challenge: unknown) {
 	return fauxAssistantMessage(
-		fauxToolCall("submit_final_selection", challenge, {
-			id: "candidate-s0-challenger",
-		}),
-		{ stopReason: "toolUse" },
+		fauxText(JSON.stringify(challenge)),
+		{ stopReason: "stop" },
 	);
 }
 
@@ -149,6 +147,7 @@ function finalizerResponse(
 function createFaux(
 	responses: FauxResponseStep[],
 	contextWindow = 1_000_000,
+	maxTokens = 16_000,
 ): FauxProviderRegistration {
 	const registration = registerFauxProvider({
 		provider: "candidate-s0-faux",
@@ -157,7 +156,7 @@ function createFaux(
 				id: "candidate-s0-faux-model",
 				reasoning: true,
 				contextWindow,
-				maxTokens: 16_000,
+				maxTokens,
 			},
 		],
 	});
@@ -171,6 +170,7 @@ async function runReview(
 	options: {
 		sourcePacket?: ReturnType<typeof packet>;
 		packetSha256?: string;
+		challengerTransportProfile?: string | null;
 	} = {},
 ) {
 	const model = registration.getModel();
@@ -187,6 +187,12 @@ async function runReview(
 		challengerRuntime: {
 			model,
 			streamFunction: streamSimple,
+			...(options.challengerTransportProfile === null
+				? {}
+				: {
+						transportProfile:
+							options.challengerTransportProfile ?? "faux-json-object",
+					}),
 			apiKey: "faux-key",
 		},
 		finalizerRuntime: {
@@ -197,13 +203,20 @@ async function runReview(
 	});
 }
 
-test("keeps the v12 flat-projection and orthogonal hard-root prompts aligned", () => {
+test("keeps the v16 JSON, locator, and orthogonal hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
 	expect(challengerPrompt).toContain(
 		"顶层恰有 `hard_carrier_root_challenges`、`remove_partitions`、`remove_audit_partitions` 与 `add_partitions` 四个 non-nullable arrays",
 	);
+	expect(challengerPrompt).toContain('`response_format={"type":"json_object"}`');
+	expect(challengerPrompt).toContain("不得调用工具");
+	expect(challengerPrompt).toContain("`S0↔S0` 与 `S0↔OUT`");
+	expect(challengerPrompt).toContain("9+ fanout 整项省略");
+	expect(challengerPrompt).toContain("1-8 个最小充分 IDs");
+	expect(challengerPrompt).toContain("1-12 个 IDs");
+	expect(challengerPrompt).toContain("最多 96 字符");
 	expect(challengerPrompt).toContain("先裁决全部 singleton");
 	expect(challengerPrompt).toContain("首 block与末 block");
 	expect(challengerPrompt).toContain(
@@ -217,6 +230,12 @@ test("keeps the v12 flat-projection and orthogonal hard-root prompts aligned", (
 	);
 	expect(candidateS0RuntimeContract).toContain(
 		"exact partition 在 canonical 合并前按原始 submitted range 拆成独立 group",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		"不要求 seed 的定界符首次出现在 `S0`",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		'固定 `thinking={"type":"disabled"}`',
 	);
 	expect(finalizerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON");
 	expect(finalizerPrompt).toContain("未挑战 `S0` 仍可删除");
@@ -247,6 +266,17 @@ test("runs the independent Finalizer after an empty challenge for non-empty S0",
 	expect(result.budget.providerCalls).toBe(2);
 	expect(result.budget.roles.challenger.providerCalls).toBe(1);
 	expect(result.budget.roles.finalizer.providerCalls).toBe(1);
+	expect(result.models.challenger).toMatchObject({
+		thinkingMode: "disabled",
+		responseFormat: "json_object",
+		transportProfile: "faux-json-object",
+	});
+	expect(result.context.challengerWorstCaseOutputTokens).toBe(7_555);
+	expect(
+		result.context.challengerWorstCaseOutputTokens +
+			result.context.challengerOutputReserveTokens,
+	).toBeLessThanOrEqual(12_000);
+	expect(result.context.challengerOutputTokenLimit).toBe(12_000);
 	expect(registration.state.callCount).toBe(2);
 	expect(registration.getPendingResponseCount()).toBe(0);
 	expect(result.schemaVersion).toBe(
@@ -380,6 +410,167 @@ test("continues to the independent Finalizer when only root reviews are invalid"
 				"hard_carrier_root_challenges[0] anchor block 1 is outside the submitted root span",
 		},
 	]);
+});
+
+test.each([
+	{
+		name: "exact remove",
+		challenge: {
+			hard_carrier_root_challenges: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 0,
+					exit_block_id_exclusive: 4,
+					projected_s0_anchor_block_id: 1,
+					source_conclusion: "The source proposes one bounded announcement root.",
+					supporting_block_ids: [0, 1, 4],
+				},
+			],
+			remove_partitions: [
+				{
+					target_ranges: ["段落2"],
+					source_conclusion: "The target intentionally overlaps the submitted root.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		},
+		expectedDirection: "remove",
+		expectedReason:
+			"remove_partitions[0] block 2 overlaps hard_carrier_root_challenges[0]",
+	},
+	{
+		name: "mixed audit",
+		challenge: {
+			hard_carrier_root_challenges: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 0,
+					exit_block_id_exclusive: 4,
+					projected_s0_anchor_block_id: 1,
+					source_conclusion: "The source proposes one bounded announcement root.",
+					supporting_block_ids: [0, 1, 4],
+				},
+			],
+			remove_partitions: [],
+			remove_audit_partitions: [
+				{
+					audit_kind: "mixed_atomic_scope",
+					target_ranges: ["段落1-段落2"],
+					audit_basis: "The audit intentionally overlaps the submitted root.",
+					supporting_block_ids: [1, 2],
+				},
+			],
+			add_partitions: [],
+		},
+		expectedDirection: "remove_audit",
+		expectedReason:
+			"remove_audit_partitions[0] block 1 overlaps hard_carrier_root_challenges[0]",
+	},
+	{
+		name: "exact add",
+		challenge: {
+			hard_carrier_root_challenges: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 0,
+					exit_block_id_exclusive: 4,
+					projected_s0_anchor_block_id: 1,
+					source_conclusion: "The source proposes one bounded announcement root.",
+					supporting_block_ids: [0, 1, 4],
+				},
+			],
+			remove_partitions: [],
+			remove_audit_partitions: [],
+			add_partitions: [
+				{
+					target_ranges: ["段落3"],
+					source_conclusion: "The target intentionally overlaps the submitted root.",
+					supporting_block_ids: [3],
+				},
+			],
+		},
+		expectedDirection: "add",
+		expectedReason:
+			"add_partitions[0] block 3 overlaps hard_carrier_root_challenges[0]",
+	},
+] as const)(
+	"rejects a $name partition that overlaps an accepted root challenge",
+	async ({ challenge, expectedDirection, expectedReason }) => {
+		const registration = createFaux([
+			challengerResponse(challenge),
+			finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+		]);
+
+		const result = await runReview(registration);
+
+		expect(result.status).toBe("preserved");
+		expect(result.resolution).toBe("finalizer_preserved");
+		expect(result.challenge?.hardCarrierRootChallenges).toHaveLength(1);
+		expect(result.trace.challengerRejectedPartitions).toEqual([
+			{
+				direction: expectedDirection,
+				partitionIndex: 0,
+				reason: expectedReason,
+			},
+		]);
+		expect(result.coverage).toEqual({
+			challenger: "partial",
+			rejectedPartitionCount: 1,
+		});
+		expect(result.budget.providerCalls).toBe(2);
+	},
+);
+
+test("fails closed when a recovery audit overlaps an accepted root challenge", async () => {
+	const challenge: PiNativeCandidateS0ChallengeSubmission = {
+		hard_carrier_root_challenges: [
+			{
+				carrier_type: "announcement_notice",
+				root_block_id: 0,
+				exit_block_id_exclusive: 4,
+				projected_s0_anchor_block_id: 1,
+				source_conclusion: "The source proposes one bounded announcement root.",
+				supporting_block_ids: [0, 1, 4],
+			},
+		],
+		remove_partitions: [],
+		remove_audit_partitions: [
+			{
+				audit_kind: "recovery_boundary_scope",
+				target_ranges: ["段落1-段落2"],
+				audit_basis: "The recovery audit intentionally overlaps the submitted root.",
+				supporting_block_ids: [1, 2],
+			},
+		],
+		add_partitions: [],
+	};
+	const registration = createFaux([
+		challengerResponse(challenge),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
+	});
+	expect(result.failure?.message).toContain(
+		"recovery_boundary_scope failed mechanical authorization",
+	);
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "remove_audit",
+			partitionIndex: 0,
+			reason:
+				"remove_audit_partitions[0] block 1 overlaps hard_carrier_root_challenges[0]",
+		},
+	]);
+	expect(result.budget.providerCalls).toBe(1);
+	expect(registration.getPendingResponseCount()).toBe(1);
 });
 
 test("stops after an empty challenge when Candidate S0 is empty", async () => {
@@ -1174,9 +1365,36 @@ test.each([
 		expectedCalls: 1,
 	},
 	{
-		name: "Challenger text instead of tool call",
+		name: "Challenger tool call instead of JSON text",
 		responses: [
-			fauxAssistantMessage(JSON.stringify(emptyChallenge()), { stopReason: "stop" }),
+			fauxAssistantMessage(
+				fauxToolCall("submit_final_selection", emptyChallenge(), {
+					id: "unexpected-candidate-s0-challenger-tool",
+				}),
+				{ stopReason: "toolUse" },
+			),
+		],
+		expectedRole: "challenger",
+		expectedCode: "contract_error",
+		expectedCalls: 1,
+	},
+	{
+		name: "malformed Challenger JSON",
+		responses: [fauxAssistantMessage(fauxText("{"), { stopReason: "stop" })],
+		expectedRole: "challenger",
+		expectedCode: "contract_error",
+		expectedCalls: 1,
+	},
+	{
+		name: "Challenger thinking content",
+		responses: [
+			fauxAssistantMessage(
+				[
+					fauxThinking("hidden reasoning is forbidden"),
+					fauxText(JSON.stringify(emptyChallenge())),
+				],
+				{ stopReason: "stop" },
+			),
 		],
 		expectedRole: "challenger",
 		expectedCode: "contract_error",
@@ -1219,8 +1437,8 @@ test.each([
 					{
 						target_ranges: ["段落1"],
 						source_conclusion: "The partition intentionally exceeds the evidence-ID cap.",
-						supporting_block_ids: Array.from(
-							{ length: 25 },
+					supporting_block_ids: Array.from(
+							{ length: 9 },
 							(_, blockId) => blockId,
 						),
 					},
@@ -1277,6 +1495,42 @@ test.each([
 	},
 );
 
+test("preserves raw truncated Challenger JSON without partial salvage", async () => {
+	const rawResponse = '{"hard_carrier_root_challenges":[]';
+	const registration = createFaux([
+		fauxAssistantMessage(fauxText(rawResponse), { stopReason: "length" }),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
+	});
+	expect(result.trace.challengerRawResponse).toBe(rawResponse);
+	expect(result.trace.challengerNormalizedResponse).toBeNull();
+	expect(result.trace.challengerStopReason).toBe("length");
+	expect(result.budget.providerCalls).toBe(1);
+});
+
+test("fails before provider use when a custom Challenger transport is unnamed", async () => {
+	const registration = createFaux([challengerResponse(emptyChallenge())]);
+
+	const result = await runReview(registration, {
+		challengerTransportProfile: null,
+	});
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({
+		role: "preflight",
+		code: "contract_error",
+	});
+	expect(result.failure?.message).toContain("explicit transportProfile");
+	expect(result.budget.providerCalls).toBe(0);
+	expect(registration.state.callCount).toBe(0);
+});
+
 test("records the raw Challenger response when target authorization fails", async () => {
 	const invalidChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		hard_carrier_root_challenges: [],
@@ -1302,7 +1556,7 @@ test("records the raw Challenger response when target authorization fails", asyn
 	});
 	expect(result.trace.challengerRawResponse).toBe(rawResponse);
 	expect(result.trace.challengerNormalizedResponse).toEqual(invalidChallenge);
-	expect(result.trace.challengerStopReason).toBe("toolUse");
+	expect(result.trace.challengerStopReason).toBe("stop");
 	expect(result.inputs.challengerSha256).toMatch(/^[a-f0-9]{64}$/u);
 });
 
@@ -1349,7 +1603,7 @@ test("continues with partial coverage when one partition is unauthorized", async
 	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
-test("continues after rejecting one partition with a non-canonical range", async () => {
+test("fails closed on a non-canonical Challenger range", async () => {
 	const challenge: PiNativeCandidateS0ChallengeSubmission = {
 		hard_carrier_root_challenges: [],
 		remove_partitions: [
@@ -1363,30 +1617,25 @@ test("continues after rejecting one partition with a non-canonical range", async
 		remove_audit_partitions: [],
 		add_partitions: [],
 	};
-	const registration = createFaux([
-		challengerResponse(challenge),
-		finalizerResponse({
-			ordinary_remove_ranges: ["段落2"],
-			ordinary_add_ranges: [],
-		}),
-	]);
+	const registration = createFaux([challengerResponse(challenge)]);
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("repaired");
-	expect(result.finalRanges).toEqual(["段落1"]);
-	expect(result.trace.challengerRejectedPartitions).toEqual([
-		{
-			direction: "remove",
-			partitionIndex: 1,
-			reason:
-				"invalid range in remove_partitions[1].target_ranges[0]: 段落1中的后半句",
-		},
-	]);
-	expect(result.coverage).toEqual({
-		challenger: "partial",
-		rejectedPartitionCount: 1,
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
 	});
+	expect(result.failure?.message).toContain(
+		"/remove_partitions/1/target_ranges/0",
+	);
+	expect(result.trace.challengerRejectedPartitions).toEqual([]);
+	expect(result.coverage).toEqual({
+		challenger: "none",
+		rejectedPartitionCount: 0,
+	});
+	expect(result.budget.providerCalls).toBe(1);
 });
 
 test("continues after rejecting an audit that overlaps an exact remove challenge", async () => {
@@ -1486,6 +1735,7 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 	expect(JSON.stringify(result.trace.challengerNormalizedResponse)).toContain(
 		traceOnlyClaim,
 	);
+	expect(result.trace.challengerClaimsForwarded).toBe(false);
 	expect(contexts).toHaveLength(2);
 	const challengerMessage = contexts[0].messages.find(
 		(message) => message.role === "user",
@@ -1796,7 +2046,7 @@ test("keeps the two typed audit channels independently bounded", async () => {
 				target_ranges: ["段落1-段落77"],
 				audit_basis:
 					"One bounded ordinary Candidate scope has mixed atomic-membership risk.",
-				supporting_block_ids: Array.from({ length: 24 }, (_, index) => index + 1),
+				supporting_block_ids: Array.from({ length: 12 }, (_, index) => index + 1),
 			},
 			{
 				audit_kind: "recovery_boundary_scope",
@@ -1832,7 +2082,7 @@ test("keeps the two typed audit channels independently bounded", async () => {
 	});
 	expect(result.challenge?.removeAuditEnvelopeBlockIds).toEqual(auditBlockIds);
 	expect(result.challenge?.removeAuditPartitions[0]?.supportingBlockIds).toHaveLength(
-		24,
+		12,
 	);
 	expect(result.patch).toEqual({
 		addRanges: [],
@@ -1967,6 +2217,46 @@ test("fails capacity preflight before the first provider call", async () => {
 	});
 	expect(result.budget.providerCalls).toBe(0);
 	expect(registration.state.callCount).toBe(0);
+});
+
+test("fails output-capacity preflight before provider use when model maxTokens is too low", async () => {
+	const registration = createFaux(
+		[challengerResponse(emptyChallenge())],
+		1_000_000,
+		1_000,
+	);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({ role: "preflight", code: "capacity" });
+	expect(result.failure?.message).toContain("model maxTokens 1000");
+	expect(result.context.challengerOutputTokenLimit).toBe(1_000);
+	expect(result.budget.providerCalls).toBe(0);
+	expect(registration.state.callCount).toBe(0);
+});
+
+test("records an exact-delimited-string entry omitted by the total fanout bound", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落0"],
+			texts: [
+				"供应商应遵守《高频共同制度》。",
+				...Array.from({ length: 8 }, () => "高频共同制度"),
+			],
+		}),
+	});
+
+	expect(result.status).toBe("preserved");
+	expect(result.context.exactDelimitedStringScannedSeedCount).toBe(1);
+	expect(result.context.exactDelimitedStringEligibleEntryCount).toBe(1);
+	expect(result.context.exactDelimitedStringFanoutOmittedEntryCount).toBe(1);
+	expect(result.context.exactDelimitedStringOccurrenceEntryCount).toBe(0);
 });
 
 test("ignores and hashes Finalizer auxiliary text", async () => {
