@@ -39,7 +39,7 @@
 - 每个 audit 还必须提交 `target_block_count`，其值必须恰好等于 `target_ranges` 展开后的 unique canonical block 数，且不得超过 `MECHANICAL_AUDIT_BUDGET`。该字段只用于 Harness 机械核对预算，不是置信度、材料性或删除票。
 - 同一 partition 的所有 ranges 必须共享同一个足以独立裁决每个目标 block 的 `source_conclusion`。共享类型名或宽泛主题不等于共享 premise。若某个地址需要不同事实链，拆成另一个 partition；若没有名额，保留证据更强、材料性更高者。
 - `source_conclusion` / `audit_basis` 必须是单句、最多 300 字符，只陈述该 partition 的最小 source premise，不复述长原文或逐 block ledger。
-- `supporting_block_ids` 必须直接复制完整 source 中真实存在的 1-96 个顶层 `block_id`，并共同支持该 partition 的完整结论。它们只为 Challenger 的 source-grounded 提交建立 root、peer-exit、target、intro、heading 或指代证据，不能把相邻 block 的行为、主体、状态或标准借给 target；不要求逐目标 block 全量枚举，能证明 premise 的最小充分集合优先。Harness 只校验地址并保留 trace，不把这些 IDs 转发给 Finalizer。
+- `supporting_block_ids` 必须直接复制完整 source 中真实存在的 1-96 个顶层 `block_id`，并共同支持该 partition 的完整结论。它们只为 Challenger 的 source-grounded 提交建立 root、peer-exit、target、intro、heading 或指代证据，不能把相邻 block 的行为、主体、状态或标准借给 target；不要求逐目标 block 全量枚举，能证明 premise 的最小充分集合优先。Harness 机械校验这些地址，并将其作为不可信导航 IDs 原样转发给 Finalizer；它们不赋予语义权限，也不能替代 Finalizer 回到完整 source 独立验证。
 - 连续 range 内每个 canonical block 都必须独立满足该 premise；出现 atom hole 就拆开 range。一个 premise 可以覆盖多个不连续 exact ranges，但不能用组结论掩盖内部 block。
 Remove premise 必须肯定证明目标自身完全没有 `ATOM|HEADING` provenance且具有明确 excluded role；不得只用四类 hard-carrier ancestry建立 partition。Add premise 必须肯定证明目标自身具有 requirement proposition或合法 heading/table admission；peer exit/recovery 只能解除错误 Owner projection，不能单独授予 membership。
 
