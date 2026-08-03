@@ -156,7 +156,7 @@ export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 		accepted_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_REMOVE_RANGES,
 			description:
-				"Maximally compact exact subset of the mechanically authorized Challenger remove envelope. Do not enumerate non-challenge Candidate descendants removed only by a hard-carrier root veto. A recovery_boundary_scope block covered by a valid veto must still appear here; omission leaves an unresolved recovery survivor and fails the decision. Exact-remove and mixed-audit targets need not be duplicated when the independent root veto removes them. Mechanically tolerated root-covered redundancy is canonicalized separately and never expands authority.",
+				"Confirmed excluded blocks only, not accepted review groups. Submit a maximally compact exact subset of the mechanically authorized Challenger remove envelope. A mixed_atomic_scope must remain sparse and must not be copied wholesale. Every challenged block covered by a valid veto must still appear here; omission declares a challenged survivor and fails the decision. Root-only descendants must be expressed only by a hard-carrier root veto; any remove outside the Challenger envelope is a contract failure.",
 		}),
 		accepted_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_ADD_RANGES,
@@ -401,6 +401,13 @@ interface PreparedCandidateS0Review {
 	sourceIndexByBlockId: Map<number, number>;
 	candidateBlockIds: number[];
 	candidateRanges: string[];
+	candidateRunQueue: Array<{
+		range: string;
+		block_count: number;
+		start_block_id: number;
+		end_block_id: number;
+		singleton: boolean;
+	}>;
 	fullSource: string;
 	fullSourceSerializedCharacterCount: number;
 	sourceTextCharacterCount: number;
@@ -418,6 +425,7 @@ interface PreparedTargetedFinalizer {
 interface ChallengerCallResult {
 	challenge: CanonicalPiNativeCandidateS0Challenge;
 	rejectedPartitions: PiNativeCandidateS0RejectedChallengePartition[];
+	rejectedRecoveryBoundary: boolean;
 	rawResponse: string;
 	normalizedResponse: unknown;
 	inputSha256: string;
@@ -504,7 +512,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->complete-source-plus-challenger-run-grouped-mechanical-S0-projection->one-strict-tool-challenger->nonempty-S0-or-envelope-finalizer-with-global-hard-carrier-veto",
+				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-and-run-boundary-queue->one-strict-tool-challenger->nonempty-S0-or-envelope-finalizer-with-global-hard-carrier-veto",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -721,7 +729,10 @@ export async function runPiNativeCandidateS0Review(
 					prepared.candidateRanges,
 				)}\n\nCOMPLETE_IMMUTABLE_SOURCE_JSON=${prepared.fullSource}\n\nFINALIZER_TOOL_SCHEMA=${JSON.stringify(
 					PiNativeCandidateS0FinalSubmissionSchema,
-				)}\n\nGLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
+				)}\n\nMECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
+					semantic_authority: false,
+					runs: prepared.candidateRunQueue,
+				})}\n\nGLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
 					candidate_s0_ranges: prepared.candidateRanges,
 					candidate_s0_block_ids: prepared.candidateBlockIds,
 					projection:
@@ -795,6 +806,23 @@ export async function runPiNativeCandidateS0Review(
 		challengerStopReason = challengerResult.stopReason;
 		options.onProgress?.({ role: "challenger", tool: FINALIZER_TOOL_NAME });
 		throwIfAborted(signal);
+		if (challengerResult.rejectedRecoveryBoundary) {
+			validatorFailure =
+				"A submitted recovery_boundary_scope failed mechanical authorization";
+			return finish({
+				status: "degraded",
+				resolution: "review_incomplete",
+				reviewDegraded: true,
+				patch: null,
+				reason:
+					"Recovery-boundary authorization was incomplete; Candidate S0 preserved.",
+				failure: {
+					role: "challenger",
+					code: "contract_error",
+					message: validatorFailure,
+				},
+			});
+		}
 		if (
 			challengerRejectedPartitions.length > 0 &&
 			challenge.removePartitions.length === 0 &&
@@ -975,7 +1003,6 @@ function prepareCandidateS0Review(
 	const availableBlockIds = new Set<number>();
 	const sourceOrderedBlockIds: number[] = [];
 	const sourceIndexByBlockId = new Map<number, number>();
-	const sourceTextByBlockId = new Map<number, string>();
 	for (const [index, block] of packet.blocks.entries()) {
 		if (!Number.isSafeInteger(block.blockId) || block.blockId < 0) {
 			throw new CandidateS0ContractError(`packet.blocks[${index}] has invalid blockId`);
@@ -986,7 +1013,6 @@ function prepareCandidateS0Review(
 		availableBlockIds.add(block.blockId);
 		sourceOrderedBlockIds.push(block.blockId);
 		sourceIndexByBlockId.set(block.blockId, index);
-		sourceTextByBlockId.set(block.blockId, block.text);
 	}
 	const candidateBlockIds = expandRanges(
 		packet.initialRanges,
@@ -996,29 +1022,34 @@ function prepareCandidateS0Review(
 	);
 	const candidateRanges = compactRanges(candidateBlockIds);
 	const candidateBlockIdSet = new Set(candidateBlockIds);
-	const candidateSourceProjection = JSON.stringify({
-		semantic_authority: false,
-		runs: candidateRanges.map((range) => {
-			const runBlockIds = expandRanges(
-				[range],
-				availableBlockIds,
-				"candidateSourceProjection.runs",
-				false,
+	const candidateRunQueue = candidateRanges.map((range) => {
+		const runBlockIds = expandRanges(
+			[range],
+			availableBlockIds,
+			"candidateRunQueue",
+			false,
+		);
+		const startBlockId = runBlockIds[0];
+		const endBlockId = runBlockIds[runBlockIds.length - 1];
+		if (startBlockId === undefined || endBlockId === undefined) {
+			throw new CandidateS0ContractError(
+				`Candidate S0 run queue produced an empty range ${range}`,
 			);
-			return {
-				range,
-				block_count: runBlockIds.length,
-				blocks: runBlockIds.map((blockId) => {
-					const text = sourceTextByBlockId.get(blockId);
-					if (text === undefined) {
-						throw new CandidateS0ContractError(
-							`Candidate S0 projection references unavailable block ${blockId}`,
-						);
-					}
-					return { block_id: blockId, text };
-				}),
-			};
-		}),
+		}
+		return {
+			range,
+			block_count: runBlockIds.length,
+			start_block_id: startBlockId,
+			end_block_id: endBlockId,
+			singleton: runBlockIds.length === 1,
+		};
+	});
+	const candidateSourceProjection = JSON.stringify({
+		candidate_s0_ranges: candidateRanges,
+		semantic_authority: false,
+		blocks: packet.blocks
+			.filter((block) => candidateBlockIdSet.has(block.blockId))
+			.map((block) => ({ block_id: block.blockId, text: block.text })),
 	});
 	const targetAuthorization = JSON.stringify({
 		remove_ranges: candidateRanges,
@@ -1042,6 +1073,11 @@ function prepareCandidateS0Review(
 
 CANDIDATE_S0_RANGES=${JSON.stringify(candidateRanges)}
 
+MECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
+	semantic_authority: false,
+	runs: candidateRunQueue,
+})}
+
 CANDIDATE_S0_SOURCE_PROJECTION_JSON=${candidateSourceProjection}
 
 MECHANICAL_AUDIT_BUDGET=${JSON.stringify({
@@ -1050,14 +1086,9 @@ MECHANICAL_AUDIT_BUDGET=${JSON.stringify({
 	max_ranges_per_partition: MAX_AUDIT_RANGES_PER_PARTITION,
 	max_blocks_per_partition: MAX_AUDIT_BLOCKS_PER_PARTITION,
 	max_total_unique_blocks: MAX_TOTAL_AUDIT_BLOCKS,
-	candidate_s0_runs: candidateRanges.map((range) => ({
+	candidate_s0_runs: candidateRunQueue.map(({ range, block_count }) => ({
 		range,
-		block_count: expandRanges(
-			[range],
-			availableBlockIds,
-			"candidate_s0_runs",
-			false,
-		).length,
+		block_count,
 	})),
 })}
 
@@ -1069,6 +1100,7 @@ MECHANICAL_TARGET_AUTHORIZATION=${targetAuthorization}
 		sourceIndexByBlockId,
 		candidateBlockIds,
 		candidateRanges,
+		candidateRunQueue,
 		fullSource,
 		fullSourceSerializedCharacterCount: fullSource.length,
 		sourceTextCharacterCount: packet.blocks.reduce(
@@ -1122,6 +1154,11 @@ function prepareTargetedFinalizer(
 		userPrompt: `COMPLETE_IMMUTABLE_SOURCE_JSON=${prepared.fullSource}
 
 CANDIDATE_S0_RANGES=${JSON.stringify(prepared.candidateRanges)}
+
+MECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
+	semantic_authority: false,
+	runs: prepared.candidateRunQueue,
+})}
 
 CHALLENGE_ENVELOPE=${envelope}
 
@@ -1297,6 +1334,7 @@ async function runCandidateS0Challenger(
 	return {
 		challenge: challengeResult.challenge,
 		rejectedPartitions: challengeResult.rejectedPartitions,
+		rejectedRecoveryBoundary: challengeResult.rejectedRecoveryBoundary,
 		rawResponse,
 		normalizedResponse: rawSubmissions[0],
 		inputSha256,
@@ -1488,6 +1526,7 @@ function validateChallengeSubmission(
 ): {
 	challenge: CanonicalPiNativeCandidateS0Challenge;
 	rejectedPartitions: PiNativeCandidateS0RejectedChallengePartition[];
+	rejectedRecoveryBoundary: boolean;
 } {
 	const candidate = new Set(prepared.candidateBlockIds);
 	const removeSeen = new Set<number>();
@@ -1563,6 +1602,7 @@ function validateChallengeSubmission(
 	const auditKindsSeen = new Set<
 		CanonicalPiNativeCandidateS0RemoveAuditPartition["auditKind"]
 	>();
+	let rejectedRecoveryBoundary = false;
 	for (const [partitionIndex, partition] of raw.remove_audit_partitions.entries()) {
 		try {
 			if (auditKindsSeen.has(partition.audit_kind)) {
@@ -1627,6 +1667,9 @@ function validateChallengeSubmission(
 				supportingBlockIds,
 			});
 		} catch (error) {
+			if (partition.audit_kind === "recovery_boundary_scope") {
+				rejectedRecoveryBoundary = true;
+			}
 			rejectedPartitions.push({
 				direction: "remove_audit",
 				partitionIndex,
@@ -1656,6 +1699,7 @@ function validateChallengeSubmission(
 			addEnvelopeBlockIds: [...addSeen].sort((left, right) => left - right),
 		},
 		rejectedPartitions,
+		rejectedRecoveryBoundary,
 	};
 }
 
@@ -1676,8 +1720,26 @@ function validateFinalSubmission(
 		"accepted_add_ranges",
 		true,
 	);
+	const submittedRemove = new Set(submittedRemoveBlockIds);
+	for (const partition of challenge.removeAuditPartitions) {
+		if (
+			partition.auditKind === "mixed_atomic_scope" &&
+			partition.targetBlockIds.every((blockId) => submittedRemove.has(blockId))
+		) {
+			throw new CandidateS0ContractError(
+				`mixed_atomic_scope partition ${partition.partitionIndex} cannot be removed wholesale`,
+			);
+		}
+	}
 	const removeEnvelope = new Set(challenge.removeEnvelopeBlockIds);
 	const addEnvelope = new Set(challenge.addEnvelopeBlockIds);
+	for (const blockId of submittedRemoveBlockIds) {
+		if (!removeEnvelope.has(blockId)) {
+			throw new CandidateS0ContractError(
+				`Finalizer remove block ${blockId} is outside the Challenger envelope`,
+			);
+		}
+	}
 	for (const blockId of addBlockIds) {
 		if (!addEnvelope.has(blockId)) {
 			throw new CandidateS0ContractError(
@@ -1697,22 +1759,7 @@ function validateFinalSubmission(
 			),
 		),
 	].sort((left, right) => left - right);
-	const hardCarrierRemove = new Set(hardCarrierRemoveBlockIds);
-	const challengeRemoveBlockIds: number[] = [];
-	const rootCoveredRedundantRemoveBlockIds: number[] = [];
-	for (const blockId of submittedRemoveBlockIds) {
-		if (removeEnvelope.has(blockId)) {
-			challengeRemoveBlockIds.push(blockId);
-			continue;
-		}
-		if (hardCarrierRemove.has(blockId)) {
-			rootCoveredRedundantRemoveBlockIds.push(blockId);
-			continue;
-		}
-		throw new CandidateS0ContractError(
-			`Finalizer remove block ${blockId} is outside the Challenger envelope and every valid hard-carrier root veto`,
-		);
-	}
+	const challengeRemoveBlockIds = submittedRemoveBlockIds;
 	if (
 		rootValidation.rejectedHardCarrierRootVetoes.length > 0 &&
 		rootValidation.hardCarrierRootVetoes.length === 0 &&
@@ -1726,16 +1773,16 @@ function validateFinalSubmission(
 		);
 	}
 	const acceptedChallengeRemove = new Set(challengeRemoveBlockIds);
-	const unresolvedRecoverySurvivors = new Set(
-		challenge.removeAuditPartitions
-			.filter((partition) => partition.auditKind === "recovery_boundary_scope")
-			.flatMap((partition) => partition.targetBlockIds)
-			.filter((blockId) => !acceptedChallengeRemove.has(blockId)),
+	const challengedSurvivors = new Set(
+		[
+			...challenge.removeExactEnvelopeBlockIds,
+			...challenge.removeAuditEnvelopeBlockIds,
+		].filter((blockId) => !acceptedChallengeRemove.has(blockId)),
 	);
 	for (const blockId of hardCarrierRemoveBlockIds) {
-		if (unresolvedRecoverySurvivors.has(blockId)) {
+		if (challengedSurvivors.has(blockId)) {
 			throw new CandidateS0ContractError(
-				`hard-carrier root veto crosses unresolved recovery survivor block ${blockId}`,
+				`hard-carrier root veto removes challenged survivor block ${blockId}`,
 			);
 		}
 	}
@@ -1755,10 +1802,8 @@ function validateFinalSubmission(
 			rootValidation.rejectedHardCarrierRootVetoes,
 		challengeRemoveRanges: compactRanges(challengeRemoveBlockIds),
 		challengeRemoveBlockIds,
-		rootCoveredRedundantRemoveRanges: compactRanges(
-			rootCoveredRedundantRemoveBlockIds,
-		),
-		rootCoveredRedundantRemoveBlockIds,
+		rootCoveredRedundantRemoveRanges: [],
+		rootCoveredRedundantRemoveBlockIds: [],
 		hardCarrierRemoveRanges: compactRanges(hardCarrierRemoveBlockIds),
 		hardCarrierRemoveBlockIds,
 		removeRanges: compactRanges(removeBlockIds),
