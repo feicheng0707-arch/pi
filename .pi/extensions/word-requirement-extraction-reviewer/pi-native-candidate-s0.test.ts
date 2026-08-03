@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v19 shared S0 projection, locator, terminal closure, and orthogonal hard-root prompts aligned", () => {
+test("keeps the v20 shared S0 projection, dual-channel audit, terminal closure, and hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
@@ -224,6 +224,10 @@ test("keeps the v19 shared S0 projection, locator, terminal closure, and orthogo
 	);
 	expect(challengerPrompt).not.toContain("sentinel");
 	expect(challengerPrompt).toContain("heading/pointer/consequence residue fixed-point");
+	expect(challengerPrompt).toContain("source-certain sparse holes");
+	expect(challengerPrompt).toContain(
+		"全部重叠 exact targets 的并集必须是该完整 audit target set 的严格子集",
+	);
 	expect(challengerPrompt).not.toContain("SOURCE_PROJECTION_JSON.runs");
 	expect(candidateS0RuntimeContract).toContain(
 		"把完整 `S0` 统一作为 ordinary remove 的机械 authorization",
@@ -243,8 +247,14 @@ test("keeps the v19 shared S0 projection, locator, terminal closure, and orthogo
 	expect(candidateS0RuntimeContract).toContain(
 		"同一份扁平、无筛选、无语义的 `S0` source projection",
 	);
+	expect(candidateS0RuntimeContract).toContain(
+		"该双通道地址只是优先导航，不是两票、额外删除授权或完整 audit 的抽样替代",
+	);
 	expect(prompts.productPrinciples).toContain(
 		"canonical serialized payload 完全相同的 projection",
+	);
+	expect(prompts.productPrinciples).toContain(
+		"exact-overlap blocks 的并集必须是每个完整 audit target set 的严格子集",
 	);
 	expect(finalizerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(finalizerPrompt).toContain(
@@ -265,6 +275,9 @@ test("keeps the v19 shared S0 projection, locator, terminal closure, and orthogo
 	expect(finalizerPrompt).toContain("`typed-audit sparse burden`");
 	expect(finalizerPrompt).toContain(
 		"`recovery_boundary_scope` 的 ordinary `Δ-` 也必须是完整 target set 的严格子集",
+	);
+	expect(finalizerPrompt).toContain(
+		"同一地址只是一条优先导航，不是两票、双重证据或额外删除授权",
 	);
 	expect(finalizerPrompt).toContain("## Terminal closure checklist");
 	expect(finalizerPrompt).toContain("### 1. AUDIT PASS");
@@ -1336,9 +1349,20 @@ test("applies a sparse remove subset inside a bounded neutral audit scope", asyn
 	expect(result.budget.providerCalls).toBe(2);
 });
 
-test("fails closed when the Finalizer removes a mixed atomic scope wholesale", async () => {
+test("fails closed when the Finalizer removes a mixed atomic scope wholesale despite an exact-hole overlap", async () => {
 	const registration = createFaux([
-		challengerResponse(auditChallenge()),
+		challengerResponse({
+			hard_carrier_root_challenges: [],
+			remove_partitions: [
+				{
+					target_ranges: ["段落2"],
+					source_conclusion: "One source-certain hole is nested inside the audit.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: auditChallenge().remove_audit_partitions,
+			add_partitions: [],
+		}),
 		finalizerResponse({
 			ordinary_remove_ranges: ["段落1-段落4"],
 			ordinary_add_ranges: [],
@@ -1794,7 +1818,8 @@ test("fails closed on a non-canonical Challenger range", async () => {
 	expect(result.budget.providerCalls).toBe(1);
 });
 
-test("continues after rejecting an audit that overlaps an exact remove challenge", async () => {
+test("keeps a partial exact remove overlap inside a complete mixed audit scope", async () => {
+	const contexts: Context[] = [];
 	const overlappingChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		hard_carrier_root_challenges: [],
 		remove_partitions: [boundedChallenge().remove_partitions[0]],
@@ -1809,11 +1834,17 @@ test("continues after rejecting an audit that overlaps an exact remove challenge
 		add_partitions: [],
 	};
 	const registration = createFaux([
-		challengerResponse(overlappingChallenge),
-		finalizerResponse({
-			ordinary_remove_ranges: ["段落2"],
-			ordinary_add_ranges: [],
-		}),
+		(context) => {
+			contexts.push(context);
+			return challengerResponse(overlappingChallenge);
+		},
+		(context) => {
+			contexts.push(context);
+			return finalizerResponse({
+				ordinary_remove_ranges: ["段落2"],
+				ordinary_add_ranges: [],
+			});
+		},
 	]);
 
 	const result = await runReview(registration);
@@ -1821,12 +1852,129 @@ test("continues after rejecting an audit that overlaps an exact remove challenge
 	expect(result.status).toBe("repaired");
 	expect(result.finalRanges).toEqual(["段落1"]);
 	expect(result.patch).toEqual({ addRanges: [], removeRanges: ["段落2"] });
+	expect(result.challenge?.removeExactEnvelopeRanges).toEqual(["段落2"]);
+	expect(result.challenge?.removeAuditPartitions).toMatchObject([
+		{
+			partitionIndex: 0,
+			auditKind: "mixed_atomic_scope",
+			targetRanges: ["段落1-段落2"],
+			targetBlockIds: [1, 2],
+		},
+	]);
+	expect(result.challenge?.removeAuditEnvelopeRanges).toEqual(["段落1-段落2"]);
+	expect(result.challenge?.removeEnvelopeRanges).toEqual(["段落1-段落2"]);
+	expect(result.trace.challengerRejectedPartitions).toEqual([]);
+	expect(result.coverage).toEqual({
+		challenger: "complete",
+		rejectedPartitionCount: 0,
+	});
+	expect(result.budget.providerCalls).toBe(2);
+	expect(registration.getPendingResponseCount()).toBe(0);
+	const finalizerMessage = contexts[1]?.messages.find(
+		(message) => message.role === "user",
+	);
+	if (finalizerMessage?.role !== "user") {
+		throw new Error("Finalizer context omitted its user message");
+	}
+	const finalizerInput =
+		typeof finalizerMessage.content === "string"
+			? finalizerMessage.content
+			: finalizerMessage.content
+					.map((content) => (content.type === "text" ? content.text : ""))
+					.join("");
+	expect(finalizerInput).toContain(
+		'"remove_review_groups":[{"review_kind":"exact_remove_claim","partition_index":0,"range_index":0,"target_ranges":["段落2"],"mechanical_context_block_ids":[0,1,3,4]},{"review_kind":"mixed_atomic_scope","target_ranges":["段落1-段落2"],"mechanical_target_block_count":2,"ordinary_remove_must_be_strict_subset":true,"supporting_block_ids":[1,2]}]',
+	);
+});
+
+test("keeps a partial exact remove overlap inside a complete recovery audit scope", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [],
+			remove_partitions: [
+				{
+					target_ranges: ["段落2"],
+					source_conclusion: "One recovered-module atom is source-certain excluded.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: [
+				{
+					audit_kind: "recovery_boundary_scope",
+					target_ranges: ["段落1-段落4"],
+					audit_basis: "The complete later-module boundary is independently established.",
+					supporting_block_ids: [1, 2, 4],
+				},
+			],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落2", "段落4"],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1", "段落3"]);
+	expect(result.patch).toEqual({
+		addRanges: [],
+		removeRanges: ["段落2", "段落4"],
+	});
+	expect(result.challenge?.removePartitions).toHaveLength(1);
+	expect(result.challenge?.removeAuditPartitions).toMatchObject([
+		{
+			auditKind: "recovery_boundary_scope",
+			targetRanges: ["段落1-段落4"],
+		},
+	]);
+	expect(result.coverage).toEqual({
+		challenger: "complete",
+		rejectedPartitionCount: 0,
+	});
+});
+
+test("rejects a mixed audit whose exact remove overlap covers its complete target", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [],
+			remove_partitions: [
+				{
+					target_ranges: ["段落1-段落2"],
+					source_conclusion: "Every submitted audit block is also exact-remove challenged.",
+					supporting_block_ids: [1, 2],
+				},
+			],
+			remove_audit_partitions: [
+				{
+					audit_kind: "mixed_atomic_scope",
+					target_ranges: ["段落1-段落2"],
+					audit_basis: "The same complete scope is submitted as an audit.",
+					supporting_block_ids: [1, 2],
+				},
+			],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("preserved");
+	expect(result.challenge?.removePartitions).toHaveLength(1);
 	expect(result.challenge?.removeAuditPartitions).toEqual([]);
 	expect(result.trace.challengerRejectedPartitions).toEqual([
 		{
 			direction: "remove_audit",
 			partitionIndex: 0,
-			reason: "remove audit block 2 already belongs to an exact remove challenge",
+			reason:
+				"remove_audit_partitions[0] exact remove overlap must remain a strict subset of the complete audit target",
 		},
 	]);
 	expect(result.coverage).toEqual({
@@ -1834,7 +1982,47 @@ test("continues after rejecting an audit that overlaps an exact remove challenge
 		rejectedPartitionCount: 1,
 	});
 	expect(result.budget.providerCalls).toBe(2);
-	expect(registration.getPendingResponseCount()).toBe(0);
+});
+
+test("fails closed when a recovery audit exact overlap covers its complete target", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			hard_carrier_root_challenges: [],
+			remove_partitions: [
+				{
+					target_ranges: ["段落1-段落2"],
+					source_conclusion: "Every submitted recovery block is exact-remove challenged.",
+					supporting_block_ids: [1, 2],
+				},
+			],
+			remove_audit_partitions: [
+				{
+					audit_kind: "recovery_boundary_scope",
+					target_ranges: ["段落1-段落2"],
+					audit_basis: "The complete recovery scope is duplicated by exact remove.",
+					supporting_block_ids: [1, 2],
+				},
+			],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			ordinary_remove_ranges: [],
+			ordinary_add_ranges: [],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure).toMatchObject({
+		role: "challenger",
+		code: "contract_error",
+	});
+	expect(result.failure?.message).toContain(
+		"recovery_boundary_scope failed mechanical authorization",
+	);
+	expect(result.budget.providerCalls).toBe(1);
+	expect(registration.getPendingResponseCount()).toBe(1);
 });
 
 test("keeps Challenger claims in trace while withholding them from the Finalizer", async () => {

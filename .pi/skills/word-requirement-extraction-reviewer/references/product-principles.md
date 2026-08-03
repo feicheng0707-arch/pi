@@ -283,6 +283,8 @@ Candidate-S0 两调用实验允许 Harness 在本次完整 source 内，从 `《
 
 Candidate-S0 两调用实验还允许 Harness 从同一次不可变 packet 与冻结 `S0` 一次性生成 `CANDIDATE_S0_SOURCE_PROJECTION_JSON`，按 packet source order 原样平铺全部且仅 `S0` canonical blocks，每个 block 恰好一次，只含 block ID 与完整 text。Challenger 与 Finalizer 必须接收 canonical serialized payload 完全相同的 projection；不得截断、采样、摘要、重排、按关键词/地址/模型答案筛选或在两次调用之间改写。projection 只是 answer-free 的完整 `S0` coverage queue，不是第二事实源、风险排序、keep/remove 票、Challenger claim、语义证据或地址扩权；相邻 entries 也不证明原文相邻、heading `D(h)`、peer/root/recovery 边界、Owner 连续或 actor 继承。所有语义结论仍须回到完整 source，由模型独立完成。Harness 只可机械记录 projection block count、serialized character count、SHA、两个 role input SHA 和容量影响；case-specific projection SHA 不得进入 capability hash。
 
+Candidate-S0 两调用实验允许同一个 source-certain sparse hole 同时出现在 exact remove partition 与一个完整 typed audit scope 中。该双通道只解决 review navigation 的信息损失：exact group 明确定位已肯定的原子 hole，audit 仍保留完整 recovery/mixed boundary 并要求 Finalizer逐 block闭包。两者不是两票、双重证据或额外删除授权，exact-overlap blocks 的并集必须是每个完整 audit target set 的严格子集；不得裁剪 audit、用 supporting IDs 代替已肯定 exact hole，或用 exact channel预删整个 audit。Harness 只可按地址集合机械校验 exact-overlap strict subset、audit-audit 去重、block 预算与最终 wholesale-removal 禁令，不得判断何者在语义上是 hole。任何 submitted recovery audit 被机械拒绝仍须整次 fail-closed。
+
 代码不得读取标题或正文含义，不得生成 semantic challenge、Owner 结论、membership 结论、修复方向或自动 override，也不得在 repair card 中硬编码价格、法律、载体、资格、heading 等业务攻击指令。所有语义原则只能进入受 Prompt hash 约束的 active Prompt。Witness 只提供模型反例；Finalizer 必须自行接受、反驳、收窄或撤回 claim。非空 Candidate 的 Candidate-only universe 与空 Candidate 的完整 source universe 只由地址集合和 Candidate 是否为空确定。
 
 以下旧 overlay、`REMOVE_REVIEW`、`BOUNDARY_REVIEW`、residual unlock 与两角色隔离细节只适用于 V1 legacy 工具：

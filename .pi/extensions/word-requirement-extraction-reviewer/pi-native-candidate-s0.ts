@@ -52,7 +52,7 @@ const MAX_FINAL_REMOVE_RANGES =
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v19";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v20";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -168,14 +168,14 @@ export const PiNativeCandidateS0ChallengeSchema = Type.Object(
 		remove_partitions: Type.Array(PiNativeCandidateS0ChallengePartitionSchema, {
 			maxItems: MAX_REMOVE_PARTITIONS,
 			description:
-				"Ordinary exact-remove challenges outside every source-proven hard-carrier root. Hard-root descendants must remain absent and are owned exclusively by the Finalizer veto channel.",
+				"Ordinary exact-remove challenges outside every source-proven hard-carrier root. A source-certain sparse hole may also remain inside one complete typed audit scope, but the accepted exact overlap must be a strict subset of that audit target. Hard-root descendants must remain absent and are owned exclusively by the Finalizer veto channel.",
 		}),
 		remove_audit_partitions: Type.Array(
 			PiNativeCandidateS0RemoveAuditPartitionSchema,
 			{
 				maxItems: MAX_REMOVE_AUDIT_PARTITIONS,
 				description:
-					"At most one mixed_atomic_scope and one recovery_boundary_scope outside every source-proven hard-carrier root; both share the mechanical total audit-block budget. Hard-root descendants must remain absent.",
+					"At most one mixed_atomic_scope and one recovery_boundary_scope outside every source-proven hard-carrier root; both share the mechanical total audit-block budget. Each complete audit scope may partially overlap source-certain exact-remove holes, but the overlap must remain a strict subset of the audit target and grants no additional authority. Hard-root descendants must remain absent.",
 			},
 		),
 		add_partitions: Type.Array(PiNativeCandidateS0ChallengePartitionSchema, {
@@ -779,7 +779,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-json-object-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto-and-strict-audit-subset-checksum",
+				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-json-object-challenger-with-typed-root-review-and-partial-exact-audit-dual-channel->full-S0-finalizer-with-global-hard-carrier-veto-and-strict-audit-subset-checksum",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -865,6 +865,8 @@ export async function runPiNativeCandidateS0Review(
 				ordinaryRemoveAuthorization: "all-candidate-S0",
 				removeAuditOrdinaryDeltaPolicy:
 					"strict-subset-per-typed-audit-partition",
+				removeAuditExactOverlapPolicy:
+					"partial-exact-remove-overlap-allowed-only-when-strict-subset-of-complete-audit-target",
 				exactRangeMechanicalContextNeighborsPerSide: 2,
 				hardCarrierProjection:
 					"candidate-S0-intersection-with-source-order-inclusive-root-exclusive-exit",
@@ -2296,18 +2298,18 @@ function validateChallengeSubmission(
 						`remove audit block ${blockId} is outside Candidate S0`,
 					);
 				}
-				if (removeSeen.has(blockId)) {
-					throw new CandidateS0ContractError(
-						`remove audit block ${blockId} already belongs to an exact remove challenge`,
-					);
-				}
 				if (removeAuditSeen.has(blockId)) {
 					throw new CandidateS0ContractError(
 						`remove audit duplicates block ${blockId} across audit partitions`,
 					);
 				}
-					nextAuditSeen.add(blockId);
-				}
+				nextAuditSeen.add(blockId);
+			}
+			if (targetBlockIds.every((blockId) => removeSeen.has(blockId))) {
+				throw new CandidateS0ContractError(
+					`remove_audit_partitions[${partitionIndex}] exact remove overlap must remain a strict subset of the complete audit target`,
+				);
+			}
 			rejectHardCarrierRootOverlap(
 				targetBlockIds,
 				`remove_audit_partitions[${partitionIndex}]`,
