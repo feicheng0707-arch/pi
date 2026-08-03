@@ -52,7 +52,7 @@ const MAX_FINAL_REMOVE_RANGES =
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v26";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v27";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -729,7 +729,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-root-free-three-array-json-object-challenger-with-partition-local-exact-and-typed-audit-navigation->single-canonical-S0-authorization->challenge-last-full-S0-finalizer-with-independent-tentative-closure-delete-only-sparse-ordinary-delta-global-hard-carrier-veto-and-strict-audit-subset-checksum",
+				"candidate-initialRanges-as-S0->both-roles-complete-source-plus-shared-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-root-free-three-array-json-object-challenger-with-partition-local-exact-and-typed-audit-navigation->single-canonical-S0-authorization->challenge-last-full-S0-finalizer-with-independent-tentative-closure-delete-only-sparse-ordinary-delta-global-hard-carrier-veto-root-owned-same-direction-redundancy-normalization-and-strict-audit-subset-checksum",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -2218,6 +2218,9 @@ function validateFinalSubmission(
 			);
 		}
 	}
+	const submittedRemoveEchoesCandidate =
+		prepared.candidateBlockIds.length > 0 &&
+		submittedRemoveBlockIds.length === prepared.candidateBlockIds.length;
 	for (const blockId of addBlockIds) {
 		if (!addEnvelope.has(blockId)) {
 			throw new CandidateS0ContractError(
@@ -2238,14 +2241,12 @@ function validateFinalSubmission(
 		),
 	].sort((left, right) => left - right);
 	const hardCarrierRemove = new Set(hardCarrierRemoveBlockIds);
-	const ordinaryRemoveBlockIds = submittedRemoveBlockIds;
-	for (const blockId of ordinaryRemoveBlockIds) {
-		if (hardCarrierRemove.has(blockId)) {
-			throw new CandidateS0ContractError(
-				`ordinary remove block ${blockId} duplicates a hard-carrier root veto`,
-			);
-		}
-	}
+	const rootCoveredRedundantRemoveBlockIds = submittedRemoveBlockIds.filter(
+		(blockId) => hardCarrierRemove.has(blockId),
+	);
+	const ordinaryRemoveBlockIds = submittedRemoveBlockIds.filter(
+		(blockId) => !hardCarrierRemove.has(blockId),
+	);
 	const submittedRemove = new Set(ordinaryRemoveBlockIds);
 	for (const partition of challenge.removeAuditPartitions) {
 		if (
@@ -2256,12 +2257,9 @@ function validateFinalSubmission(
 			);
 		}
 	}
-	if (
-		prepared.candidateBlockIds.length > 0 &&
-		ordinaryRemoveBlockIds.length === prepared.candidateBlockIds.length
-	) {
+	if (submittedRemoveEchoesCandidate) {
 		throw new CandidateS0ContractError(
-			"ordinary_remove_ranges cannot remove the entire non-empty Candidate S0 without a participating hard-carrier root veto",
+			"ordinary_remove_ranges cannot remove the entire non-empty Candidate S0",
 		);
 	}
 	if (
@@ -2306,8 +2304,10 @@ function validateFinalSubmission(
 			independentOrdinaryRemoveBlockIds,
 		),
 		independentOrdinaryRemoveBlockIds,
-		rootCoveredRedundantRemoveRanges: [],
-		rootCoveredRedundantRemoveBlockIds: [],
+		rootCoveredRedundantRemoveRanges: compactRanges(
+			rootCoveredRedundantRemoveBlockIds,
+		),
+		rootCoveredRedundantRemoveBlockIds,
 		hardCarrierRemoveRanges: compactRanges(hardCarrierRemoveBlockIds),
 		hardCarrierRemoveBlockIds,
 		removeRanges: compactRanges(removeBlockIds),

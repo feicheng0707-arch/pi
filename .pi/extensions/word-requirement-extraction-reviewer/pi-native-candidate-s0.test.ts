@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v26 concise-role prompts aligned with root-free Challenger mechanics", () => {
+test("keeps the v27 concise-role prompts aligned with root-free Challenger mechanics", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain(
@@ -254,6 +254,9 @@ test("keeps the v26 concise-role prompts aligned with root-free Challenger mecha
 	);
 	expect(candidateS0RuntimeContract).toContain(
 		"完整 `S0` 授权只由唯一 `CANDIDATE_S0_RANGES` 提供",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		"同向冗余机械归一化为 root-owned removal",
 	);
 	expect(candidateS0RuntimeContract).toContain(
 		"不重复暴露完整 `S0` 或 `remove_review_ranges`",
@@ -836,7 +839,7 @@ test("allows a hard-carrier root veto to shadow an exact challenge address", asy
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([3, 4]);
 });
 
-test("fails closed when ordinary remove duplicates a hard-carrier root veto", async () => {
+test("normalizes an exact ordinary remove duplicated by a hard-carrier root veto", async () => {
 	const registration = createFaux([
 		challengerResponse({
 			remove_partitions: [
@@ -867,12 +870,16 @@ test("fails closed when ordinary remove duplicates a hard-carrier root veto", as
 		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
 	});
 
-	expect(result.status).toBe("degraded");
-	expect(result.finalRanges).toEqual(["段落1-段落4"]);
-	expect(result.decision).toBeNull();
-	expect(result.failure?.message).toContain(
-		"ordinary remove block 3 duplicates a hard-carrier root veto",
-	);
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.decision).toMatchObject({
+		submittedRemoveRanges: ["段落3"],
+		ordinaryRemoveRanges: [],
+		challengedOrdinaryRemoveRanges: [],
+		rootCoveredRedundantRemoveRanges: ["段落3"],
+		rootCoveredRedundantRemoveBlockIds: [3],
+		hardCarrierRemoveRanges: ["段落3-段落4"],
+	});
 });
 
 test("allows a hard-carrier root to shadow recovery challenge addresses", async () => {
@@ -913,7 +920,7 @@ test("allows a hard-carrier root to shadow recovery challenge addresses", async 
 	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([3, 4]);
 });
 
-test("fails closed when recovery ordinary delta duplicates its root veto", async () => {
+test("lets a root veto own a recovery ordinary delta that it fully covers", async () => {
 	const registration = createFaux([
 		challengerResponse({
 			remove_partitions: [],
@@ -945,11 +952,110 @@ test("fails closed when recovery ordinary delta duplicates its root veto", async
 		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
 	});
 
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.decision).toMatchObject({
+		ordinaryRemoveRanges: [],
+		rootCoveredRedundantRemoveRanges: ["段落3-段落4"],
+		rootCoveredRedundantRemoveBlockIds: [3, 4],
+		hardCarrierRemoveRanges: ["段落3-段落4"],
+	});
+});
+
+test("keeps only the non-root part of a partially overlapping ordinary remove", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落2-段落3"],
+			ordinary_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 3,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.decision).toMatchObject({
+		ordinaryRemoveRanges: ["段落2"],
+		independentOrdinaryRemoveRanges: ["段落2"],
+		rootCoveredRedundantRemoveRanges: ["段落3"],
+		hardCarrierRemoveRanges: ["段落3-段落4"],
+	});
+});
+
+test("does not let a rejected root shadow an ordinary remove", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落3"],
+			ordinary_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 1,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1-段落2", "段落4"]);
+	expect(result.decision).toMatchObject({
+		submittedRemoveRanges: ["段落3"],
+		ordinaryRemoveRanges: ["段落3"],
+		rootCoveredRedundantRemoveRanges: [],
+		hardCarrierRemoveRanges: [],
+		rejectedHardCarrierRootVetoes: [
+			{
+				vetoIndex: 0,
+				reason:
+					"hard_carrier_root_vetoes[0] anchor block 1 is outside the submitted root span",
+			},
+		],
+	});
+});
+
+test("still fails closed when raw ordinary removal echoes the complete Candidate S0", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			ordinary_remove_ranges: ["段落1-段落4"],
+			ordinary_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+					projected_s0_anchor_block_id: 3,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
 	expect(result.status).toBe("degraded");
 	expect(result.finalRanges).toEqual(["段落1-段落4"]);
-	expect(result.decision).toBeNull();
 	expect(result.failure?.message).toContain(
-		"ordinary remove block 3 duplicates a hard-carrier root veto",
+		"ordinary_remove_ranges cannot remove the entire non-empty Candidate S0",
 	);
 });
 
