@@ -19,6 +19,8 @@
 
 上述两类 source-proven Owner contradiction 高于普通 atom membership、公告内部内容价值、重复或范围整洁度争议。只要其中任一成立，必须先让它进入 global tournament；独立 Owner 槽不能改写成第三张 atom remove card，atom 卡也不能代替 typed span。
 
+两条 Owner 修复通道不得混用。`owner_boundary_challenges` 只表达“provisional 错误选中了一个应由 hard root 删除的 span”：其 `anchor_block_id` 必须直接落入 `MECHANICAL_TARGET_AUTHORIZATION.remove_from_provisional`，且该 span 与该授权集合有非空净删除交集。若错误相反，是 provisional hard-root claim 过宽、应在 later peer/recovered module 起点前收窄并释放被误排 block，必须使用 `add_to_provisional` 的 `kind=owner_boundary`，target 为一个实际 provisional-excluded 的 boundary block；不得提交一个不删除任何 authorized selected block 的冗余 Owner span。若没有合法 add target，宁可省略卡，也不能借 Owner challenge 表达 claim 收窄。
+
 ## Unified adversarial enumerate/rank
 
 完成上述四层读取后，才统一枚举、资格淘汰并排序全部候选：
@@ -43,6 +45,8 @@
 - `supporting_block_ids` 为 1-8 个在 `source_ordered_blocks` 中实际读到的顶层 `block_id`，可包含 authorization 外的 support-only block；不得从 layout/path/root 元数据抄地址。support 只提供证据，不授权 unseen target。
 - `source_conclusion` 只写一句肯定、可核验、source-grounded 的最终结论，以约 192 个汉字以内为紧凑目标，但不得为满足字符目标牺牲 singleton predicate 所需的信息；不写扫描过程、自问自答、可能性或改口。字符数不是 schema hard gate，整体输出仍受 2400-token 上限约束。
 
+Owner card 的 anchor 还必须直接属于 `MECHANICAL_TARGET_AUTHORIZATION.remove_from_provisional`；仅仅位于 span、`S0` 或 `AUDIT_UNIVERSE` 不足以提交。span 若不能对 provisional 产生非空净删除，整张 card 淘汰。`add_to_provisional kind=owner_boundary` 则只用于释放过宽 projection 下的 singleton target：source conclusion 必须肯定证明既有 hard root 在 target 或之前已经到达真实 peer exit，或 target 开始了通过 recovery eligibility gate 的独立 module。
+
 任一非法 span、target 或 source 地址会使整个 Witness contract failure。无法用合法 typed Owner span或合法 singleton target 和完整 premise 表达的反例必须省略；错误卡比缺卡更差。
 
 ## Owner gate
@@ -55,7 +59,9 @@
 
 四类 carrier 外，边界完整且主要功能为资格审查、强制响应、人员准入或最低配置的 module，可以建立 pre-award Stage Owner；内部未来岗位措辞不形成内容例外。孤立的证书、承诺、证明或未来时态不足以建立该 Owner。
 
-若 earlier independent requirement source 明确纳入 later 清单、图纸、制度或技术附件，later module 又固定、已填充、非投标人填写且对象/功能对应，则 later module 是 boundary-independent peer，前一 hard root 必须在其起点前结束。该 Owner recovery 先于 atom gate；later module 采用处罚、费用或合同式语言不能把它重新变成前一 carrier descendant。Recovery 只重新开放 later module 的逐 block atom evaluation，不给 module、heading、普通 child 或末项 membership。earlier block 同时写“遵守/执行/符合 X”与“详见附件”时是 operative incorporation，不能降格为 bare pointer；只有完全没有执行关系的 lookup 才可能 excluded。来自 hard carrier 内部的 pointer 不能 recovery。
+若 earlier independent requirement source 明确纳入 later 清单、图纸、制度或技术附件，later module 又固定、已填充、非投标人填写、对象/功能对应，并通过下述 boundary gate，则 later module 是 boundary-independent peer，前一 hard root 必须在其起点前结束。该 Owner recovery 先于 atom gate；later module 采用处罚、费用或合同式语言不能把它重新变成前一 carrier descendant。Recovery 只重新开放 later module 的逐 block atom evaluation，不给 module、heading、普通 child 或末项 membership。earlier block 同时写“遵守/执行/符合 X”与“详见附件”时是 operative incorporation，不能降格为 bare pointer；只有完全没有执行关系的 lookup 才可能 excluded。来自 hard carrier 内部的 pointer 不能 recovery。
+
+Recovery 还必须通过 `recovery eligibility gate`，但 boundary independence 是累计 source-functional 结论，不是预先要求 Word/path/编号已经同级退出。earlier operative incorporation、later 名称/对象/功能匹配、固定非填报内容，以及 intro 对当前项目、供应商或实施活动建立的自足适用关系，可以共同证明 later 从自身起点成为独立 module，即使外层附件标签、编号或 Word outline 仍继承前一 carrier。仅有已填充、项目专用、内容重复、直接采用为合同/响应附件、技术密度增加或附件编号重启则不足；缺少 operative incorporation、匹配 module 与自足适用关系时仍无 recovery 资格。
 
 ## shared atomic controlling-predicate gate
 
@@ -89,6 +95,8 @@ Heading closure 必须 bottom-up，并与 hard-carrier Owner exit 分开判断�
 4. `rank`：先应用上述 rationale-exposed owner-boundary contradiction > other source-proven root contradiction > typed/rationale/source exact contradiction > strongest singleton falsifier 优先级，再在同级 eligible clusters 间按 source 确定性、whole-block 原子确定性、材料性和独立失败覆盖排序，取最多一张 typed Owner challenge、两张 atom remove 与一张 add，总卡数最多四。材料性相近时，全文只有单一肯定 excluded effect 的短 atom target 优先于长 mixed block；长 block 只有在逐 proposition self-falsification 后 remainder 确为零才可入选。最多数量不是配额；没有合格反例就输出空数组。
 
 Typed Owner challenge 直接提交完整 carrier/root/exclusive-exit 和 span 内一个 provisional-selected anchor；不得把 root/peer 压缩成 singleton remove target，也不得为同一 root 提交多个 descendants。它只是 Finalizer 可接受或拒绝的独立 source claim；Witness 自身不能删除 span。
+
+Typed Owner challenge 是删除通道，必须以一个 `remove_from_provisional` 授权内 anchor 证明非空净删除。过宽 provisional claim 的收窄属于释放通道：使用一个 `add_to_provisional kind=owner_boundary` singleton target，让 Finalizer 从 source 独立重建并收窄或撤回原 claim；不得把目标已在 provisional 中、span 没有净删除或只是重复既有正确 projection 的 card 占用 Owner 槽。
 
 Atom exclude card 必须写出目标自身肯定的 price/proof/procedure/legal/meta/shell/pointer primary effect，并已反证 whole block 无 requirement survivor。普通重复、语义冗余、别处已覆盖或删除后更整齐永远不合格。
 
