@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v20 shared S0 projection, dual-channel audit, terminal closure, and hard-root prompts aligned", () => {
+test("keeps the v22 shared S0 projection, dual-channel audit, terminal closure, and hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
@@ -249,6 +249,12 @@ test("keeps the v20 shared S0 projection, dual-channel audit, terminal closure, 
 	);
 	expect(candidateS0RuntimeContract).toContain(
 		"该双通道地址只是优先导航，不是两票、额外删除授权或完整 audit 的抽样替代",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		"完整 `S0` 授权只由唯一 `CANDIDATE_S0_RANGES` 提供",
+	);
+	expect(candidateS0RuntimeContract).toContain(
+		"不重复暴露完整 `S0` 或 `remove_review_ranges`",
 	);
 	expect(prompts.productPrinciples).toContain(
 		"canonical serialized payload 完全相同的 projection",
@@ -2205,9 +2211,6 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 			},
 		],
 	});
-	expect(finalizerInput).toContain(
-		'"remove_review_ranges":["段落1-段落2","段落4"]',
-	);
 	expect(finalizerInput).toContain('"hard_root_review_groups":[]');
 	expect(finalizerInput).toContain(
 		'"remove_review_groups":[{"review_kind":"exact_remove_claim","partition_index":0,"range_index":0,"target_ranges":["段落1"],"mechanical_context_block_ids":[0,2,3]},{"review_kind":"recovery_boundary_scope","target_ranges":["段落2"],"mechanical_target_block_count":1,"ordinary_remove_must_be_strict_subset":true,"supporting_block_ids":[2]}]',
@@ -2230,6 +2233,27 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 	expect(finalizerInput).not.toContain("source_conclusion");
 	expect(finalizerInput).not.toContain("audit_basis");
 	expect(finalizerInput).toContain("supporting_block_ids");
+	const finalizerContext = contexts[1];
+	const serializedFinalizerContext = JSON.stringify(finalizerContext);
+	expect(serializedFinalizerContext).not.toContain("remove_review_ranges");
+	expect(serializedFinalizerContext).not.toContain("full-Candidate-S0 delta");
+	expect(serializedFinalizerContext).not.toContain(
+		"limited exactly to Candidate S0",
+	);
+	expect(
+		finalizerInput
+			.split("\n")
+			.filter((line) => line.startsWith("CANDIDATE_S0_RANGES=")),
+	).toHaveLength(1);
+	const finalizerTool = finalizerContext.tools?.find(
+		(tool) => tool.name === "submit_final_selection",
+	);
+	expect(finalizerTool?.description).toContain(
+		"delete-only sparse exclusion delta over Candidate S0",
+	);
+	expect(JSON.stringify(finalizerTool?.parameters)).toContain(
+		"Confirmed sparse exclusion delta over Candidate S0",
+	);
 });
 
 test("splits exact target ranges into stable groups with source-order neighbor context", async () => {
@@ -2388,9 +2412,7 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 	].map((marker) => finalizerInput.indexOf(marker));
 	expect(orderedMarkers.every((index) => index >= 0)).toBe(true);
 	expect(orderedMarkers).toEqual([...orderedMarkers].sort((left, right) => left - right));
-	expect(finalizerInput).toContain(
-		'"remove_review_ranges":["段落1-段落96"]',
-	);
+	expect(finalizerInput).not.toContain("remove_review_ranges");
 	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":true');
 	expect(finalizerInput).toContain('"review_kind":"mixed_atomic_scope"');
 	expect(finalizerInput).not.toContain("remove_partitions");

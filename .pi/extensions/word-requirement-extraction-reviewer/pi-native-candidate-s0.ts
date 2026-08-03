@@ -52,7 +52,7 @@ const MAX_FINAL_REMOVE_RANGES =
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const CHALLENGER_OUTPUT_NAME = "json_object";
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v20";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v22";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -218,7 +218,7 @@ export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 		ordinary_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_REMOVE_RANGES,
 			description:
-				"Ordinary full-Candidate-S0 delta, never a final removal inventory. Submit a maximally compact exact subset of Candidate S0. Every mixed_atomic_scope and recovery_boundary_scope must remain a strict sparse subset and must not be copied wholesale through this ordinary channel. A source-proven categorical hard-carrier span must use hard_carrier_root_vetoes instead. Any block covered by a submitted hard-carrier root veto is owned exclusively by that veto and must be omitted here. Any address outside Candidate S0 is a contract failure.",
+				"Confirmed sparse exclusion delta over Candidate S0 outside typed hard-carrier root vetoes; [] is valid. This field is not a retained selection, Candidate-S0 authorization, review queue, or complete audit-target echo. It must not equal the complete non-empty Candidate S0, and its overlap with every mixed_atomic_scope or recovery_boundary_scope must remain a strict subset. A source-proven categorical hard-carrier span must use hard_carrier_root_vetoes instead. Any block covered by a submitted hard-carrier root veto is owned exclusively by that veto and must be omitted here. Any address outside Candidate S0 is a contract failure.",
 		}),
 		ordinary_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_ADD_RANGES,
@@ -1626,7 +1626,6 @@ function prepareTargetedFinalizer(
 			})),
 		);
 	const envelope = JSON.stringify({
-		remove_review_ranges: prepared.candidateRanges,
 		add_review_ranges: challenge.addEnvelopeRanges,
 		hard_root_review_groups: challenge.hardCarrierRootChallenges.map(
 			(rootChallenge) => ({
@@ -1891,11 +1890,9 @@ async function runCandidateS0Finalizer(
 	> = {
 		name: FINALIZER_TOOL_NAME,
 		label: "Submit targeted delta and hard-carrier vetoes",
-		description: `Submit hard-carrier root vetoes plus ordinary remove/add subsets. ordinary_remove_ranges is limited exactly to Candidate S0 ${JSON.stringify(
-			prepared.candidateRanges,
-		)}; ordinary_add_ranges is limited exactly to ${JSON.stringify(
+		description: `Submit source-proven hard-carrier root vetoes plus confirmed sparse ordinary deltas. ordinary_remove_ranges is a delete-only sparse exclusion delta over Candidate S0; [] is valid. Never copy a retained/final selection, Candidate-S0 authorization, the mechanical run queue, or a complete typed audit target into it. Every typed audit overlap must remain a strict subset; use a source-proven hard-carrier root veto for a categorical span. Every block covered by a submitted root veto, including a challenged address, must be omitted from ordinary_remove_ranges. ordinary_add_ranges is limited exactly to ${JSON.stringify(
 			challenge.addEnvelopeRanges,
-		)}. Every typed audit partition must remain a strict subset in ordinary_remove_ranges; use a source-proven hard-carrier root veto for a categorical span. Every block covered by a submitted root veto, including a challenged address, must be omitted from ordinary_remove_ranges; never submit a final removal inventory.`,
+		)}; [] is valid. Never submit a final selection or removal inventory.`,
 		parameters: PiNativeCandidateS0FinalSubmissionSchema,
 		executionMode: "sequential",
 		prepareArguments(args) {

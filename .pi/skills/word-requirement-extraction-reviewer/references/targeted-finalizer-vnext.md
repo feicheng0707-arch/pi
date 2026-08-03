@@ -60,3 +60,7 @@
 ### 3. HEADING FIXED-POINT PASS
 
 先应用 tentative roots 与 body/table `Δ-`，再对完整 `S0` 中全部 heading-like blocks 按真实 peer-bounded `D(h)` 自底向上重算，直到集合稳定。heading 自身 eligibility 失败，或 tentative final `D(h)` 已无 selected descendant，且 heading 自身无 `ATOM` 时，必须进入 `Δ-`；不得借后续 sibling、已删除 child 或邻近 survivor 存活。完成 fixed-point 后才可提交一次最大紧凑 sparse delta。
+
+### 4. TOOL SERIALIZATION PASS
+
+先用 typed roots 形成 `V`，再序列化 root 外确实要删除的 ordinary blocks。`ordinary_remove_ranges` 只包含要从 `S0` 删除的地址，不是 keep ranges、最终 selection 或 Candidate 副本；无 ordinary 删除时必须提交 `[]`。绝不能把 `CANDIDATE_S0_RANGES`、完整非空 `S0` 或任一完整 typed audit target set 原样复制进该字段。若某个完整范围确属四类 categorical hard carrier，必须用 source-proven `hard_carrier_root_vetoes` 表达；若 root/exit 不能肯定证明，则保持该范围，不得改走 ordinary channel。compact ranges 后重新展开 exact set，逐项确认 `Δ-∩V=∅`、每个 audit 的 `Δ-∩P` 都是 `P` 的严格子集，且 `Δ-` 不等于完整非空 `S0`；任一失败都先修正 tool arguments，不能依赖 Harness 拒绝。
