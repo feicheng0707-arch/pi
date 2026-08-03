@@ -44,3 +44,19 @@
 - 被拒绝、证据不足或方向错误的 challenge 只失去导航效果，不自动保护或删除其地址；只要本轮进入 Finalizer，这些地址仍属于完整 `S0` precision audit。禁止幂等 add、同一地址双向出现、重叠 veto spans或借 root veto 偷渡普通 atom 删除。任何 `Δ+` 位于 veto span 内表示 typed conclusions 自相矛盾，必须先撤回/收窄 veto或放弃 add。每个 veto 都必须使用自己 span 内的 exact S0 anchor；不得复制另一个 veto 的 anchor。单个 effectless veto会被机械拒绝，不得依赖它产生任何删除。
 - Root challenge 只是 attention/navigation，不是 veto授权或双钥匙；你可无 challenge 提交 source-proven veto，也可拒绝所有 root groups。Harness 只按 `carrier_type + root + exit` 记录 trace match，anchor 不参与 match，match 与否不改变最终集合。Ordinary remove 的统一机械授权是完整 `S0`；只有 add groups 形成地址 envelope。
 提交前执行 exact-set checksum：`Δ-⊆S0`，`Δ+⊆ADD_ENVELOPE⊆(完整 packet block set-S0)`，`anchor∈S0∩[root,exit)`，`V=union(S0∩[root,exit))`，`Δ-∩V=∅`，`Δ+∩V=∅`。再对每个 ordinary delta block执行 `ATOM|HEADING` checksum，并对每个 veto 执行 `root + first peer exit + recovery disconfirmation + valid S0 anchor` checksum；`mixed_atomic_scope` 与 `recovery_boundary_scope` 都不得被 ordinary wholesale remove，ordinary 通道不得单独清空完整非空 `S0`。最终集合只由 Harness 机械计算 `S=(S0-Δ--V)∪Δ+`；Harness 仅机械记录 challenged `Δ-` 与 independent `Δ-`，代码不得读取 source 意义、修改方向或补做语义裁决。
+
+## Terminal closure checklist
+
+唯一 tool call 前必须依次完成以下三个 silent pass，不输出过程、计数或 ledger。`strict subset` 是发布约束，不是 preserve-all shortcut；Challenger group 只是优先导航，不是完整审查边界。
+
+### 1. AUDIT PASS
+
+对每个 `mixed_atomic_scope|recovery_boundary_scope` 从 target set 的第一个 canonical block 扫到最后一个，逐 block 使用同一 `ATOM|HEADING|excluded` gate。支持 IDs 只决定优先定位，不能替代完整 scope。`Δ-∩P=∅` 只有在 `P` 内每个 body/table 都由自身肯定建立 `ATOM`，且每个 heading 在 tentative final child 状态下建立 `HEADING` 时才成立；whole-removal 被禁止也绝不表示整个 scope 应保留。Recovery 只解除错误 carrier projection，other-actor、bare pointer、excluded role、抽象 consequence 与开放式 epilogue 仍必须形成 sparse `Δ-`。
+
+### 2. GLOBAL RESIDUAL PASS
+
+冻结 tentative root projection `V` 后，对 `V` 外完整 `S0` 再执行一次同门 residual closure，包括所有 unchallenged runs 与 groups 之外地址。每个 retained ordinary body 必须由目标 block 自身建立当前供应商的 concrete action/resource/standard/state/result tuple；peer-only、肯定 excluded-role、纯定位 pointer，或剥离 consequence 后只剩抽象问题、责任、损失、费用标签的 block 必须进入 `Δ-`。不得把 `independent Δ-=∅` 当默认答案。
+
+### 3. HEADING FIXED-POINT PASS
+
+先应用 tentative roots 与 body/table `Δ-`，再对完整 `S0` 中全部 heading-like blocks 按真实 peer-bounded `D(h)` 自底向上重算，直到集合稳定。heading 自身 eligibility 失败，或 tentative final `D(h)` 已无 selected descendant，且 heading 自身无 `ATOM` 时，必须进入 `Δ-`；不得借后续 sibling、已删除 child 或邻近 survivor 存活。完成 fixed-point 后才可提交一次最大紧凑 sparse delta。

@@ -203,7 +203,7 @@ async function runReview(
 	});
 }
 
-test("keeps the v17 JSON, locator, typed-audit, and orthogonal hard-root prompts aligned", () => {
+test("keeps the v18 JSON, locator, terminal closure, and orthogonal hard-root prompts aligned", () => {
 	expect(challengerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(challengerPrompt).toContain("MECHANICAL_S0_RUN_QUEUE_JSON.runs[]");
 	expect(challengerPrompt).toContain("`hard_carrier_root_challenges`");
@@ -255,6 +255,13 @@ test("keeps the v17 JSON, locator, typed-audit, and orthogonal hard-root prompts
 	expect(finalizerPrompt).toContain("`typed-audit sparse burden`");
 	expect(finalizerPrompt).toContain(
 		"`recovery_boundary_scope` 的 ordinary `Δ-` 也必须是完整 target set 的严格子集",
+	);
+	expect(finalizerPrompt).toContain("## Terminal closure checklist");
+	expect(finalizerPrompt).toContain("### 1. AUDIT PASS");
+	expect(finalizerPrompt).toContain("### 2. GLOBAL RESIDUAL PASS");
+	expect(finalizerPrompt).toContain("### 3. HEADING FIXED-POINT PASS");
+	expect(finalizerPrompt).toContain(
+		"`strict subset` 是发布约束，不是 preserve-all shortcut",
 	);
 });
 
