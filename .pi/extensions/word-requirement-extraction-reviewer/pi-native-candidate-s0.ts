@@ -36,13 +36,13 @@ const MAX_AUDIT_RANGES_PER_PARTITION = 32;
 const MAX_AUDIT_BLOCKS_PER_PARTITION = 96;
 const MAX_TOTAL_AUDIT_BLOCKS =
 	MAX_REMOVE_AUDIT_PARTITIONS * MAX_AUDIT_BLOCKS_PER_PARTITION;
-const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 96;
+const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 24;
 const MAX_HARD_CARRIER_ROOT_VETOES = 32;
 const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v6";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v9";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -156,7 +156,7 @@ export const PiNativeCandidateS0FinalSubmissionSchema = Type.Object(
 		accepted_remove_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_REMOVE_RANGES,
 			description:
-				"Maximally compact exact subset of the mechanically authorized Challenger remove envelope. Do not enumerate non-challenge Candidate descendants removed only by a hard-carrier root veto. Every challenged block covered by a valid veto must still appear here; omission declares a challenged survivor and fails the decision. Mechanically tolerated root-covered redundancy is canonicalized separately and never expands authority.",
+				"Maximally compact exact subset of the mechanically authorized Challenger remove envelope. Do not enumerate non-challenge Candidate descendants removed only by a hard-carrier root veto. A recovery_boundary_scope block covered by a valid veto must still appear here; omission leaves an unresolved recovery survivor and fails the decision. Exact-remove and mixed-audit targets need not be duplicated when the independent root veto removes them. Mechanically tolerated root-covered redundancy is canonicalized separately and never expands authority.",
 		}),
 		accepted_add_ranges: Type.Array(PiNativeCandidateS0RangeSchema, {
 			maxItems: MAX_FINAL_ADD_RANGES,
@@ -504,7 +504,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->complete-source-plus-mechanical-S0-projection->one-strict-tool-challenger->nonempty-S0-or-envelope-finalizer-with-global-hard-carrier-veto",
+				"candidate-initialRanges-as-S0->complete-source-plus-challenger-run-grouped-mechanical-S0-projection->one-strict-tool-challenger->nonempty-S0-or-envelope-finalizer-with-global-hard-carrier-veto",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -975,6 +975,7 @@ function prepareCandidateS0Review(
 	const availableBlockIds = new Set<number>();
 	const sourceOrderedBlockIds: number[] = [];
 	const sourceIndexByBlockId = new Map<number, number>();
+	const sourceTextByBlockId = new Map<number, string>();
 	for (const [index, block] of packet.blocks.entries()) {
 		if (!Number.isSafeInteger(block.blockId) || block.blockId < 0) {
 			throw new CandidateS0ContractError(`packet.blocks[${index}] has invalid blockId`);
@@ -985,6 +986,7 @@ function prepareCandidateS0Review(
 		availableBlockIds.add(block.blockId);
 		sourceOrderedBlockIds.push(block.blockId);
 		sourceIndexByBlockId.set(block.blockId, index);
+		sourceTextByBlockId.set(block.blockId, block.text);
 	}
 	const candidateBlockIds = expandRanges(
 		packet.initialRanges,
@@ -995,11 +997,28 @@ function prepareCandidateS0Review(
 	const candidateRanges = compactRanges(candidateBlockIds);
 	const candidateBlockIdSet = new Set(candidateBlockIds);
 	const candidateSourceProjection = JSON.stringify({
-		candidate_s0_ranges: candidateRanges,
 		semantic_authority: false,
-		blocks: packet.blocks
-			.filter((block) => candidateBlockIdSet.has(block.blockId))
-			.map((block) => ({ block_id: block.blockId, text: block.text })),
+		runs: candidateRanges.map((range) => {
+			const runBlockIds = expandRanges(
+				[range],
+				availableBlockIds,
+				"candidateSourceProjection.runs",
+				false,
+			);
+			return {
+				range,
+				block_count: runBlockIds.length,
+				blocks: runBlockIds.map((blockId) => {
+					const text = sourceTextByBlockId.get(blockId);
+					if (text === undefined) {
+						throw new CandidateS0ContractError(
+							`Candidate S0 projection references unavailable block ${blockId}`,
+						);
+					}
+					return { block_id: blockId, text };
+				}),
+			};
+		}),
 	});
 	const targetAuthorization = JSON.stringify({
 		remove_ranges: candidateRanges,
@@ -1707,18 +1726,16 @@ function validateFinalSubmission(
 		);
 	}
 	const acceptedChallengeRemove = new Set(challengeRemoveBlockIds);
-	const challengedSurvivors = new Set(
-		[
-			...challenge.removeExactEnvelopeBlockIds,
-			...challenge.removeAuditEnvelopeBlockIds,
-		].filter(
-			(blockId) => !acceptedChallengeRemove.has(blockId),
-		),
+	const unresolvedRecoverySurvivors = new Set(
+		challenge.removeAuditPartitions
+			.filter((partition) => partition.auditKind === "recovery_boundary_scope")
+			.flatMap((partition) => partition.targetBlockIds)
+			.filter((blockId) => !acceptedChallengeRemove.has(blockId)),
 	);
 	for (const blockId of hardCarrierRemoveBlockIds) {
-		if (challengedSurvivors.has(blockId)) {
+		if (unresolvedRecoverySurvivors.has(blockId)) {
 			throw new CandidateS0ContractError(
-				`hard-carrier root veto removes challenged survivor block ${blockId}`,
+				`hard-carrier root veto crosses unresolved recovery survivor block ${blockId}`,
 			);
 		}
 	}
