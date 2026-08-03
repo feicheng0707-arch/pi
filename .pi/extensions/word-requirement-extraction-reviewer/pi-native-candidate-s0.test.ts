@@ -2254,6 +2254,14 @@ test("keeps Challenger claims in trace while withholding them from the Finalizer
 	expect(JSON.stringify(finalizerTool?.parameters)).toContain(
 		"Confirmed sparse exclusion delta over Candidate S0",
 	);
+	const serializedFinalizerParameters = JSON.parse(
+		JSON.stringify(finalizerTool?.parameters),
+	) as { properties?: Record<string, unknown> };
+	expect(Object.keys(serializedFinalizerParameters.properties ?? {})).toEqual([
+		"hard_carrier_root_vetoes",
+		"ordinary_remove_ranges",
+		"ordinary_add_ranges",
+	]);
 });
 
 test("splits exact target ranges into stable groups with source-order neighbor context", async () => {
