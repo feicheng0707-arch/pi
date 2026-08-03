@@ -279,6 +279,8 @@ Active Pi-native 路线必须最大化复用 Pi Agent 底座的模型循环、�
 - 仅按 typed provisional hard-root claim 与地址连续性，为 projected 与 no-projection 两类 claim 的每个 root 和非 EOF exit 加入目标地址及前后最多两个实际 source block；只有 projected claims 为其 projection 连续岛加入固定首尾各两个 block，并参与 unclaimed/overlap/最终一致性。全部 focus block 去重后在 `source_ordered_blocks` 中按 `block_id` 严格升序、每个 block 和正文只出现一次，且不内嵌 provisional state、target permission 或 root projection。`MECHANICAL_TARGET_AUTHORIZATION` 仅由可见地址、AUDIT_UNIVERSE 和 provisional membership 机械生成 singleton target 权限，Owner span 另做 typed root/exit/anchor 地址授权。source、authorization、claims 的实际合计序列化预算为 180000 characters；Harness 始终在各 selected islands 间 round-robin，并用确定性的 breadth-first recursive-midpoint 顺序覆盖岛内 block，固定 256-block 预算容纳时必须完整展示全部岛内 block。岛内 midpoint 队列耗尽后，再以剩余预算和 `packet.blocks` source-order index 从每岛首尾向外逐层 round-robin 扩 focus，不得用 `blockId ± N` 代替 source 邻接，不能让早期长岛饿死后续岛；该窗口、权限和调度都不证明 claim、Owner、membership 或修复方向；
 - 仅在 Finalizer 显式提交一个有效 accepted Owner challenge index，且 final hard-root claim 与其 carrier/root/exit exact match 时，机械形成 `A=S0∩[root,exit)`；accepted array 为空时不投影，显式 index 未知或无 exact claim 时 fail-closed 且不投影。按 `S=(S0-A-Δ-)∪Δ+` 机械派生 final selection，校验其与 final hard-root projection 零交集，并在任何失败时保留 Candidate。代码只做地址、focus、authorization 和集合投影，不判断 Owner span 的语义真伪；
 
+Candidate-S0 两调用实验允许 Harness 在本次完整 source 内，从 `《》`、`“”`、`「」`、`『』` 或英文双引号中提取 bounded seed，只做 Unicode 空白折叠，再按大小写、标点和其他字符完全不变的 exact literal occurrence 列出同时位于 `S0` 内外的 block IDs。seed 扫描数、eligible/emitted entries 和每侧 block IDs 都必须有固定确定性上限，截断状态进入 trace，算法与上限进入 capability identity。该索引只能作为两个角色共享的确定性 source locator，不判定引用方向、纳入关系、同一 module、固定/填充状态、对象/功能对应、intro applicability、Owner、recovery、membership、材料性或修复方向，不生成 challenge、root、audit、add envelope、delta 或发布权限；命中、未命中和任一层上限截断都不是语义证据。两个角色必须回到完整 source 独立证明结论，且 Finalizer 接收的必须是同一份原始机械索引，不能是 Challenger 挑选或改写后的子集。
+
 代码不得读取标题或正文含义，不得生成 semantic challenge、Owner 结论、membership 结论、修复方向或自动 override，也不得在 repair card 中硬编码价格、法律、载体、资格、heading 等业务攻击指令。所有语义原则只能进入受 Prompt hash 约束的 active Prompt。Witness 只提供模型反例；Finalizer 必须自行接受、反驳、收窄或撤回 claim。非空 Candidate 的 Candidate-only universe 与空 Candidate 的完整 source universe 只由地址集合和 Candidate 是否为空确定。
 
 以下旧 overlay、`REMOVE_REVIEW`、`BOUNDARY_REVIEW`、residual unlock 与两角色隔离细节只适用于 V1 legacy 工具：
@@ -294,7 +296,7 @@ Active Pi-native 路线必须最大化复用 Pi Agent 底座的模型循环、�
 - 仅按 Candidate/remove/hard 地址集合检测完整 removal、撤销普通 envelope，并机械派生 hard-boundary residual 权限：full-removal safety 接受任一 Candidate hard hit；普通 bounded patch 必须至少有一个 hard hit 同时属于 `REMOVE_REVIEW`；两种模式都要求完整 Candidate 只剩一个非空连续地址岛；
 - 将模型明确批准的增删机械应用到 candidate。
 
-代码不得依据关键词、标题文本、表格内容、章节位置、source hash、case ID、历史错误类型或任何弱信号判断 keep/drop、文件角色、评分、资格、价格、供应商成稿、material loss 或最终范围。代码允许仅依据地址集合和 Word 的非语义格式字段，确定性选择候选边界邻居、outline、段落/表格、粗体、居中和分页节点形成有界结构导航；不得把这些节点转换成公告、合同、响应格式、采购需求等语义标签。代码也不得生成语义 challenge、修改模型方向、补齐遗漏或选择更接近已知答案的结果。
+除前述受限 exact-delimited-string occurrence locator 外，代码不得依据关键词、标题文本、表格内容、章节位置、source hash、case ID、历史错误类型或任何弱信号判断 keep/drop、文件角色、评分、资格、价格、供应商成稿、material loss 或最终范围。代码允许仅依据地址集合、Word 的非语义格式字段和前述只做空白折叠与 exact literal occurrence 的 bounded locator，确定性形成地址导航；不得把这些地址或格式节点转换成公告、合同、响应格式、采购需求、引用、recovery 或 membership 等语义标签。代码也不得生成语义 challenge、修改模型方向、补齐遗漏或选择更接近已知答案的结果。
 
 `operational_precision` 的 10% Candidate 字符门是机械安全门，不是代码语义判断。只有模型已经把本次 challenge 声明为 `operational_precision`、且机械裁剪后的有效 patch 没有新增 block 时，Harness 才按完整 Candidate 与拟删地址的字符数计算比例；低于门槛就机械归一化为 `reviewer_noop_challenge`。若同一提交存在有效新增，`operational_precision` 与其 remove-only schema 机械矛盾，Harness 只把非权威 issue label 降为 `unspecified` 后交给独立 Release，不读取 reason 或正文、不决定新增是否正确。空 Candidate 保留后结束；非空 Candidate 的低于门槛 remove-only challenge 不获得普通 patch 权限，只进入 terminal-or-hard veto Release audit。代码不得根据正文内容重新分类 issue type，也不得把该比例用于任何 correctness challenge。
 
@@ -310,6 +312,8 @@ Active Pi-native 路线必须最大化复用 Pi Agent 底座的模型循环、�
 
 可选 Word 结构证据必须来自本次 source 对应的原始 DOCX，并在第一次语义调用前完成 source hash、block count、严格递增 body order 和高置信对齐校验。不得从 expected、evaluator 或历史答案构造、修订或筛选结构节点。
 
+Candidate-S0 exact-delimited-string occurrence index 只能由本次不可变 source 与冻结 `S0` 机械重建；不得读取外部附件文本、Production 或其他 Agent 输出、历史 run、case 元数据、evaluator 或答案来新增、删除、排序或筛选 seed 与 occurrence。
+
 评测必须在 Agent raw result 和 trace 落盘后独立进行。离线代码只能比较结果，不能在计分前执行生产路径中不存在的语义补丁。
 
 ## 六、成本与调用上限
@@ -317,6 +321,8 @@ Active Pi-native 路线必须最大化复用 Pi Agent 底座的模型循环、�
 Active Pi-native 每个 case 固定最多三次 provider call：GLM Finalizer provisional、Doubao 2.0 Pro Witness、同一个 GLM Finalizer final。成功发布必须恰好三次；失败路径可提前终止。Finalizer provider 边界最多两次，首轮无合法 provisional 时立即停止，第二轮后无条件停止；每轮必须恰好一个目标工具调用，owner reason 硬上限 1200 字符；第一轮 residual reason 目标 2400、硬上限 8000 字符，第二轮 residual reason 硬上限 2400 字符。普通 text 若出现只能作为不参与结果的 trace-only auxiliary output；Finalizer thinking、未知或额外工具仍拒绝。Witness 无论是否发现反例都只调用一次。无 retry、第四次调用、投票、best-of-N、逐 block ledger 或自由读搜 loop。两次 Finalizer 始终关闭 thinking。Witness 默认 `thinkingMode=disabled`；仅允许预先声明的 sealed A/B runner 在第一次语义调用前把整个 run 显式冻结为 `enabled`，不得依据 case、正文、provisional、答案、评测标签、历史结果或 provider 返回选择或切换。Enabled 与 disabled profile 使用相同模型、source/focus、Prompt、exact schema、2400-token provider-visible JSON response 上限、三调用合同和 no-retry 规则；唯一实验变量是 provider Witness thinking runtime 及其对应 reasoning 预算。Provider-reported hidden reasoning 与可见 JSON output 分开记账：disabled profile 的 run reasoning 上限为 1000 tokens，enabled profile 为 6000 tokens，原有 20000-token run 总 output 上限继续生效。provider payload 始终删除 reasoning effort，发送 `response_format={"type":"json_object"}` 与冻结 profile 对应的 `thinking={"type":"disabled|enabled"}`。Disabled mode 只允许唯一 JSON text；enabled mode 可额外包含至多一个 thinking block，但 Harness 不读取其语义、不持久化正文、不转发给 Finalizer，只记录 mode、block count、character count 与 `forwarded=false`。唯一权威 Witness 输出仍是恰好一个完整 JSON text，并继续经过严格 `JSON.parse`、同一 TypeBox schema 和 per-card 交叉字段校验。provider JSON mode 或 enabled thinking 都不构成语义裁决、本地合同替代或质量提升证明；质量收益必须由预先冻结、无答案泄漏的 sealed A/B 独立验证。
 
 调用前必须用 answer-free、确定性的上下文估算做容量预检。provider、capacity、timeout、abort、budget、全局 JSON/turn/schema/cross-field、完整 source 地址、Owner slot 非 `valid_challenge` 且 exclude/select 两个 atom lanes 均为 `rejected_source_focus`、调用数或最终一致性失败均不应用语义改写，Candidate 原样保留并标记 degraded。单张 card 的 focus/slot/group/universe 动态越权只把该原始 card 机械降为 `rejected_source_focus`，不增加调用、不触发 retry，也不阻断其他有效 card 与第三次 Finalizer；成功结果必须显式标记 `partial` coverage。上述非空单岛普通 `OUT` spill 的最小权限投影只是删除模型无权选择的地址，不是 range failure、语义补丁或答案裁决；其他越权形态仍失败关闭。上游 Candidate 成本与新增 Agent 成本分开报告。
+
+Candidate-S0 Challenger/Finalizer 实验固定最多两次 provider call；exact-delimited-string occurrence index 只进入这两次既有输入与容量预检，不增加第三次调用、retry、模型角色或 ledger。
 
 以下两调用成本规则只适用于 V1 legacy baseline：
 

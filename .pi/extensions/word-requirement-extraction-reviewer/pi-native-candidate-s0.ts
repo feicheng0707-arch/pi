@@ -39,11 +39,14 @@ const MAX_TOTAL_AUDIT_BLOCKS =
 const MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION = 24;
 const MAX_HARD_CARRIER_ROOT_CHALLENGES = 8;
 const MAX_HARD_CARRIER_ROOT_VETOES = 32;
+const MAX_EXACT_DELIMITED_STRING_SEEDS = 256;
+const MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES = 64;
+const MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE = 8;
 const MAX_FINAL_REMOVE_RANGES =
 	MAX_REMOVE_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION + MAX_TOTAL_AUDIT_BLOCKS;
 const MAX_FINAL_ADD_RANGES = MAX_ADD_PARTITIONS * MAX_TARGET_RANGES_PER_PARTITION;
 const FINALIZER_TOOL_NAME = "submit_final_selection";
-const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v14";
+const RUNTIME_VERSION = "pi-native-candidate-s0-challenger-finalizer-v15";
 
 export const PiNativeCandidateS0RangeSchema = Type.String({
 	pattern: "^段落\\d+(?:-(?:段落)?\\d+)?$",
@@ -435,6 +438,14 @@ export interface PiNativeCandidateS0ReviewResult {
 		sourceBlockCount: number;
 		sourceTextCharacterCount: number;
 		fullSourceSerializedCharacterCount: number;
+		exactDelimitedStringScannedSeedCount: number;
+		exactDelimitedStringSeedScanTruncated: boolean;
+		exactDelimitedStringEligibleEntryCount: number;
+		exactDelimitedStringEntryScanTruncated: boolean;
+		exactDelimitedStringCandidateSideTruncatedEntryCount: number;
+		exactDelimitedStringOutsideSideTruncatedEntryCount: number;
+		exactDelimitedStringOccurrenceEntryCount: number;
+		exactDelimitedStringOccurrenceSerializedCharacterCount: number;
 		finalizerSourceBlockCount: number;
 		finalizerSourceSerializedCharacterCount: number;
 		challengerEstimatedTokens: number;
@@ -474,6 +485,14 @@ interface PreparedCandidateS0Review {
 		singleton: boolean;
 	}>;
 	fullSource: string;
+	exactDelimitedStringOccurrenceIndex: string;
+	exactDelimitedStringScannedSeedCount: number;
+	exactDelimitedStringSeedScanTruncated: boolean;
+	exactDelimitedStringEligibleEntryCount: number;
+	exactDelimitedStringEntryScanTruncated: boolean;
+	exactDelimitedStringCandidateSideTruncatedEntryCount: number;
+	exactDelimitedStringOutsideSideTruncatedEntryCount: number;
+	exactDelimitedStringOccurrenceEntryCount: number;
 	fullSourceSerializedCharacterCount: number;
 	sourceTextCharacterCount: number;
 	challengerSystemPrompt: string;
@@ -503,6 +522,146 @@ interface FinalizerCallResult {
 	auxiliaryText: PiNativeCandidateS0AuxiliaryTextTrace;
 	inputSha256: string;
 	stopReason: string;
+}
+
+export interface PiNativeCandidateS0ExactDelimitedStringOccurrence {
+	matchedSourceText: string;
+	candidateS0BlockIds: number[];
+	candidateS0BlockIdsTruncated: boolean;
+	outsideCandidateS0BlockIds: number[];
+	outsideCandidateS0BlockIdsTruncated: boolean;
+}
+
+interface PiNativeCandidateS0ExactDelimitedStringOccurrenceIndexBuild {
+	entries: PiNativeCandidateS0ExactDelimitedStringOccurrence[];
+	scannedSeedCount: number;
+	seedScanTruncated: boolean;
+	eligibleEntryCount: number;
+	entryScanTruncated: boolean;
+	candidateSideTruncatedEntryCount: number;
+	outsideSideTruncatedEntryCount: number;
+}
+
+export function buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndex(
+	blocks: readonly { blockId: number; text: string }[],
+	candidateBlockIds: ReadonlySet<number>,
+): PiNativeCandidateS0ExactDelimitedStringOccurrence[] {
+	return buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndexReport(
+		blocks,
+		candidateBlockIds,
+	).entries;
+}
+
+function buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndexReport(
+	blocks: readonly { blockId: number; text: string }[],
+	candidateBlockIds: ReadonlySet<number>,
+): PiNativeCandidateS0ExactDelimitedStringOccurrenceIndexBuild {
+	const delimitedStrings = new Set<string>();
+	const patterns = [
+		/《[^《》]{2,120}》/gu,
+		/“[^“”]{2,120}”/gu,
+		/「[^「」]{2,120}」/gu,
+		/『[^『』]{2,120}』/gu,
+		/"[^"]{2,120}"/gu,
+	];
+	let seedScanTruncated = false;
+	let reachedSeedLimit = false;
+	for (const block of blocks) {
+		const blockDelimitedStrings: Array<{
+			sourceIndex: number;
+			matchedSourceText: string;
+		}> = [];
+		for (const pattern of patterns) {
+			for (const match of block.text.matchAll(pattern)) {
+				const matchedSourceText = match[0]
+					.slice(1, -1)
+					.replace(/\s+/gu, " ")
+					.trim();
+				if (matchedSourceText.length >= 2) {
+					blockDelimitedStrings.push({
+						sourceIndex: match.index ?? Number.MAX_SAFE_INTEGER,
+						matchedSourceText,
+					});
+				}
+			}
+		}
+		blockDelimitedStrings.sort(
+			(left, right) => left.sourceIndex - right.sourceIndex,
+		);
+		for (const entry of blockDelimitedStrings) {
+			if (delimitedStrings.has(entry.matchedSourceText)) continue;
+			if (delimitedStrings.size >= MAX_EXACT_DELIMITED_STRING_SEEDS) {
+				seedScanTruncated = true;
+				reachedSeedLimit = true;
+				break;
+			}
+			delimitedStrings.add(entry.matchedSourceText);
+		}
+		if (reachedSeedLimit) break;
+	}
+	const normalizedBlocks = blocks.map((block) => ({
+		blockId: block.blockId,
+		text: block.text.replace(/\s+/gu, " ").trim(),
+	}));
+	const eligibleEntries = [...delimitedStrings]
+		.flatMap((matchedSourceText) => {
+			const candidateS0BlockIds: number[] = [];
+			const outsideCandidateS0BlockIds: number[] = [];
+			let candidateS0BlockIdsTruncated = false;
+			let outsideCandidateS0BlockIdsTruncated = false;
+			for (const block of normalizedBlocks) {
+				if (!block.text.includes(matchedSourceText)) continue;
+				if (candidateBlockIds.has(block.blockId)) {
+					if (
+						candidateS0BlockIds.length <
+						MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE
+					) {
+						candidateS0BlockIds.push(block.blockId);
+					} else {
+						candidateS0BlockIdsTruncated = true;
+					}
+				} else if (
+					outsideCandidateS0BlockIds.length <
+					MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE
+				) {
+					outsideCandidateS0BlockIds.push(block.blockId);
+				} else {
+					outsideCandidateS0BlockIdsTruncated = true;
+				}
+			}
+			if (
+				candidateS0BlockIds.length === 0 ||
+				outsideCandidateS0BlockIds.length === 0
+			) {
+				return [];
+			}
+			return [
+				{
+					matchedSourceText,
+					candidateS0BlockIds,
+					candidateS0BlockIdsTruncated,
+					outsideCandidateS0BlockIds,
+					outsideCandidateS0BlockIdsTruncated,
+				},
+			];
+		});
+	return {
+		entries: eligibleEntries.slice(
+			0,
+			MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
+		),
+		scannedSeedCount: delimitedStrings.size,
+		seedScanTruncated,
+		eligibleEntryCount: eligibleEntries.length,
+		entryScanTruncated:
+			eligibleEntries.length > MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
+		candidateSideTruncatedEntryCount: eligibleEntries.filter(
+			(entry) => entry.candidateS0BlockIdsTruncated,
+		).length,
+		outsideSideTruncatedEntryCount: eligibleEntries.filter(
+			(entry) => entry.outsideCandidateS0BlockIdsTruncated,
+		).length,
+	};
 }
 
 class CandidateS0ContractError extends Error {}
@@ -577,7 +736,7 @@ export async function runPiNativeCandidateS0Review(
 		JSON.stringify({
 			runtimeVersion: RUNTIME_VERSION,
 			architecture:
-				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-and-run-boundary-queue->one-strict-tool-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto",
+				"candidate-initialRanges-as-S0->complete-source-plus-flat-mechanical-S0-projection-run-boundary-queue-and-exact-delimited-string-occurrence-index->one-strict-tool-challenger-with-typed-root-review->full-S0-finalizer-with-global-hard-carrier-veto",
 			models: {
 				challenger: {
 					...runtimeCapabilityIdentity(
@@ -614,6 +773,25 @@ export async function runPiNativeCandidateS0Review(
 					MAX_SUPPORTING_BLOCK_IDS_PER_PARTITION,
 				maxHardCarrierRootChallenges: MAX_HARD_CARRIER_ROOT_CHALLENGES,
 				maxHardCarrierRootVetoes: MAX_HARD_CARRIER_ROOT_VETOES,
+				maxExactDelimitedStringSeeds: MAX_EXACT_DELIMITED_STRING_SEEDS,
+				maxExactDelimitedStringOccurrenceEntries:
+					MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
+				maxExactDelimitedStringBlockIdsPerSide:
+					MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE,
+				exactDelimitedStringOccurrenceIndex:
+					"paired-delimiter-seeded-whitespace-collapsed-exact-literal-source-block-occurrences-on-candidate-and-outside-sides",
+				exactDelimitedStringOccurrenceAlgorithm: {
+					version: 1,
+					delimiters: ["《》", "“”", "「」", "『』", '\"\"'],
+					seedInnerCharacterLength: { minimum: 2, maximum: 120 },
+					seedMaySpanBlockLineBreaks: true,
+					normalization:
+						"collapse-unicode-whitespace-to-one-ascii-space-and-trim",
+					matching: "case-sensitive-literal-substring-in-normalized-block",
+					perBlockDedupe: true,
+					order:
+						"first-delimited-seed-source-order-then-packet-block-source-order",
+				},
 				ordinaryRemoveAuthorization: "all-candidate-S0",
 				exactRangeMechanicalContextNeighborsPerSide: 2,
 				hardCarrierProjection:
@@ -649,6 +827,14 @@ export async function runPiNativeCandidateS0Review(
 		0,
 	);
 	let fullSourceSerializedCharacterCount = 0;
+	let exactDelimitedStringScannedSeedCount = 0;
+	let exactDelimitedStringSeedScanTruncated = false;
+	let exactDelimitedStringEligibleEntryCount = 0;
+	let exactDelimitedStringEntryScanTruncated = false;
+	let exactDelimitedStringCandidateSideTruncatedEntryCount = 0;
+	let exactDelimitedStringOutsideSideTruncatedEntryCount = 0;
+	let exactDelimitedStringOccurrenceEntryCount = 0;
+	let exactDelimitedStringOccurrenceSerializedCharacterCount = 0;
 	let finalizerSourceBlockCount = 0;
 	let finalizerSourceSerializedCharacterCount = 0;
 	let challengerEstimatedTokens = 0;
@@ -692,6 +878,14 @@ export async function runPiNativeCandidateS0Review(
 			sourceBlockCount: options.packet.blocks.length,
 			sourceTextCharacterCount,
 			fullSourceSerializedCharacterCount,
+			exactDelimitedStringScannedSeedCount,
+			exactDelimitedStringSeedScanTruncated,
+			exactDelimitedStringEligibleEntryCount,
+			exactDelimitedStringEntryScanTruncated,
+			exactDelimitedStringCandidateSideTruncatedEntryCount,
+			exactDelimitedStringOutsideSideTruncatedEntryCount,
+			exactDelimitedStringOccurrenceEntryCount,
+			exactDelimitedStringOccurrenceSerializedCharacterCount,
 			finalizerSourceBlockCount,
 			finalizerSourceSerializedCharacterCount,
 			challengerEstimatedTokens,
@@ -764,6 +958,22 @@ export async function runPiNativeCandidateS0Review(
 		sourceTextCharacterCount = prepared.sourceTextCharacterCount;
 		fullSourceSerializedCharacterCount =
 			prepared.fullSourceSerializedCharacterCount;
+		exactDelimitedStringScannedSeedCount =
+			prepared.exactDelimitedStringScannedSeedCount;
+		exactDelimitedStringSeedScanTruncated =
+			prepared.exactDelimitedStringSeedScanTruncated;
+		exactDelimitedStringEligibleEntryCount =
+			prepared.exactDelimitedStringEligibleEntryCount;
+		exactDelimitedStringEntryScanTruncated =
+			prepared.exactDelimitedStringEntryScanTruncated;
+		exactDelimitedStringCandidateSideTruncatedEntryCount =
+			prepared.exactDelimitedStringCandidateSideTruncatedEntryCount;
+		exactDelimitedStringOutsideSideTruncatedEntryCount =
+			prepared.exactDelimitedStringOutsideSideTruncatedEntryCount;
+		exactDelimitedStringOccurrenceEntryCount =
+			prepared.exactDelimitedStringOccurrenceEntryCount;
+		exactDelimitedStringOccurrenceSerializedCharacterCount =
+			prepared.exactDelimitedStringOccurrenceIndex.length;
 		finalizerSourceBlockCount = options.packet.blocks.length;
 		finalizerSourceSerializedCharacterCount = prepared.fullSource.length;
 		challengerEstimatedTokens =
@@ -801,7 +1011,7 @@ export async function runPiNativeCandidateS0Review(
 				)}\n\nMECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
 					semantic_authority: false,
 					runs: prepared.candidateRunQueue,
-				})}\n\nGLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
+				})}\n\nMECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON=${prepared.exactDelimitedStringOccurrenceIndex}\n\nGLOBAL_HARD_CARRIER_VETO_AUTHORIZATION=${JSON.stringify({
 					candidate_s0_ranges: prepared.candidateRanges,
 					candidate_s0_block_ids: prepared.candidateBlockIds,
 					projection:
@@ -1129,6 +1339,33 @@ function prepareCandidateS0Review(
 			[...availableBlockIds].filter((blockId) => !candidateBlockIdSet.has(blockId)),
 		),
 	});
+	const exactDelimitedStringOccurrenceIndexBuild =
+		buildPiNativeCandidateS0ExactDelimitedStringOccurrenceIndexReport(
+			packet.blocks,
+			candidateBlockIdSet,
+		);
+	const exactDelimitedStringOccurrenceIndex = JSON.stringify({
+		semantic_authority: false,
+		matching_rule:
+			"seed inner text from explicit paired delimiters, collapse whitespace only, then locate exact case-sensitive literal occurrences in source blocks",
+		bounded_and_non_exhaustive: true,
+		absence_is_not_evidence: true,
+		max_scanned_seeds: MAX_EXACT_DELIMITED_STRING_SEEDS,
+		scanned_seed_count: exactDelimitedStringOccurrenceIndexBuild.scannedSeedCount,
+		seed_scan_truncated:
+			exactDelimitedStringOccurrenceIndexBuild.seedScanTruncated,
+		max_entries: MAX_EXACT_DELIMITED_STRING_OCCURRENCE_ENTRIES,
+		eligible_entry_count:
+			exactDelimitedStringOccurrenceIndexBuild.eligibleEntryCount,
+		entry_scan_truncated:
+			exactDelimitedStringOccurrenceIndexBuild.entryScanTruncated,
+		max_block_ids_per_side: MAX_EXACT_DELIMITED_STRING_BLOCK_IDS_PER_SIDE,
+		candidate_side_truncated_entry_count:
+			exactDelimitedStringOccurrenceIndexBuild.candidateSideTruncatedEntryCount,
+		outside_side_truncated_entry_count:
+			exactDelimitedStringOccurrenceIndexBuild.outsideSideTruncatedEntryCount,
+		entries: exactDelimitedStringOccurrenceIndexBuild.entries,
+	});
 	const fullSourceObject = {
 		source_name: packet.sourceName,
 		source_sha256: packet.sourceSha256,
@@ -1149,6 +1386,8 @@ MECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
 	semantic_authority: false,
 	runs: candidateRunQueue,
 })}
+
+MECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON=${exactDelimitedStringOccurrenceIndex}
 
 CANDIDATE_S0_SOURCE_PROJECTION_JSON=${candidateSourceProjection}
 
@@ -1174,6 +1413,21 @@ MECHANICAL_TARGET_AUTHORIZATION=${targetAuthorization}
 		candidateRanges,
 		candidateRunQueue,
 		fullSource,
+		exactDelimitedStringOccurrenceIndex,
+		exactDelimitedStringScannedSeedCount:
+			exactDelimitedStringOccurrenceIndexBuild.scannedSeedCount,
+		exactDelimitedStringSeedScanTruncated:
+			exactDelimitedStringOccurrenceIndexBuild.seedScanTruncated,
+		exactDelimitedStringEligibleEntryCount:
+			exactDelimitedStringOccurrenceIndexBuild.eligibleEntryCount,
+		exactDelimitedStringEntryScanTruncated:
+			exactDelimitedStringOccurrenceIndexBuild.entryScanTruncated,
+		exactDelimitedStringCandidateSideTruncatedEntryCount:
+			exactDelimitedStringOccurrenceIndexBuild.candidateSideTruncatedEntryCount,
+		exactDelimitedStringOutsideSideTruncatedEntryCount:
+			exactDelimitedStringOccurrenceIndexBuild.outsideSideTruncatedEntryCount,
+		exactDelimitedStringOccurrenceEntryCount:
+			exactDelimitedStringOccurrenceIndexBuild.entries.length,
 		fullSourceSerializedCharacterCount: fullSource.length,
 		sourceTextCharacterCount: packet.blocks.reduce(
 			(total, block) => total + block.text.length,
@@ -1251,6 +1505,8 @@ MECHANICAL_S0_RUN_QUEUE_JSON=${JSON.stringify({
 	semantic_authority: false,
 	runs: prepared.candidateRunQueue,
 })}
+
+MECHANICAL_EXACT_DELIMITED_STRING_OCCURRENCE_INDEX_JSON=${prepared.exactDelimitedStringOccurrenceIndex}
 
 CHALLENGE_ENVELOPE=${envelope}
 
