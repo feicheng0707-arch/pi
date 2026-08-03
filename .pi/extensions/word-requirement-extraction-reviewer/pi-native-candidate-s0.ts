@@ -1205,6 +1205,7 @@ export async function runPiNativeCandidateS0Review(
 			});
 		}
 		if (
+			prepared.candidateBlockIds.length === 0 &&
 			challengerRejectedPartitions.length > 0 &&
 			challenge.removePartitions.length === 0 &&
 			challenge.removeAuditPartitions.length === 0 &&
@@ -1217,7 +1218,7 @@ export async function runPiNativeCandidateS0Review(
 				reviewDegraded: true,
 				patch: null,
 				reason:
-					"Every submitted Challenger partition failed mechanical authorization; Candidate S0 preserved.",
+					"Every submitted Challenger partition failed mechanical authorization and no non-empty Candidate S0 remained for independent Finalizer review; Candidate S0 preserved.",
 				failure: {
 					role: "challenger",
 					code: "contract_error",

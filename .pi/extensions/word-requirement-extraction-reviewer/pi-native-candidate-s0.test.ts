@@ -264,6 +264,9 @@ test("keeps the v26 concise-role prompts aligned with root-free Challenger mecha
 	expect(prompts.productPrinciples).toContain(
 		"exact-overlap blocks 的并集必须是每个完整 audit target set 的严格子集",
 	);
+	expect(prompts.productPrinciples).toContain(
+		"即使全部非 recovery ordinary partitions 均被拒绝",
+	);
 	expect(finalizerPrompt).toContain("CANDIDATE_S0_SOURCE_PROJECTION_JSON.blocks[]");
 	expect(finalizerPrompt).toContain(
 		"Projection 中相邻 entries 可能被完整 source 中未选择 blocks 隔开",
@@ -1196,14 +1199,18 @@ test("normalizes mechanically equivalent compact range syntax", async () => {
 	expect(result.finalRanges).toEqual(["段落1"]);
 });
 
-test("fails closed when a neutral audit scope leaves Candidate S0", async () => {
-	const registration = createFaux([challengerResponse(auditChallenge())]);
+test("continues to the independent Finalizer when the sole mixed audit leaves Candidate S0", async () => {
+	const registration = createFaux([
+		challengerResponse(auditChallenge()),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+	]);
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("degraded");
+	expect(result.status).toBe("preserved");
 	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.patch).toBeNull();
+	expect(result.failure).toBeNull();
 	expect(result.trace.challengerRejectedPartitions).toEqual([
 		{
 			direction: "remove_audit",
@@ -1215,7 +1222,8 @@ test("fails closed when a neutral audit scope leaves Candidate S0", async () => 
 		challenger: "none",
 		rejectedPartitionCount: 1,
 	});
-	expect(result.budget.providerCalls).toBe(1);
+	expect(result.budget.providerCalls).toBe(2);
+	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
 test("fails closed when the Finalizer leaves the Challenger envelope", async () => {
@@ -1426,7 +1434,7 @@ test("fails before provider use when a custom Challenger transport is unnamed", 
 	expect(registration.state.callCount).toBe(0);
 });
 
-test("records the raw Challenger response when target authorization fails", async () => {
+test("continues to the independent Finalizer when the sole exact partition authorization fails", async () => {
 	const invalidChallenge: PiNativeCandidateS0ChallengeSubmission = {
 		remove_partitions: [],
 		remove_audit_partitions: [],
@@ -1439,19 +1447,32 @@ test("records the raw Challenger response when target authorization fails", asyn
 		],
 	};
 	const rawResponse = JSON.stringify(invalidChallenge);
-	const registration = createFaux([challengerResponse(invalidChallenge)]);
+	const registration = createFaux([
+		challengerResponse(invalidChallenge),
+		finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+	]);
 
 	const result = await runReview(registration);
 
-	expect(result.status).toBe("degraded");
-	expect(result.failure).toMatchObject({
-		role: "challenger",
-		code: "contract_error",
-	});
+	expect(result.status).toBe("preserved");
+	expect(result.failure).toBeNull();
 	expect(result.trace.challengerRawResponse).toBe(rawResponse);
 	expect(result.trace.challengerNormalizedResponse).toEqual(invalidChallenge);
 	expect(result.trace.challengerStopReason).toBe("stop");
+	expect(result.trace.challengerRejectedPartitions).toEqual([
+		{
+			direction: "add",
+			partitionIndex: 0,
+			reason: "add challenge block 1 already belongs to Candidate S0",
+		},
+	]);
+	expect(result.coverage).toEqual({
+		challenger: "none",
+		rejectedPartitionCount: 1,
+	});
+	expect(result.budget.providerCalls).toBe(2);
 	expect(result.inputs.challengerSha256).toMatch(/^[a-f0-9]{64}$/u);
+	expect(registration.getPendingResponseCount()).toBe(0);
 });
 
 test("continues with partial coverage when one partition is unauthorized", async () => {
@@ -1600,6 +1621,84 @@ test("rejects a mixed audit whole above the 12-ID protocol limit", async () => {
 	});
 	expect(result.budget.providerCalls).toBe(2);
 });
+
+test.each([
+	{
+		name: "exact remove",
+		challenge: {
+			remove_partitions: [
+				{
+					target_ranges: ["段落1"],
+					source_conclusion: "This sole exact partition exceeds its protocol limit.",
+					supporting_block_ids: Array.from({ length: 9 }, (_, blockId) => blockId),
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		},
+		expectedDirection: "remove",
+		expectedReason:
+			"remove_partitions[0].supporting_block_ids contains 9 block IDs; protocol maximum is 8",
+	},
+	{
+		name: "mixed audit",
+		challenge: {
+			remove_partitions: [],
+			remove_audit_partitions: [
+				{
+					audit_kind: "mixed_atomic_scope",
+					target_ranges: ["段落1-段落4"],
+					audit_basis: "This sole mixed audit exceeds its protocol limit.",
+					supporting_block_ids: Array.from(
+						{ length: 13 },
+						(_, blockId) => blockId,
+					),
+				},
+			],
+			add_partitions: [],
+		},
+		expectedDirection: "remove_audit",
+		expectedReason:
+			"remove_audit_partitions[0].supporting_block_ids contains 13 block IDs; protocol maximum is 12",
+	},
+] as const)(
+	"continues to the independent Finalizer when the sole $name partition exceeds its protocol limit",
+	async ({ challenge, expectedDirection, expectedReason }) => {
+		const registration = createFaux([
+			challengerResponse(challenge),
+			finalizerResponse({ ordinary_remove_ranges: [], ordinary_add_ranges: [] }),
+		]);
+
+		const result = await runReview(registration, {
+			sourcePacket: packet({
+				initialRanges: ["段落1-段落4"],
+				texts: Array.from({ length: 20 }, (_, blockId) => `Source block ${blockId}`),
+			}),
+		});
+
+		expect(result.status).toBe("preserved");
+		expect(result.finalRanges).toEqual(["段落1-段落4"]);
+		expect(result.failure).toBeNull();
+		expect(result.challenge).toMatchObject({
+			removePartitions: [],
+			removeAuditPartitions: [],
+			addPartitions: [],
+		});
+		expect(result.trace.challengerRejectedPartitions).toEqual([
+			{
+				direction: expectedDirection,
+				partitionIndex: 0,
+				reason: expectedReason,
+			},
+		]);
+		expect(result.coverage).toEqual({
+			challenger: "none",
+			rejectedPartitionCount: 1,
+		});
+		expect(result.budget.providerCalls).toBe(2);
+		expect(registration.getPendingResponseCount()).toBe(0);
+	},
+);
 
 test("fails closed when a recovery audit exceeds the 12-ID protocol limit", async () => {
 	const recoverySupportingBlockIds = Array.from(
