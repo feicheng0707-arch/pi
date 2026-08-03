@@ -51,6 +51,7 @@ const MAX_WITNESS_SOURCE_QUOTE_CHARACTERS = 32_000;
 const MAX_WITNESS_FOCUS_BLOCKS = 256;
 const MAX_WITNESS_FOCUS_BLOCK_CHARACTERS = 4_000;
 const MAX_WITNESS_FOCUS_CHARACTERS = 180_000;
+const MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS = 190_000;
 const MAX_WITNESS_EXCLUDE_CARDS = 3;
 const MAX_WITNESS_SELECT_CARDS = 1;
 const MAX_CANONICAL_WITNESS_CHALLENGES =
@@ -58,11 +59,22 @@ const MAX_CANONICAL_WITNESS_CHALLENGES =
 const MAX_FINALIZER_OWNER_REASON_CHARACTERS = 1_200;
 const TARGET_FINALIZER_RESIDUAL_REASON_CHARACTERS = 2_400;
 const MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS = 8_000;
+const MAX_JSON_SERIALIZED_UTF16_CODE_UNIT_CHARACTERS = 6;
+const WITNESS_PROVISIONAL_RATIONALE_MARKER = "UNTRUSTED_PROVISIONAL_RATIONALE=";
+const WITNESS_PROVISIONAL_RATIONALE_JSON_ENVELOPE_CHARACTERS = JSON.stringify({
+	owner_reason: "",
+	residual_reason: "",
+}).length;
+const MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS =
+	WITNESS_PROVISIONAL_RATIONALE_MARKER.length +
+	WITNESS_PROVISIONAL_RATIONALE_JSON_ENVELOPE_CHARACTERS +
+	MAX_JSON_SERIALIZED_UTF16_CODE_UNIT_CHARACTERS *
+		(MAX_FINALIZER_OWNER_REASON_CHARACTERS + MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS);
 const WITNESS_RESPONSE_FORMAT = "json_object";
 const FINALIZER_REVIEW_PACKET_TOKEN_RESERVE = 120_000;
 const WITNESS_STATIC_TOKEN_RESERVE = 32_000;
 const PI_NATIVE_RUNTIME_VERSION =
-	"pi-native-finalizer-witness-v47-frozen-witness-thinking-profile";
+	"pi-native-finalizer-witness-v49-serialized-rationale-bound";
 
 type RunKind = "AUDIT_ISLAND" | "AUDIT_UNIVERSE";
 type HardCarrierType =
@@ -150,6 +162,11 @@ interface WitnessTargetAuthorization {
 	add_to_provisional: WitnessTargetGroup[];
 }
 
+interface WitnessProvisionalRationale {
+	owner_reason: string;
+	residual_reason: string;
+}
+
 interface SelectedBoundaryGap {
 	runIndex: number;
 	gapBlockIds: number[];
@@ -235,6 +252,11 @@ export interface PiNativeWitnessResult {
 		inputSha256: string;
 		focusBlockCount: number;
 		focusCharacterCount: number;
+		provisionalRationaleSerializedCharacterCount: number;
+		maxProvisionalRationaleSerializedCharacters: number;
+		effectiveFocusCharacterLimit: number;
+		combinedFocusAndRationaleSerializedCharacterCount: number;
+		maxCombinedFocusAndRationaleSerializedCharacters: number;
 		structuredTerminal: boolean;
 		providerCalls: number;
 		rawArguments: unknown[];
@@ -329,6 +351,8 @@ export interface PiNativeRequirementReviewResult {
 		finalizerContextWindow: number;
 		witnessEstimatedTokens: number;
 		witnessContextWindow: number;
+		maxWitnessProvisionalRationaleSerializedCharacters: number;
+		maxWitnessCombinedFocusAndRationaleSerializedCharacters: number;
 		auditUniverseRanges: string[];
 		runRegistry: Array<{
 			runIndex: number;
@@ -662,7 +686,7 @@ export async function runPiNativeRequirementReview(
 				thinkingMode: witnessThinkingMode,
 				localValidation: "native-json-parse+typebox+cross-field",
 				inputOrdering:
-					"source-then-mechanical-target-authorization-then-typed-hard-root-support",
+					"source-then-mechanical-target-authorization-then-typed-hard-root-support-then-untrusted-provisional-rationale",
 			},
 			promptRouting: {
 				finalizerSystem: [
@@ -719,6 +743,10 @@ export async function runPiNativeRequirementReview(
 					TARGET_FINALIZER_RESIDUAL_REASON_CHARACTERS,
 				maxFinalizerResidualReasonCharacters:
 					MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS,
+				maxWitnessProvisionalRationaleSerializedCharacters:
+					MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS,
+				maxWitnessCombinedFocusAndRationaleSerializedCharacters:
+					MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS,
 			},
 		}),
 	);
@@ -801,6 +829,10 @@ export async function runPiNativeRequirementReview(
 				finalizerContextWindow: options.finalizerRuntime.model.contextWindow,
 				witnessEstimatedTokens,
 				witnessContextWindow: options.witnessRuntime.model.contextWindow,
+				maxWitnessProvisionalRationaleSerializedCharacters:
+					MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS,
+				maxWitnessCombinedFocusAndRationaleSerializedCharacters:
+					MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS,
 				auditUniverseRanges: compactRanges(prepared.runs.flatMap((run) => run.blockIds)),
 				runRegistry: prepared.runs.map((run) => ({
 					runIndex: run.runIndex,
@@ -881,6 +913,11 @@ export async function runPiNativeRequirementReview(
 				throwIfAborted(signal);
 				if (!Value.Check(definition.parameters, params)) {
 					validationError = schemaErrors(definition.parameters, params);
+					return terminalResult({ ok: false, status: "contract_failure", validationError });
+				}
+				const reasonLengthError = finalizerReasonCodeUnitError(params);
+				if (reasonLengthError !== null) {
+					validationError = reasonLengthError;
 					return terminalResult({ ok: false, status: "contract_failure", validationError });
 				}
 				const submission = params as RawFinalSubmission;
@@ -1185,6 +1222,10 @@ export async function runPiNativeRequirementReview(
 				finalizerContextWindow: options.finalizerRuntime.model.contextWindow,
 				witnessEstimatedTokens: 0,
 				witnessContextWindow: options.witnessRuntime.model.contextWindow,
+				maxWitnessProvisionalRationaleSerializedCharacters:
+					MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS,
+				maxWitnessCombinedFocusAndRationaleSerializedCharacters:
+					MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS,
 				auditUniverseRanges: compactRanges(candidateBlockIds),
 				runRegistry: [],
 				structureEvidenceProvided: options.packet.structureEvidence !== undefined,
@@ -1990,6 +2031,26 @@ async function runSemanticWitness(
 ): Promise<PiNativeWitnessResult> {
 	const provisionalBlockIds = new Set(provisionalDecision.finalBlockIds);
 	const auditUniverseBlockIds = new Set(prepared.runs.flatMap((run) => run.blockIds));
+	const untrustedProvisionalRationale: WitnessProvisionalRationale = {
+		owner_reason: provisionalDecision.ownerReason,
+		residual_reason: provisionalDecision.residualReason,
+	};
+	const serializedUntrustedProvisionalRationale =
+		WITNESS_PROVISIONAL_RATIONALE_MARKER + JSON.stringify(untrustedProvisionalRationale);
+	if (
+		serializedUntrustedProvisionalRationale.length >
+		MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS
+	) {
+		throw new Error("serialized provisional rationale exceeds its deterministic input bound");
+	}
+	const effectiveWitnessFocusCharacterLimit = Math.min(
+		MAX_WITNESS_FOCUS_CHARACTERS,
+		MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS -
+			serializedUntrustedProvisionalRationale.length,
+	);
+	if (effectiveWitnessFocusCharacterLimit < 0) {
+		throw new Error("serialized provisional rationale exceeds the combined Witness input budget");
+	}
 	const unclaimedExcludedBlockIds = collectUnclaimedExcludedBlockIds(
 		prepared,
 		provisionalDecision,
@@ -2046,7 +2107,10 @@ async function runSemanticWitness(
 			truncated: text.length > MAX_WITNESS_FOCUS_BLOCK_CHARACTERS,
 		};
 		const serializedCharacters = JSON.stringify(focusBlock).length + 1;
-		if (witnessFocusBlockCharacters + serializedCharacters > MAX_WITNESS_FOCUS_CHARACTERS) {
+		if (
+			witnessFocusBlockCharacters + serializedCharacters >
+			effectiveWitnessFocusCharacterLimit
+		) {
 			return false;
 		}
 		witnessFocusBlockById.set(blockId, focusBlock);
@@ -2209,7 +2273,7 @@ async function runSemanticWitness(
 		JSON.stringify(witnessFocusSource).length +
 		JSON.stringify(witnessTargetAuthorization).length +
 		JSON.stringify(provisionalHardRootClaims).length;
-	while (witnessFocusCharacters > MAX_WITNESS_FOCUS_CHARACTERS) {
+	while (witnessFocusCharacters > effectiveWitnessFocusCharacterLimit) {
 		const lastAddedBlockId = [...witnessFocusBlockById.keys()]
 			.reverse()
 			.find((blockId) => !mandatoryWitnessFocusBlockIds.has(blockId));
@@ -2234,6 +2298,7 @@ async function runSemanticWitness(
 	const userPrompt = `REVIEW_FOCUS_SOURCE=${JSON.stringify(witnessFocusSource)}
 MECHANICAL_TARGET_AUTHORIZATION=${JSON.stringify(witnessTargetAuthorization)}
 PROVISIONAL_HARD_ROOT_CLAIMS=${JSON.stringify(provisionalHardRootClaims)}
+${serializedUntrustedProvisionalRationale}
 WITNESS_JSON_SCHEMA=${JSON.stringify(PiNativeSemanticWitnessSchema)}
 CANDIDATE_RANGES=${JSON.stringify(compactRanges(prepared.candidateBlockIds))}
 FALSE_NULL_REVIEW_RANGES=${JSON.stringify(compactRanges(prepared.falseNullReviewBlockIds))}
@@ -2346,6 +2411,15 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
+				provisionalRationaleSerializedCharacterCount:
+					serializedUntrustedProvisionalRationale.length,
+				maxProvisionalRationaleSerializedCharacters:
+					MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS,
+				effectiveFocusCharacterLimit: effectiveWitnessFocusCharacterLimit,
+				combinedFocusAndRationaleSerializedCharacterCount:
+					witnessFocusCharacters + serializedUntrustedProvisionalRationale.length,
+				maxCombinedFocusAndRationaleSerializedCharacters:
+					MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS,
 				structuredTerminal,
 				providerCalls,
 				rawArguments,
@@ -2418,6 +2492,15 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
+				provisionalRationaleSerializedCharacterCount:
+					serializedUntrustedProvisionalRationale.length,
+				maxProvisionalRationaleSerializedCharacters:
+					MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS,
+				effectiveFocusCharacterLimit: effectiveWitnessFocusCharacterLimit,
+				combinedFocusAndRationaleSerializedCharacterCount:
+					witnessFocusCharacters + serializedUntrustedProvisionalRationale.length,
+				maxCombinedFocusAndRationaleSerializedCharacters:
+					MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS,
 				structuredTerminal,
 				providerCalls,
 				rawArguments,
@@ -2456,6 +2539,15 @@ SHORT_FULLY_EXCLUDED_RUNS=${JSON.stringify(shortFullyExcludedRuns)}`;
 				inputSha256,
 				focusBlockCount: witnessFocusBlocks.length,
 				focusCharacterCount: witnessFocusCharacters,
+				provisionalRationaleSerializedCharacterCount:
+					serializedUntrustedProvisionalRationale.length,
+				maxProvisionalRationaleSerializedCharacters:
+					MAX_WITNESS_PROVISIONAL_RATIONALE_SERIALIZED_CHARACTERS,
+				effectiveFocusCharacterLimit: effectiveWitnessFocusCharacterLimit,
+				combinedFocusAndRationaleSerializedCharacterCount:
+					witnessFocusCharacters + serializedUntrustedProvisionalRationale.length,
+				maxCombinedFocusAndRationaleSerializedCharacters:
+					MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS,
 				structuredTerminal,
 				providerCalls,
 				rawArguments,
@@ -2713,6 +2805,23 @@ function validateFinalizerTurnShape(
 	const normalized = normalizeFinalSubmission(toolCall.arguments, terminalBlockId);
 	if (!Value.Check(schema, normalized)) {
 		return schemaErrors(schema, normalized);
+	}
+	return finalizerReasonCodeUnitError(normalized);
+}
+
+function finalizerReasonCodeUnitError(value: unknown): string | null {
+	if (!isRecord(value)) return null;
+	if (
+		typeof value.owner_reason === "string" &&
+		value.owner_reason.length > MAX_FINALIZER_OWNER_REASON_CHARACTERS
+	) {
+		return `owner_reason exceeds ${MAX_FINALIZER_OWNER_REASON_CHARACTERS} UTF-16 code units`;
+	}
+	if (
+		typeof value.residual_reason === "string" &&
+		value.residual_reason.length > MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS
+	) {
+		return `residual_reason exceeds ${MAX_FINALIZER_RESIDUAL_REASON_CHARACTERS} UTF-16 code units`;
 	}
 	return null;
 }
@@ -3120,7 +3229,7 @@ function estimateWitnessWorstCaseTokens(prepared: PreparedFinalSelection): numbe
 	return (
 		estimateTextTokens(`${prepared.witnessSystemPrompt}\n${knownInput}`) +
 		WITNESS_STATIC_TOKEN_RESERVE +
-		MAX_WITNESS_FOCUS_CHARACTERS +
+		MAX_WITNESS_COMBINED_FOCUS_AND_RATIONALE_SERIALIZED_CHARACTERS +
 		WITNESS_MAX_TOKENS +
 		CONTEXT_SAFETY_TOKENS
 	);
