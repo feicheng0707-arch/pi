@@ -289,7 +289,7 @@ async function runScenario(
 	packetSha256 = "0".repeat(64),
 	sourcePacket?: ReturnType<typeof packet>,
 	scenarioPrompts: typeof prompts = prompts,
-	witnessThinkingMode: PiNativeWitnessThinkingMode = "disabled",
+	witnessThinkingMode?: PiNativeWitnessThinkingMode,
 ) {
 	const scripted = scriptedScenario(steps);
 	const result = await runPiNativeRequirementReview({
@@ -305,7 +305,7 @@ async function runScenario(
 			model: witnessModel,
 			streamFunction: scripted.witnessStream,
 			apiKey: "test-key",
-			thinkingMode: witnessThinkingMode,
+			...(witnessThinkingMode === undefined ? {} : { thinkingMode: witnessThinkingMode }),
 		},
 		signal,
 	});
@@ -871,6 +871,83 @@ test("hashes a frozen enabled Witness thinking profile without changing the thre
 	);
 });
 
+test("treats an omitted Witness thinking profile exactly like explicit disabled", async () => {
+	const scenario = (): ScenarioStep[] => [
+		{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
+		{ role: "witness", response: toolWitness(witnessSubmission([])) },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+	];
+	const omitted = await runScenario(
+		scenario(),
+		undefined,
+		undefined,
+		"0".repeat(64),
+		undefined,
+		prompts,
+		undefined,
+	);
+	const explicit = await runScenario(
+		scenario(),
+		undefined,
+		undefined,
+		"0".repeat(64),
+		undefined,
+		prompts,
+		"disabled",
+	);
+
+	expect(omitted.result.status).toBe("preserved");
+	expect(omitted.result.capabilitySha256).toBe(explicit.result.capabilitySha256);
+	expect(omitted.result.models.witness.thinkingMode).toBe("disabled");
+	expect(omitted.result.witness?.trace.thinking).toEqual(
+		explicit.result.witness?.trace.thinking,
+	);
+	expect(omitted.scripted.observed.map(({ reasoning }) => reasoning)).toEqual([
+		"off",
+		"off",
+		"off",
+	]);
+});
+
+test("freezes the Witness thinking profile before progress callbacks can mutate runtime input", async () => {
+	const scripted = scriptedScenario([
+		{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
+		{ role: "witness", response: toolWitness(witnessSubmission([])) },
+		{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+	]);
+	const witnessRuntime = {
+		model: witnessModel,
+		streamFunction: scripted.witnessStream,
+		apiKey: "test-key",
+		thinkingMode: "disabled" as PiNativeWitnessThinkingMode,
+	};
+	const result = await runPiNativeRequirementReview({
+		packet: packet(),
+		packetSha256: "0".repeat(64),
+		prompts,
+		finalizerRuntime: {
+			model: finalizerModel,
+			streamFunction: scripted.finalizerStream,
+			apiKey: "test-key",
+		},
+		witnessRuntime,
+		onProgress(progress) {
+			if (progress.role === "witness") witnessRuntime.thinkingMode = "enabled";
+		},
+	});
+
+	expect(witnessRuntime.thinkingMode).toBe("enabled");
+	expect(result.status).toBe("preserved");
+	expect(result.models.witness.thinkingMode).toBe("disabled");
+	expect(result.witness?.trace.thinking).toEqual({
+		mode: "disabled",
+		blockCount: 0,
+		characterCount: 0,
+		forwarded: false,
+	});
+	expect(scripted.observed.map(({ reasoning }) => reasoning)).toEqual(["off", "off", "off"]);
+});
+
 test("accepts one enabled Witness thinking block without forwarding or persisting its content", async () => {
 	const hiddenThinking = "private Witness reasoning that must not be forwarded";
 	const witnessJson = JSON.stringify(witnessSubmission([]));
@@ -982,6 +1059,49 @@ test("fails closed on multiple enabled Witness thinking blocks without leaking t
 	expect(scripted.observed[2].serializedContext).not.toContain(secondThinking);
 	expect(JSON.stringify(result)).not.toContain(firstThinking);
 	expect(JSON.stringify(result)).not.toContain(secondThinking);
+});
+
+test("does not leak enabled Witness thinking when its visible JSON is invalid", async () => {
+	const hiddenThinking = "private invalid-JSON Witness reasoning";
+	const invalidJson = '{"remove_from_provisional":';
+	const { result, scripted } = await runScenario(
+		[
+			{ role: "finalizer", response: toolSelection(selection(["段落0-段落2"]), "provisional") },
+			{
+				role: "witness",
+				response: fauxAssistantMessage(
+					[fauxThinking(hiddenThinking), fauxText(invalidJson)],
+					{ stopReason: "stop" },
+				),
+			},
+			{ role: "finalizer", response: toolSelection(finalDelta(), "final") },
+		],
+		undefined,
+		undefined,
+		"0".repeat(64),
+		undefined,
+		prompts,
+		"enabled",
+	);
+
+	expect(scripted.callCount()).toBe(3);
+	expect(result.status).toBe("degraded");
+	expect(result.witness).toMatchObject({
+		status: "contract_failure",
+		error: expect.stringContaining("JSON parse failed"),
+		trace: {
+			thinking: {
+				mode: "enabled",
+				blockCount: 1,
+				characterCount: hiddenThinking.length,
+				forwarded: false,
+			},
+			rawArguments: [invalidJson],
+			normalizedArguments: [],
+		},
+	});
+	expect(scripted.observed[2].serializedContext).not.toContain(hiddenThinking);
+	expect(JSON.stringify(result)).not.toContain(hiddenThinking);
 });
 
 test("uses the frozen Witness thinking profile reasoning-token budget", async () => {
@@ -3200,6 +3320,55 @@ test.each(["throw", "reject"] as const)(
 		expect(result.failure).toMatchObject({ role: "witness", code: "contract_error" });
 	},
 );
+
+test("records the frozen enabled thinking profile on a Witness runner failure", async () => {
+	compatStreamMock.mockReset();
+	compatStreamMock.mockRejectedValueOnce(new Error("injected enabled Witness failure"));
+	const scripted = scriptedScenario([
+		{
+			role: "finalizer",
+			response: toolSelection(selection(["段落0-段落2"]), "provisional"),
+		},
+		{
+			role: "finalizer",
+			response: toolSelection(finalDelta(), "final"),
+		},
+	]);
+	const result = await runPiNativeRequirementReview({
+		packet: packet(),
+		packetSha256: "0".repeat(64),
+		prompts,
+		finalizerRuntime: {
+			model: finalizerModel,
+			streamFunction: scripted.finalizerStream,
+			apiKey: "test-key",
+		},
+		witnessRuntime: {
+			model: witnessModel,
+			streamFunction: piNativeWitnessStreamFunction,
+			apiKey: "test-key",
+			thinkingMode: "enabled",
+		},
+	});
+
+	expect(compatStreamMock).toHaveBeenCalledTimes(1);
+	expect(scripted.callCount()).toBe(2);
+	expect(result.status).toBe("degraded");
+	expect(result.models.witness.thinkingMode).toBe("enabled");
+	expect(result.witness).toMatchObject({
+		status: "runner_failure",
+		trace: {
+			responseFormat: "json_object",
+			providerCalls: 1,
+			thinking: {
+				mode: "enabled",
+				blockCount: 0,
+				characterCount: 0,
+				forwarded: false,
+			},
+		},
+	});
+});
 
 test("stops after invalid provisional schema, thinking, or extra tool calls", async () => {
 	const malformed = fauxAssistantMessage(

@@ -897,6 +897,7 @@ export async function runPiNativeRequirementReview(
 							prepared,
 							submitted,
 							options.witnessRuntime,
+							witnessThinkingMode,
 							usage,
 							signal,
 							options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
@@ -1982,11 +1983,11 @@ async function runSemanticWitness(
 	prepared: PreparedFinalSelection,
 	provisionalDecision: CanonicalPiNativeDecision,
 	runtime: PiNativeWitnessRuntime,
+	thinkingMode: PiNativeWitnessThinkingMode,
 	usage: PiNativeRuntimeUsage,
 	signal: AbortSignal,
 	requestTimeoutMs: number,
 ): Promise<PiNativeWitnessResult> {
-	const thinkingMode = runtime.thinkingMode ?? "disabled";
 	const provisionalBlockIds = new Set(provisionalDecision.finalBlockIds);
 	const auditUniverseBlockIds = new Set(prepared.runs.flatMap((run) => run.blockIds));
 	const unclaimedExcludedBlockIds = collectUnclaimedExcludedBlockIds(
