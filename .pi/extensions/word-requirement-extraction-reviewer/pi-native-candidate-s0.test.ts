@@ -44,6 +44,7 @@ function packet(options: {
 	candidatePromptSha256?: string;
 	initialRanges?: string[];
 	texts?: string[];
+	blockIds?: number[];
 } = {}) {
 	const texts =
 		options.texts ??
@@ -54,7 +55,11 @@ function packet(options: {
 			"系统应提供运行记录。",
 			"响应文件格式模板。",
 		];
-	const blocks = texts.map((text, blockId) => ({ blockId, text }));
+	const blockIds = options.blockIds ?? texts.map((_, blockId) => blockId);
+	if (blockIds.length !== texts.length) {
+		throw new Error("blockIds length must match texts length");
+	}
+	const blocks = texts.map((text, index) => ({ blockId: blockIds[index], text }));
 	return parseRequirementReviewPacket({
 		schemaVersion: "xique.word-requirement-review.packet.v1",
 		reviewMode: "candidate_protected_residual",
@@ -128,8 +133,11 @@ function finalizerResponse(
 	value: Record<string, unknown>,
 	id = "candidate-s0-finalizer",
 ) {
+	const submission = Object.hasOwn(value, "hard_carrier_root_vetoes")
+		? value
+		: { ...value, hard_carrier_root_vetoes: [] };
 	return fauxAssistantMessage(
-		fauxToolCall("submit_final_selection", value, { id }),
+		fauxToolCall("submit_final_selection", submission, { id }),
 		{ stopReason: "toolUse" },
 	);
 }
@@ -185,7 +193,7 @@ async function runReview(
 	});
 }
 
-test("preserves Candidate S0 after one empty Challenger call", async () => {
+test("runs the independent Finalizer after an empty challenge for non-empty S0", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
 		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }, "unused"),
@@ -194,20 +202,37 @@ test("preserves Candidate S0 after one empty Challenger call", async () => {
 	const result = await runReview(registration);
 
 	expect(result.status).toBe("preserved");
-	expect(result.resolution).toBe("challenger_no_change");
+	expect(result.resolution).toBe("finalizer_preserved");
 	expect(result.finalRanges).toEqual(["段落1-段落2"]);
 	expect(result.patch).toBeNull();
-	expect(result.budget.providerCalls).toBe(1);
+	expect(result.budget.providerCalls).toBe(2);
 	expect(result.budget.roles.challenger.providerCalls).toBe(1);
-	expect(result.budget.roles.finalizer.providerCalls).toBe(0);
-	expect(registration.state.callCount).toBe(1);
-	expect(registration.getPendingResponseCount()).toBe(1);
+	expect(result.budget.roles.finalizer.providerCalls).toBe(1);
+	expect(registration.state.callCount).toBe(2);
+	expect(registration.getPendingResponseCount()).toBe(0);
 	expect(result.schemaVersion).toBe(
-		"xique.word-requirement-review.pi-native-candidate-s0-result.v2",
+		"xique.word-requirement-review.pi-native-candidate-s0-result.v3",
 	);
 	expect(result.prompts.candidateS0RuntimeContract).toBe(
 		sha256(candidateS0RuntimeContract),
 	);
+});
+
+test("stops after an empty challenge when Candidate S0 is empty", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }, "unused"),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: [] }),
+	});
+
+	expect(result.status).toBe("preserved");
+	expect(result.resolution).toBe("challenger_no_change");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.budget.providerCalls).toBe(1);
+	expect(registration.getPendingResponseCount()).toBe(1);
 });
 
 test("applies only the accepted remove and add envelope", async () => {
@@ -242,6 +267,206 @@ test("applies only the accepted remove and add envelope", async () => {
 	expect(result.budget.providerCalls).toBe(2);
 	expect(registration.state.callCount).toBe(2);
 	expect(registration.getPendingResponseCount()).toBe(0);
+});
+
+test("allows the Finalizer to remove an S0 hard-carrier span outside the challenge envelope", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			remove_partitions: [
+				{
+					target_ranges: ["段落2"],
+					source_conclusion: "One bounded atom requires review.",
+					supporting_block_ids: [2],
+				},
+			],
+			remove_audit_partitions: [],
+			add_partitions: [],
+		}),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落2"],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual(["段落1"]);
+	expect(result.patch).toEqual({
+		addRanges: [],
+		removeRanges: ["段落2-段落4"],
+	});
+	expect(result.decision).toMatchObject({
+		challengeRemoveRanges: ["段落2"],
+		hardCarrierRemoveRanges: ["段落3-段落4"],
+		removeRanges: ["段落2-段落4"],
+		hardCarrierRootVetoes: [
+			{
+				vetoIndex: 0,
+				carrierType: "contract_terms_and_formats",
+				rootBlockId: 3,
+				exitBlockIdExclusive: "EOF",
+				projectedRanges: ["段落3-段落4"],
+			},
+		],
+	});
+});
+
+test("projects hard-carrier vetoes by source order when block IDs are sparse", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			accepted_remove_ranges: [],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 5,
+					exit_block_id_exclusive: 40,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({
+			initialRanges: ["段落10", "段落30"],
+			blockIds: [5, 10, 30, 40],
+			texts: ["root", "selected one", "selected two", "peer exit"],
+		}),
+	});
+
+	expect(result.status).toBe("repaired");
+	expect(result.finalRanges).toEqual([]);
+	expect(result.decision?.hardCarrierRemoveBlockIds).toEqual([10, 30]);
+});
+
+test("fails closed when an accepted add conflicts with a hard-carrier root veto", async () => {
+	const registration = createFaux([
+		challengerResponse({
+			remove_partitions: [],
+			remove_audit_partitions: [],
+			add_partitions: [
+				{
+					target_ranges: ["段落3"],
+					source_conclusion: "One excluded block requires add review.",
+					supporting_block_ids: [3],
+				},
+			],
+		}),
+		finalizerResponse({
+			accepted_remove_ranges: [],
+			accepted_add_ranges: ["段落3"],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 2,
+					exit_block_id_exclusive: 4,
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落2"]);
+	expect(result.failure).toMatchObject({
+		role: "finalizer",
+		code: "contract_error",
+	});
+	expect(result.failure?.message).toContain(
+		"Finalizer add block 3 conflicts with hard-carrier root veto 0",
+	);
+});
+
+test("fails closed when a hard-carrier veto removes a challenged survivor", async () => {
+	const registration = createFaux([
+		challengerResponse(auditChallenge()),
+		finalizerResponse({
+			accepted_remove_ranges: ["段落2"],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "contract_terms_and_formats",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration, {
+		sourcePacket: packet({ initialRanges: ["段落1-段落4"] }),
+	});
+
+	expect(result.status).toBe("degraded");
+	expect(result.finalRanges).toEqual(["段落1-段落4"]);
+	expect(result.failure?.message).toContain(
+		"hard-carrier root veto removes challenged survivor block 3",
+	);
+});
+
+test("fails closed when hard-carrier veto spans overlap", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			accepted_remove_ranges: [],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "announcement_notice",
+					root_block_id: 0,
+					exit_block_id_exclusive: 3,
+				},
+				{
+					carrier_type: "bidder_instructions",
+					root_block_id: 2,
+					exit_block_id_exclusive: "EOF",
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure?.message).toContain(
+		"hard_carrier_root_vetoes[1] overlaps veto 0 in source order",
+	);
+});
+
+test("fails closed when a hard-carrier veto has an empty S0 projection", async () => {
+	const registration = createFaux([
+		challengerResponse(emptyChallenge()),
+		finalizerResponse({
+			accepted_remove_ranges: [],
+			accepted_add_ranges: [],
+			hard_carrier_root_vetoes: [
+				{
+					carrier_type: "response_format",
+					root_block_id: 3,
+					exit_block_id_exclusive: "EOF",
+				},
+			],
+		}),
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("degraded");
+	expect(result.failure?.message).toContain(
+		"hard_carrier_root_vetoes[0] has an empty Candidate-S0 projection",
+	);
 });
 
 test("applies a sparse remove subset inside a bounded neutral audit scope", async () => {
@@ -358,6 +583,7 @@ test("fails closed when the Finalizer leaves the Challenger envelope", async () 
 		{
 			accepted_remove_ranges: ["段落1"],
 			accepted_add_ranges: ["段落4"],
+			hard_carrier_root_vetoes: [],
 		},
 	]);
 	expect(result.inputs.finalizerSha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -557,6 +783,76 @@ test("rejects a neutral audit that overlaps an exact remove challenge", async ()
 	expect(registration.getPendingResponseCount()).toBe(1);
 });
 
+test("forwards neutral range groups without Challenger semantics", async () => {
+	const contexts: Context[] = [];
+	const groupedChallenge: PiNativeCandidateS0ChallengeSubmission = {
+		remove_partitions: [
+			{
+				target_ranges: ["段落1"],
+				source_conclusion: "EXACT_REMOVE_SECRET",
+				supporting_block_ids: [0, 1],
+			},
+		],
+		remove_audit_partitions: [
+			{
+				target_ranges: ["段落2"],
+				audit_basis: "REMOVE_AUDIT_SECRET",
+				supporting_block_ids: [2],
+			},
+		],
+		add_partitions: [
+			{
+				target_ranges: ["段落3"],
+				source_conclusion: "EXACT_ADD_SECRET",
+				supporting_block_ids: [3],
+			},
+		],
+	};
+	const registration = createFaux([
+		(context) => {
+			contexts.push(context);
+			return challengerResponse(groupedChallenge);
+		},
+		(context) => {
+			contexts.push(context);
+			return finalizerResponse({
+				accepted_remove_ranges: [],
+				accepted_add_ranges: [],
+			});
+		},
+	]);
+
+	const result = await runReview(registration);
+
+	expect(result.status).toBe("preserved");
+	expect(contexts).toHaveLength(2);
+	const finalizerMessage = contexts[1].messages.find(
+		(message) => message.role === "user",
+	);
+	if (finalizerMessage?.role !== "user") {
+		throw new Error("Finalizer context omitted its user message");
+	}
+	const finalizerInput =
+		typeof finalizerMessage.content === "string"
+			? finalizerMessage.content
+			: finalizerMessage.content
+					.map((content) => (content.type === "text" ? content.text : ""))
+					.join("");
+	expect(finalizerInput).toContain('"remove_review_ranges":["段落1-段落2"]');
+	expect(finalizerInput).toContain(
+		'"remove_review_groups":[{"target_ranges":["段落1"]},{"target_ranges":["段落2"]}]',
+	);
+	expect(finalizerInput).toContain('"add_review_ranges":["段落3"]');
+	expect(finalizerInput).toContain(
+		'"add_review_groups":[{"target_ranges":["段落3"]}]',
+	);
+	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":false');
+	expect(finalizerInput).not.toContain("EXACT_REMOVE_SECRET");
+	expect(finalizerInput).not.toContain("REMOVE_AUDIT_SECRET");
+	expect(finalizerInput).not.toContain("EXACT_ADD_SECRET");
+	expect(finalizerInput).not.toContain("supporting_block_ids");
+});
+
 test("keeps expanded audit block IDs internal to the Finalizer context", async () => {
 	const contexts: Context[] = [];
 	const largeAudit: PiNativeCandidateS0ChallengeSubmission = {
@@ -616,7 +912,12 @@ test("keeps expanded audit block IDs internal to the Finalizer context", async (
 	].map((marker) => finalizerInput.indexOf(marker));
 	expect(orderedMarkers.every((index) => index >= 0)).toBe(true);
 	expect(orderedMarkers).toEqual([...orderedMarkers].sort((left, right) => left - right));
-	expect(finalizerInput).toContain('"target_ranges":["段落1-段落96"]');
+	expect(finalizerInput).toContain(
+		'"remove_review_ranges":["段落1-段落96"]',
+	);
+	expect(finalizerInput).toContain('"challenger_partition_kind_forwarded":false');
+	expect(finalizerInput).not.toContain("remove_partitions");
+	expect(finalizerInput).not.toContain("remove_audit_partitions");
 	expect(finalizerInput).not.toContain("target_block_ids");
 	expect(finalizerInput).not.toContain("audit_basis");
 	expect(finalizerInput).not.toContain("source_conclusion");
@@ -647,6 +948,7 @@ test("ignores and hashes Finalizer auxiliary text", async () => {
 				fauxToolCall("submit_final_selection", {
 					accepted_remove_ranges: ["段落2"],
 					accepted_add_ranges: [],
+					hard_carrier_root_vetoes: [],
 				}),
 			],
 			{ stopReason: "toolUse" },
@@ -668,7 +970,9 @@ test("ignores and hashes Finalizer auxiliary text", async () => {
 test("keeps the capability hash independent of packet and Candidate data", async () => {
 	const registration = createFaux([
 		challengerResponse(emptyChallenge()),
+		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }),
 		challengerResponse(emptyChallenge()),
+		finalizerResponse({ accepted_remove_ranges: [], accepted_add_ranges: [] }),
 	]);
 	const firstPacket = packet();
 	const secondPacket = packet({
@@ -694,7 +998,7 @@ test("keeps the capability hash independent of packet and Candidate data", async
 		packetSha256: "b".repeat(64),
 	});
 
-	expect(registration.state.callCount).toBe(2);
+	expect(registration.state.callCount).toBe(4);
 	expect(first.packetSha256).not.toBe(second.packetSha256);
 	expect(first.candidateId).not.toBe(second.candidateId);
 	expect(first.candidatePromptSha256).not.toBe(second.candidatePromptSha256);
