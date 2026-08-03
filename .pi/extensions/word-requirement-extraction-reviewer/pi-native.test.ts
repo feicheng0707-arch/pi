@@ -414,7 +414,7 @@ function witnessProvisionalRationale(observed: { userPrompt: string }): {
 	};
 }
 
-test("loads the v49 source-ordered adversarial typed-delta contracts", () => {
+test("loads the v50 source-ordered adversarial typed-delta contracts", () => {
 	expect(prompts.finalizer).toContain("`S=(S0-Δ-)∪Δ+`");
 	expect(prompts.finalizer).toContain("exact target-own predicate");
 	expect(prompts.finalizer).toContain(
@@ -622,9 +622,17 @@ test("loads the v49 source-ordered adversarial typed-delta contracts", () => {
 	expect(prompts.witness).toContain(
 		"长 block 只有在逐 proposition self-falsification 后 remainder 确为零才可入选",
 	);
-	expect(prompts.witness).toContain("`source-proven root contradiction`");
+	expect(prompts.witness).toContain("`other source-proven root contradiction`");
+	expect(prompts.witness).toContain("`denied_local_hard_root`");
+	expect(prompts.witness).toContain("`overbroad_recovery`");
 	expect(prompts.witness).toContain(
-		"root contradiction > typed/rationale/source exact contradiction > strongest singleton falsifier",
+		"rationale-exposed owner-boundary contradiction > other source-proven root contradiction > typed/rationale/source exact contradiction > strongest singleton falsifier",
+	);
+	expect(prompts.witness).toContain(
+		"later 固定且非填写模板的匹配 module 起点",
+	);
+	expect(prompts.witness).toContain(
+		"Recovery 只撤销仍跨过对应 source-bound module 的前置 projection",
 	);
 	expect(prompts.witness).toContain("`strongest singleton falsifier`");
 	expect(prompts.witness).toContain("`target-alone counterfactual`");
@@ -650,7 +658,12 @@ test("loads the v49 source-ordered adversarial typed-delta contracts", () => {
 		"source → authorization/typed claims → untrusted rationale → unified enumerate/rank",
 	);
 	expect(prompts.piNativeRuntimeContract).toContain(
-		"root contradiction > typed/rationale/source exact contradiction > strongest singleton falsifier",
+		"rationale-exposed owner-boundary contradiction > other source-proven root contradiction > typed/rationale/source exact contradiction > strongest singleton falsifier",
+	);
+	expect(prompts.piNativeRuntimeContract).toContain("`denied_local_hard_root`");
+	expect(prompts.piNativeRuntimeContract).toContain("`overbroad_recovery`");
+	expect(prompts.piNativeRuntimeContract).toContain(
+		"source-bound matching module 之外",
 	);
 	expect(prompts.piNativeRuntimeContract).toContain(
 		"rationale line 的确定性上限为 55272 serialized characters",
@@ -660,6 +673,12 @@ test("loads the v49 source-ordered adversarial typed-delta contracts", () => {
 	);
 	expect(prompts.piNativeRuntimeContract).not.toContain("`authorized_target_groups`");
 	expect(prompts.piNativeRuntimeContract).not.toContain("`target_lane=null`");
+	expect(prompts.finalizer).toContain(
+		"Witness 的 singleton `owner_boundary` target 只是最小反例地址，不是修复宽度",
+	);
+	expect(prompts.finalizer).toContain(
+		"必须重建完整 root→first peer exit 或逐 module recovery scope",
+	);
 });
 
 test("runs exactly GLM provisional, Doubao Witness, then GLM final", async () => {

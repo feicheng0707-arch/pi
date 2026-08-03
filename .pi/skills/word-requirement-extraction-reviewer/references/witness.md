@@ -10,13 +10,23 @@
 
 优先检查三类通用自相矛盾：rationale 的 exact selected/excluded 结论与 typed provisional ranges 不一致；rationale 声称的 hard-root span 与 source-proven peer exit 或 cross-reference recovery 不一致；rationale 声称 whole block 无 survivor，但目标自身仍有未被逐 proposition 反驳的 target-own tuple、alternative 或 tail。每项都必须脱离 rationale，用可见 source 独立重建 premise；若 source 不能肯定证明反例，就忽略该 claim。不得因为 rationale 更详细、措辞确定或点名某地址而提高其权重，也不得把 rationale 未提到某 block 当作错误证据。
 
+## Owner-boundary rationale falsifiers
+
+进入普通 atom membership 争议前，必须先对 rationale 暴露的 Owner premise 执行两个通用证伪器。它们只有在可见 source 独立、肯定证明反例时才产生 card；rationale 的措辞、结论和遗漏本身都不是证据。
+
+1. `denied_local_hard_root`：若 rationale 以 mixed parent、多载体容器、父章同时含技术/服务内容、descendant 有履约价值或局部 child 较窄为由，否认 child 已开始四类 hard carrier，必须从该 child heading 的实际主功能和后续 peer 结构重新检验。source 一旦证明 local hard root，它从 child 起点持续到首个同级或更高层级、功能不同的 peer exit；内部技术、服务期、地点、质量、人员或交付内容不能救回 selected descendant。此时优先对该 authorized group 最早的 selected descendant 提交 `owner_boundary` remove card。
+2. `overbroad_recovery`：若 rationale 用一次 peer exit 或 cross-reference recovery 释放 later content，必须从 source 重建其精确、scope-bounded 链：earlier 合格需求 source 的 operative incorporation、later 固定且非填写模板的匹配 module 起点，以及该 module 的首个真实 peer exit。若 earlier source 明确纳入多个 fixed modules，可以逐 module 独立成立 recovery；但每个 module 都必须分别满足该链，不能共享一张无边界的全局通行证。Recovery 只撤销仍跨过对应 source-bound module 的前置 projection，不会自动释放未被纳入的 sibling、相邻 module 或其后的全部内容。只有 source 肯定证明某 authorized selected target 位于已证明的 recovered scope 之外，并且仍在前置 hard root 的真实 peer exit 之前，或已进入 later 独立建立的 hard root 时，才对该无关 module 的首个 selected descendant 提交 `owner_boundary` remove card；不能仅因缺少映射证据而推定它无关。
+
+上述两类 source-proven Owner contradiction 高于普通 atom membership、公告内部内容价值、重复或范围整洁度争议。只要其中任一成立，必须先让它进入 global tournament；不得用三个低覆盖 atom card 消耗全部 remove 容量。
+
 ## Unified adversarial enumerate/rank
 
 完成上述四层读取后，才统一枚举、资格淘汰并排序全部候选：
 
-1. `source-proven root contradiction`：对每个 `MECHANICAL_TARGET_AUTHORIZATION.remove_from_provisional` island，先检查可见的最近前置或包含 root 与首个同级/更高层级 peer exit。Root 可以位于 `AUDIT_UNIVERSE` 外但必须位于 focus；它只作 supporting evidence，target 仍取该 authorized group 最早的 descendant singleton。若 source 肯定证明 hard-carrier root 或 peer exit 与 provisional Owner/selection 矛盾，这张 `owner_boundary` 卡高于所有普通 atom 争议；不得在它存在时把三个 remove 卡槽全部用于低覆盖的局部争议。
-2. `typed/rationale/source exact contradiction`：把 typed provisional membership、typed hard-root claim 与 provisional rationale 都视为待证伪 claim。若 source 肯定证明某 exact block 的 membership 或 Owner/exit 与任一 provisional claim 矛盾，先从 source 独立确定变更方向，再将该 exact 矛盾作为高优先级候选；typed state 与 rationale 本身都不能决定语义方向。
-3. `strongest singleton falsifier`：把每个 compact selected range 和每个宽组归纳都当作“其内每个 block 均有 membership”的全称命题，专门寻找一个最强 exact 反例：无 `ATOM|HEADING` provenance、空 heading、bare pointer/meta、错误履约主体、只剩泛化后果/跨 block 指代，或被 block tail 直接反证。能否定整个宽归纳或覆盖材料性错误的 singleton，高于只改善整洁度的局部卡。
+1. `rationale-exposed owner-boundary contradiction`：先枚举已经通过 `denied_local_hard_root` 或 `overbroad_recovery` 证伪器的 source-proven 反例。它们必须优先占用对应的独立 Owner cluster。
+2. `other source-proven root contradiction`：对每个 `MECHANICAL_TARGET_AUTHORIZATION.remove_from_provisional` island，检查可见的最近前置或包含 root 与首个同级/更高层级 peer exit。Root 可以位于 `AUDIT_UNIVERSE` 外但必须位于 focus；它只作 supporting evidence，target 仍取该 authorized group 最早的 descendant singleton。若 source 肯定证明 hard-carrier root 或 peer exit 与 provisional Owner/selection 矛盾，这张 `owner_boundary` 卡高于所有普通 atom 争议；不得在它存在时把三个 remove 卡槽全部用于低覆盖的局部争议。
+3. `typed/rationale/source exact contradiction`：把 typed provisional membership、typed hard-root claim 与 provisional rationale 都视为待证伪 claim。若 source 肯定证明某 exact block 的 membership 或 Owner/exit 与任一 provisional claim 矛盾，先从 source 独立确定变更方向，再将该 exact 矛盾作为高优先级候选；typed state 与 rationale 本身都不能决定语义方向。
+4. `strongest singleton falsifier`：把每个 compact selected range 和每个宽组归纳都当作“其内每个 block 均有 membership”的全称命题，专门寻找一个最强 exact 反例：无 `ATOM|HEADING` provenance、空 heading、bare pointer/meta、错误履约主体、只剩泛化后果/跨 block 指代，或被 block tail 直接反证。能否定整个宽归纳或覆盖材料性错误的 singleton，高于只改善整洁度的局部卡。
 
 然后统一进入下面相同的 Owner gate、atomic gate、whole-block survivor veto 与 global tournament。普通重复、语义冗余、别处已覆盖、删除后更短/整齐，以及“hard carrier 内容与合格需求相同”，在 eligibility 之前就必须永久淘汰：它们既不能授权 remove，也不能证明 peer exit/recovery 或 add。`source_conclusion` 和 `supporting_block_ids` 只能引用 source-grounded 结论与可见 focus block。
 
@@ -74,7 +84,7 @@ Heading closure 必须 bottom-up，并与 hard-carrier Owner exit 分开判断�
 1. `enumerate`：为所有可见 target 枚举 owner-boundary 或 atom-membership 候选。
 2. `eligibility`：对 remove 先执行 Owner/recovery 检查和 `whole-block survivor veto`；有任何 survivor 的 target 彻底淘汰。再执行 `target-alone counterfactual`：假定其他所有 block 不存在，target 是否仍由自身原文肯定建立 excluded role；若结论依赖“别处已覆盖、内容重复或相似”，该卡无资格。owner_boundary 的 root 必须是 source 中边界独立、可定位的 distinct root/module，不能把 target block 自身尾部的“承诺函、证明、未提供作废”等 embedded clause 当作 Owner root。若证明包装与实际人员配置、时限响应、报告交付、复核、修正或其他履约 proposition 位于同一 target block，必须按 atom gate 保留整块并淘汰 owner candidate。对 add，target 自身必须有肯定 requirement proposition 或合法 heading/table admission；peer exit/recovery 只撤销错误 projection并重开该判断，不能单独赋予 membership。对 `owner_boundary add` 再执行 `similar-content removal counterfactual`：假定删除较早的相似内容，当前 source 是否仍肯定证明 peer exit 或 recovery；若不能，相同文字不构成 Owner 边界证据。若 target 位于 typed hard-root claim 内，`atom_membership` card 直接淘汰；只有 source 已肯定证明 peer exit 或 cross-reference recovery 的 `owner_boundary` card 才有资格先攻击该 projection。不得用 hard root 内部的 atom 内容例外浪费唯一 add card。
 3. `cluster`：对剩余 candidate 指定唯一的 `肯定 exclusion mechanism × source-proven peer-bounded partition`。同一 root、同一连续 hole、同一原文 premise或同一 remedy/price/proof cluster 最多一张；不得拆卡制造票数。
-4. `rank`：先应用上述 root contradiction > typed/rationale/source exact contradiction > strongest singleton falsifier 优先级，再在同级 eligible clusters 间按 source 确定性、whole-block 原子确定性、材料性和独立失败覆盖排序，取最多三张 remove 与一张 add。材料性相近时，全文只有单一肯定 excluded effect 的短 target 优先于长 mixed block；长 block 只有在逐 proposition self-falsification 后 remainder 确为零才可入选。最多数量不是配额；没有合格反例就输出空数组。
+4. `rank`：先应用上述 rationale-exposed owner-boundary contradiction > other source-proven root contradiction > typed/rationale/source exact contradiction > strongest singleton falsifier 优先级，再在同级 eligible clusters 间按 source 确定性、whole-block 原子确定性、材料性和独立失败覆盖排序，取最多三张 remove 与一张 add。材料性相近时，全文只有单一肯定 excluded effect 的短 target 优先于长 mixed block；长 block 只有在逐 proposition self-falsification 后 remainder 确为零才可入选。最多数量不是配额；没有合格反例就输出空数组。
 
 Owner remove card 的 target 取该 `remove_from_provisional` group 内最早的 selected descendant singleton；root/peer 只放 supporting IDs。不得 target 当前 excluded root，也不得为同一 root 提交多个 descendants。
 
